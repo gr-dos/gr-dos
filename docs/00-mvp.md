@@ -73,6 +73,14 @@ Open questions to resolve experimentally:
 8. **License.** New GR-DOS scripts, patches and documentation are MIT.
 9. **Hardware validation.** The 8086/V20 check in 86Box is a documented manual step, since many machine ROMs are not redistributable. CI uses QEMU only.
 10. **Open Watcom version.** Pin open-watcom-v2 release `2026-10-01-Build`, locally and in CI. Use the Linux x64 C asset `open-watcom-2_0-c-linux-x64` (`sha256:a961f3e02ce27bcd88428345dc57483457a623b6e718b6cee52c48d24ab8065f`). The `ow-snapshot.tar.xz` asset (`sha256:e6aa1b1e40ac8bbf97658d2c70fff8a4242d6ca4a1c60806f2baa5317083d4fe`) may be evaluated in M0 as an installer-free alternative. Rolling `Current-build`/`Last-CI-build` tags are not used. Fallback if a regression is found: `2026-09-01-Build`.
+11. **Build entry point.** `make` driving POSIX shell scripts.
+12. **Image creation.** mtools writes the FAT12 image. A script verifies IO.SYS and MSDOS.SYS are the first directory entries and contiguous.
+13. **Smoke tests.** Headless QEMU; a test batch file writes results to COM1 and a scripted runner with timeouts checks them. CI pins the runner image (`ubuntu-24.04`) and records the QEMU version in the logs.
+14. **Test program.** Built with the pinned Open Watcom (`wasm`/`wlink`), independent of the DOS source tree.
+15. **Build flavor.** MS-DOS, not IBM PC-DOS.
+16. **Copyright notice.** The GR-DOS banner retains the Microsoft copyright line, satisfying the MIT notice requirement without suggesting endorsement.
+17. **Versioning and releases.** The version lives in a top-level `VERSION` file, starting at `0.01`. When a merge to `main` changes `VERSION`, CI tags that merge commit `v<VERSION>` (first: `v0.01`), creates a GitHub Release and attaches the image, checksums and logs. Other builds publish Actions artifacts only.
+18. **Workflow.** All changes reach `main` through pull requests. `main` is protected: pull requests required, CI status check `ci` must pass, and administrators are not exempt. The CI workflow's job must therefore be named `ci`.
 
 ## Proposed milestones
 
