@@ -107,7 +107,31 @@ Original source of lotharsm `500867d`. The repository requires a password, so it
 - `0ecc065`, `f4a7323`: restore all 20 damaged files to raw CP437. Data bytes agree with hharte/ecm, including `WR_PIIND = 0FEh`.
 - `.gitattributes` forcing CRLF for `.SKL`, `LOCSCR`, `ZERO.DAT` and others, and `^Z` stripped from 18 `.SKL` files; commit messages state `NOSRVBLD` and `EXE2BIN` fail otherwise.
 - Clean targets, `.gitignore`s, rebuilding `4201.CPI`/`4208.CPI` and `STRING.OBJ`/`PRINTF.OBJ` from source, a Ruby floppy-image builder, build instructions for DOSBox/DOSEMU with the bundled tools.
-- **Branch `linux-build-2`** (head `d963a6298bc450de12ab305c8f71b9a911060c55`, 123 commits, 2025-05-19): ports the tree to JWasm plus Open Watcom `wcl`/`wlink` with GNU makefiles. Directly relevant to M2; not yet reviewed.
+- **Branch `linux-build-2`**: see the review below.
+
+#### Review of `linux-build-2`
+
+Head `d963a6298bc450de12ab305c8f71b9a911060c55` (2025-05-19). 106 commits by Ray Chason on top of chasonr `main` at `cff1c74`, so it includes his restoration. All changes are by the committer in an MIT fork.
+
+What it does:
+
+- **Linux-native build.** GNU makefiles beside the original `MAKEFILE`s, using JWasm (`-Zm -Zg`), Open Watcom `wlink`, `wcl`, `wlib` and `exe2bin`. No GNU makefile invokes a DOS-hosted tool.
+- **Tool replacements in Ruby** (`v4.0/src/bldtools/`): `buildmsg.rb` (covers both BUILDMSG and NOSRVBLD), `hexify.rb` (DBOF), `make-com.rb` (CONVERT), `menubld.rb`, `rlencode.rb` (COMPRESS), `asc2hlp.rb`, `exefix.rb`. BUILDIDX is removed from the build.
+- **Coverage.** Every directory, including SELECT and EMM386. C utilities are ported to Watcom C (`__watcall`), and `comsubs.lib` is rebuilt from reconstructed sources. Missing, per its README: HIMEM.SYS, GW-BASIC, DOS Shell.
+
+Why GR-DOS does not adopt it wholesale:
+
+- **Language.** Ruby tools; GR-DOS uses Perl (decision 11).
+- **Renames.** 1,041 files lowercased, diverging from the vendored tree layout (decision 1).
+- **Large source edits.** Ignoring whitespace and CR: DOS +1415/−1213 lines, COMMAND +550/−501, INC +246/−318, BIOS +164/−150, BOOT +11/−2. JWasm does not accept the MASM 5 macros `retz`, `transfer` and `error`, so their uses were hand-expanded into explicit jumps and labels, plus `short` qualifiers and include changes. Code layout is therefore not byte-identical to the Microsoft build.
+- **Unverified.** No commit claims comparison against a reference build or a successful boot. Not built or booted during this review (JWasm not installed).
+
+Implications for GR-DOS:
+
+- `wasm` may hit the same MASM 5 macro limitations as JWasm; the `wasm`-preferred ordering in the toolchain section is untested.
+- M1 (reference build with the original tools) comes first, providing binaries and intermediate files (`.CL*`, `.CTL`, `BOOT.INC`) to verify any port against.
+- M2 ports only the MVP core (BOOT, BIOS, DOS, INC, CMD/COMMAND, MESSAGES) on the vendored tree, keeping original filenames and minimal edits, using linux-build-2 commits as a guide with their hashes cited, and comparing output to M1 by disassembly.
+- The Perl replacements for BUILDMSG/NOSRVBLD and DBOF use `buildmsg.rb` and `hexify.rb` as design references, verified against M1 intermediates.
 
 ### AndresTraks/MS-DOS-FASM
 
@@ -133,4 +157,4 @@ Ubuntu 26.04.1, QEMU 10.2.1, NASM 3.01, GNU Make 4.4.1, DOSBox and DOSBox-X inst
 
 - Reference build under DOSBox-X with `TOOLS/` binaries, recording hashes of every intermediate (`.IDX`, `.CL*`, `.CTL`, `BOOT.INC`) as the specification for reimplemented tools.
 - Whether `MASM` 5 and `NMAKE` accept LF-only sources or need CRLF restored (chasonr reports `NOSRVBLD` and `EXE2BIN` need CRLF input).
-- Review chasonr `linux-build-2` before designing M2; it may already solve the Watcom port, including `BUILDMSG`/`NOSRVBLD` replacement.
+- Capture every intermediate the Perl tool replacements must reproduce (see the `linux-build-2` review).
