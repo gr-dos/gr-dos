@@ -15,6 +15,7 @@ timeout_secs=${M1_TIMEOUT:-3600}
 
 rm -rf "$out"
 mkdir -p "$out"
+out=$(cd "$out" && pwd)
 "$root/scripts/prepare-dos-tree" "$root/v4.0/src" "$out/SRC"
 
 # Equivalent of SETENV.BAT with the paths corrected to TOOLS\BLD, written
@@ -39,7 +40,7 @@ printf '%s\r\n' \
   ':end' \
   > "$out/BUILD.BAT"
 
-dosbox-x -version | head -1 > "$out/dosbox-x.version"
+dosbox-x -version 2>&1 | head -1 > "$out/dosbox-x.version"
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
 timeout "$timeout_secs" dosbox-x -silent -nogui -nomenu -defaultconf \
@@ -54,3 +55,17 @@ timeout "$timeout_secs" dosbox-x -silent -nogui -nomenu -defaultconf \
 status=$(tr -d '\r\n' < "$out/STATUS.TXT" 2>/dev/null || echo MISSING)
 echo "reference build: $status (log: $out/BUILD.LOG)"
 [ "$status" = OK ]
+
+# Manifest of every file the build created or changed, found by comparing
+# contents with a freshly prepared tree (timestamps are too coarse). MASM
+# listings (.LST) are excluded because their headers contain the build time.
+pristine="$out/PRISTINE"
+"$root/scripts/prepare-dos-tree" "$root/v4.0/src" "$pristine" > /dev/null
+(
+  cd "$out/SRC"
+  find . -type f ! -iname '*.lst' -printf '%P\n' | LC_ALL=C sort | while IFS= read -r f; do
+    cmp -s "$f" "$pristine/$f" || sha256sum "$f"
+  done
+) > "$out/manifest.sha256"
+rm -rf "$pristine"
+echo "manifest: $(wc -l < "$out/manifest.sha256") files ($out/manifest.sha256)"
