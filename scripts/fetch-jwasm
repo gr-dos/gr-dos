@@ -1,7 +1,8 @@
 #!/bin/sh
 #
-# Fetch and build the pinned JWasm (decision 19). Prints the path of the
-# jwasm executable on stdout. Reuses an existing build.
+# Fetch and build the pinned JWasm (decision 19) with the patches in
+# patches/jwasm applied. Prints the path of the jwasm executable on stdout.
+# Reuses an existing build of the same patch set.
 #
 # usage: scripts/fetch-jwasm [DESTDIR]     (default: build/tools)
 
@@ -13,7 +14,8 @@ repo=https://github.com/Baron-von-Riedesel/JWasm.git
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 dest=${1:-"$root/build/tools"}
-dir="$dest/jwasm-$version"
+patches=$(cat "$root"/patches/jwasm/*.patch | sha256sum | cut -c1-12)
+dir="$dest/jwasm-$version-$patches"
 jwasm="$dir/build/GccUnixR/jwasm"
 
 if [ ! -x "$jwasm" ]; then
@@ -23,6 +25,9 @@ if [ ! -x "$jwasm" ]; then
   git -C "$dir" fetch -q --depth 1 "$repo" "$commit"
   git -C "$dir" checkout -q FETCH_HEAD
   [ "$(git -C "$dir" rev-parse HEAD)" = "$commit" ]
+  for p in "$root"/patches/jwasm/*.patch; do
+    git -C "$dir" apply "$p"
+  done
   make -s -C "$dir" -f GccUnix.mak > "$dir/build.log" 2>&1 \
     || { cat "$dir/build.log" >&2; exit 1; }
 fi
