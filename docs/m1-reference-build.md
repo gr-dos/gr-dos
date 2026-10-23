@@ -80,6 +80,6 @@ The DOS tools are part of the vendored `v4.0` tree; their exact bytes are fixed 
 
 ## Findings for later milestones
 
-- **M2:** the manifest includes the intermediates the Perl tool replacements must reproduce exactly: `MESSAGES/USA-MS.IDX`, every `*.CL?` and `*.CTL`, and `INC/BOOT.INC`.
-- **M3:** the image builder must set the boot sector drive number and must not create a volume label before `IO.SYS` and `MSDOS.SYS`.
-- **M3:** the boot test proves prompt, `VER`, `DIR`, file create/copy/read. Running an independently built program is still to do.
+- **M2:** the manifest includes the intermediates the Perl tool replacements must reproduce exactly: `MESSAGES/USA-MS.IDX`, every `*.CL?` and `*.CTL`, and `INC/BOOT.INC`. *Done:* `scripts/buildmsg` reproduces every `*.CL?` and `*.CTL`, and `scripts/dbof` reproduces `INC/BOOT.INC`. `USA-MS.IDX` isn't needed, since nothing in the build reads it (`docs/m2-jwasm.md`).
+- **M3:** the image builder must set the boot sector drive number and must not create a volume label before `IO.SYS` and `MSDOS.SYS`. *Done* in `scripts/mkimage`, and checked by `scripts/check-image`.
+- **M3:** the boot test proves prompt, `VER`, `DIR`, file create/copy/read. Running an independently built program is still to do. *Done:* `make test` also runs a Watcom-built `HELLO.COM` and checks its exit code (`docs/m3-boot.md`).

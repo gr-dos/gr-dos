@@ -1,6 +1,6 @@
 # GR-DOS — MVP Design
 
-**Status:** Proposed, not started  
+**Status:** In progress. M0–M3 are complete and M4's CI is running; branding (decision 7) and the 86Box check (decision 9) remain.  
 **Name:** GR-DOS (*Graham DOS*)  
 **Upstream:** Microsoft/IBM MS-DOS 4.00 source published by Microsoft under MIT  
 **Target:** 8086-compatible, usable DOS built on Linux, with GitHub Actions CI
@@ -81,8 +81,8 @@ Result: with the source edits on `graham/impl` all 102 files assemble, and with 
 9. **Hardware validation.** The 8086/V20 check in 86Box is a documented manual step, since many machine ROMs are not redistributable. CI uses QEMU only.
 10. **Open Watcom version.** Pin open-watcom-v2 release `2026-10-01-Build`, locally and in CI. The installer asset `open-watcom-2_0-c-linux-x64` (`sha256:a961f3e02ce27bcd88428345dc57483457a623b6e718b6cee52c48d24ab8065f`) is not used; the `ow-snapshot.tar.xz` asset (`sha256:e6aa1b1e40ac8bbf97658d2c70fff8a4242d6ca4a1c60806f2baa5317083d4fe`) is used instead: it unpacks to a ready-to-use tree with no installer (`scripts/fetch-watcom`). Rolling `Current-build`/`Last-CI-build` tags are not used. Fallback if a regression is found: `2026-09-01-Build`.
 11. **Build entry point.** `make` driving POSIX shell scripts. Replacements for the binary-only DOS build tools (`BUILDMSG`, `NOSRVBLD`, `DBOF` and others) are written in modern Perl 5.42, following the style of [OpenAPI::Humbug](https://github.com/uperl/OpenAPI-Humbug/blob/main/lib/OpenAPI/Humbug.pm): `use 5.042`, subroutine signatures, postfix dereference, POD documentation. Non-core module dependencies are pinned. CI installs a pinned Perl 5.42, since the runner image's system Perl is older.
-12. **Image creation.** mtools writes the FAT12 image. A script verifies IO.SYS and MSDOS.SYS are the first directory entries and contiguous.
-13. **Smoke tests.** Headless QEMU; a test batch file writes results to COM1 and a scripted runner with timeouts checks them. CI pins the runner image (`ubuntu-24.04`) and records the QEMU version in the logs.
+12. **Image creation.** mtools writes the FAT12 image (`scripts/mkimage`). A script verifies IO.SYS and MSDOS.SYS are the first directory entries and contiguous (`scripts/check-image`).
+13. **Smoke tests.** Headless QEMU; a test batch file writes results to COM1 and a scripted runner with timeouts checks them (`scripts/smoke-test`, `tests/smoke`). CI pins the runner image (`ubuntu-24.04`) and records the QEMU version in the logs.
 14. **Test program.** Built with the pinned Open Watcom (`wasm`/`wlink`), independent of the DOS source tree.
 15. **Build flavor.** MS-DOS, not IBM PC-DOS.
 16. **Copyright notice.** The GR-DOS banner retains the Microsoft copyright line, satisfying the MIT notice requirement without suggesting endorsement.
@@ -92,25 +92,25 @@ Result: with the source edits on `graham/impl` all 102 files assemble, and with 
 
 ## Proposed milestones
 
-**M0: Provenance.** Inventory published sources, missing files, license notices, build scripts, historical tools and community patches.
+**M0: Provenance.** *Complete.* Inventory published sources, missing files, license notices, build scripts, historical tools and community patches. See `docs/provenance.md`.
 
-**M1: Reference build.** Reproduce a documented successful DOS 4 build and boot, recording hashes and exact tools.
+**M1: Reference build.** *Complete.* Reproduce a documented successful DOS 4 build and boot, recording hashes and exact tools. See `docs/m1-reference-build.md`.
 
-**M2: Linux build.** Replace interactive/historical steps with scripted Linux execution; aim for Linux-native cross-tools, clearly label any remaining emulation.
+**M2: Linux build.** *Complete* for the MVP core (boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM). Replace interactive/historical steps with scripted Linux execution; aim for Linux-native cross-tools, clearly label any remaining emulation. `make` uses no emulation, and `make check` confirms the output is byte-identical to M1. See `docs/m2-jwasm.md`.
 
-**M3: Boot image and tests.** Generate a bootable image; verify prompt, directory listing, file creation/copy/read, and a small DOS test program.
+**M3: Boot image and tests.** *Complete.* Generate a bootable image; verify prompt, directory listing, file creation/copy/read, and a small DOS test program. See `docs/m3-boot.md`.
 
-**M4: CI.** Build and smoke-test on GitHub Actions, preferably with headless QEMU for automation; separately validate in 86Box.
+**M4: CI.** *CI complete; 86Box validation not done.* Build and smoke-test on GitHub Actions, preferably with headless QEMU for automation; separately validate in 86Box. `.github/workflows/ci.yml` builds, runs `make check` and `make test`, and uploads the artifacts.
 
 ## Acceptance criteria
 
-- [ ] Fresh Linux environment can run one documented build command without manually launching DOS/Windows.
-- [ ] Required inputs have documented legal redistribution or acquisition paths.
-- [ ] Output image boots to GR-DOS prompt in an emulator.
-- [ ] Basic disk I/O and external program execution work.
-- [ ] GitHub Actions builds, boots/tests and uploads artifacts.
-- [ ] Build and test versions/hashes are pinned or recorded.
-- [ ] 8086/V20 compatibility is preserved or deviations are documented.
+- [x] Fresh Linux environment can run one documented build command without manually launching DOS/Windows. (`make`; CI does it from scratch on `ubuntu-24.04`.)
+- [x] Required inputs have documented legal redistribution or acquisition paths. (`docs/provenance.md`; tools are fetched from their published releases.)
+- [ ] Output image boots to GR-DOS prompt in an emulator. (Boots to the prompt in QEMU; it still says MS-DOS until branding, decision 7.)
+- [x] Basic disk I/O and external program execution work. (`make test`: `DIR`, `COPY`, `TYPE`, `DEL`, `MD`, the Watcom-built `HELLO.COM` and its exit code.)
+- [x] GitHub Actions builds, boots/tests and uploads artifacts.
+- [x] Build and test versions/hashes are pinned or recorded. (Tools, Perl and actions are pinned; `BUILDINFO` records the runner, QEMU and mtools versions.)
+- [ ] 8086/V20 compatibility is preserved or deviations are documented. (The binaries are byte-identical to the MASM build of MS-DOS 4.00, but the 86Box check of decision 9 has not been done.)
 
 ## Non-goals
 
