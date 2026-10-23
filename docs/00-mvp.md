@@ -43,9 +43,10 @@ Investigate MASM-compatible assemblers (JWasm/UASM, Open Watcom components) and 
 
 ## Toolchain candidates
 
-**Preferred: Open Watcom 2.0.** Linux-native (x64 and x86) and covers most of the build:
+**Assembler: JWasm** (decision 19). Open Watcom `wasm` was the original preference but proved unable to assemble the DOS 4 sources (see M2 findings below).
 
-- `wasm`: MASM-compatible assembler.
+**Open Watcom 2.0** for everything else. Linux-native (x64 and x86):
+
 - `wlink`: OMF linker producing DOS EXE/COM.
 - `ms2wlink`: converts Microsoft LINK command lines/response files, as used by the DOS 4 makefiles.
 - `exe2bin`: replaces the historical EXE2BIN step.
@@ -54,12 +55,16 @@ Investigate MASM-compatible assemblers (JWasm/UASM, Open Watcom components) and 
 
 Open questions to resolve experimentally:
 
-- **MASM dialect.** DOS 4 sources target MASM 4/5; `wasm` differs in places (e.g. `%OUT`, segment ordering, implicit `ASSUME`). Test against real sources before committing.
 - **C portability.** DOS 4 C utilities assume Microsoft C 5.x pragmas, calling conventions and runtime. Treat them as "missing until ported" rather than assumed buildable.
 - **Version pinning.** OW 2.0 is a rolling beta. CI must fetch a specific dated snapshot from the open-watcom-v2 GitHub releases and verify its hash; record the snapshot used locally.
 - **License.** Open Watcom Public License is acceptable for a build tool. If Watcom runtime code is linked into image components, document it.
 
-**Fallback: JWasm/UASM** as assembler, paired with `wlink`, if `wasm` proves incompatible with the DOS 4 sources.
+### M2 assembler findings (2026-10-23)
+
+Surveyed by assembling the 102 sources behind the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM, with the M1 message intermediates in place:
+
+- **`wasm -zcm=masm -cx`** (Open Watcom `2026-10-01-Build`): 101 of 102 files fail, 1,875 errors, mostly cascading from MASM 5 idioms it does not support (`EQU` redefinition, segment/group handling, macro label tricks). Not viable.
+- **JWasm v2.20 `-Zm -Zg -Cx`** (MASM 5.1 compatibility, MASM-identical code generation, MASM `/Mx` case handling): 1,918 errors, of which about 70% come from DOS's own `invoke` macro colliding with the MASM 6 `INVOKE` directive. Renaming that macro alone leaves 578, concentrated in a few macro patterns. chasonr's `linux-build-2` shows the remaining work is tractable.
 
 ## Decisions
 
@@ -72,7 +77,7 @@ Open questions to resolve experimentally:
 7. **Branding.** Change the banner and `VER` output to GR-DOS. The DOS version reported to programs stays 4.00.
 8. **License.** New GR-DOS scripts, patches and documentation are MIT.
 9. **Hardware validation.** The 8086/V20 check in 86Box is a documented manual step, since many machine ROMs are not redistributable. CI uses QEMU only.
-10. **Open Watcom version.** Pin open-watcom-v2 release `2026-10-01-Build`, locally and in CI. Use the Linux x64 C asset `open-watcom-2_0-c-linux-x64` (`sha256:a961f3e02ce27bcd88428345dc57483457a623b6e718b6cee52c48d24ab8065f`). The `ow-snapshot.tar.xz` asset (`sha256:e6aa1b1e40ac8bbf97658d2c70fff8a4242d6ca4a1c60806f2baa5317083d4fe`) may be evaluated in M0 as an installer-free alternative. Rolling `Current-build`/`Last-CI-build` tags are not used. Fallback if a regression is found: `2026-09-01-Build`.
+10. **Open Watcom version.** Pin open-watcom-v2 release `2026-10-01-Build`, locally and in CI. The installer asset `open-watcom-2_0-c-linux-x64` (`sha256:a961f3e02ce27bcd88428345dc57483457a623b6e718b6cee52c48d24ab8065f`) is not used; the `ow-snapshot.tar.xz` asset (`sha256:e6aa1b1e40ac8bbf97658d2c70fff8a4242d6ca4a1c60806f2baa5317083d4fe`) is used instead: it unpacks to a ready-to-use tree with no installer (`scripts/fetch-watcom`). Rolling `Current-build`/`Last-CI-build` tags are not used. Fallback if a regression is found: `2026-09-01-Build`.
 11. **Build entry point.** `make` driving POSIX shell scripts. Replacements for the binary-only DOS build tools (`BUILDMSG`, `NOSRVBLD`, `DBOF` and others) are written in modern Perl 5.42, following the style of [OpenAPI::Humbug](https://github.com/uperl/OpenAPI-Humbug/blob/main/lib/OpenAPI/Humbug.pm): `use 5.042`, subroutine signatures, postfix dereference, POD documentation. Non-core module dependencies are pinned. CI installs a pinned Perl 5.42, since the runner image's system Perl is older.
 12. **Image creation.** mtools writes the FAT12 image. A script verifies IO.SYS and MSDOS.SYS are the first directory entries and contiguous.
 13. **Smoke tests.** Headless QEMU; a test batch file writes results to COM1 and a scripted runner with timeouts checks them. CI pins the runner image (`ubuntu-24.04`) and records the QEMU version in the logs.
@@ -81,6 +86,7 @@ Open questions to resolve experimentally:
 16. **Copyright notice.** The GR-DOS banner retains the Microsoft copyright line, satisfying the MIT notice requirement without suggesting endorsement.
 17. **Versioning and releases.** The version lives in a top-level `VERSION` file, starting at `0.01`. When a merge to `main` changes `VERSION`, CI tags that merge commit `v<VERSION>` (first: `v0.01`), creates a GitHub Release and attaches the image, checksums and logs. Other builds publish Actions artifacts only.
 18. **Workflow.** All changes reach `main` through pull requests. `main` is protected: pull requests required, CI status check `ci` must pass, and administrators are not exempt. The CI workflow's job must therefore be named `ci`.
+19. **Assembler.** JWasm v2.20 (commit `ac54827ff40b77ecd6e77ed0866a43fc60cd5fe1`, Sybase Open Watcom Public License), built from source by `scripts/fetch-jwasm`, with `-Zm -Zg -Cx`. Compatibility edits to `v4.0` are committed as small patches, and each must leave the original MASM build (M1) byte-identical to `docs/m1/reference-build.sha256`. M2 targets JWasm + `wlink` output byte-identical to M1 for the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM.
 
 ## Proposed milestones
 
