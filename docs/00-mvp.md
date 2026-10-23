@@ -65,7 +65,7 @@ Open questions to resolve experimentally:
 
 1. **Source import.** Vendor only `v4.0` from microsoft/MS-DOS, unmodified, in a single commit recording the upstream commit hash. All repairs follow as separate, reviewable commits.
 2. **Encoding.** Keep sources in the repository byte-for-byte as published (upstream ships LF line endings and raw CP437 bytes; see `docs/provenance.md`). Build scripts perform any transformation deterministically.
-3. **Community restorations.** Take fixes only from sources with a verified license (currently the hharte and lotharsm forks, MIT), recording commit hash and author per patch. Do not use the felsqualle archives or images. ecm's patches require a license check first.
+3. **Community restorations.** Take fixes only from sources with a verified license (currently the hharte, lotharsm and chasonr forks, MIT, for commits authored by the committer), recording commit hash and author per patch. Do not use the felsqualle archives or images. ecm's patches are not used: the repository is private and its license unverifiable. See `docs/provenance.md` for the restoration basis.
 4. **Reference build tools.** If the original Microsoft build tools are not MIT-covered, M1 may run them under emulation locally only, documented, never in CI and never redistributed.
 5. **Boot media.** Start with a 1.44 MB floppy image. Hard disk images come later.
 6. **Minimum components.** IO.SYS, MSDOS.SYS, COMMAND.COM and whatever the smoke tests require. FORMAT, SYS and FDISK are deferred because the image is built on Linux. Other utilities are a fast follow after MVP.
@@ -116,7 +116,7 @@ No new INT 21h services, conventional-memory optimization, EMS repairs, 32 MB fi
 - Restoration patch sources:
   - https://github.com/hharte/MS-DOS/commit/1f506100a818cb9b6c2b29aeda8d4d24d094c477 (fork of microsoft/MS-DOS; upstream MIT `LICENSE` unchanged)
   - https://github.com/lotharsm/MS-DOS/commits/dos-4.00-reconstructed/ (fork of microsoft/MS-DOS; upstream MIT `LICENSE` unchanged)
-  - https://hg.pushbx.org/ecm/msdos4/rev/63a05668c5f3 (Mercurial; license not yet verified)
+  - https://hg.pushbx.org/ecm/msdos4/rev/63a05668c5f3 (Mercurial; password-protected, license unverifiable, not used)
 - Restoration discussion only: https://felsqualle.com/posts/2024/05/the-broken-source-code-for-ms-dos-4-has-been-restored/ (no license stated; do not use its archives or disk images, which include IBM PC-DOS binaries)
 
 Audit reference-project licenses and patch provenance before copying. For fork commits, record the commit hash and author in provenance notes, since contributor terms are implied by the repository license rather than stated. MIT permission does not grant Microsoft/IBM trademark rights. GR-DOS is an independent working name; avoid suggesting endorsement.

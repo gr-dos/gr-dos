@@ -98,7 +98,7 @@ hharte's commits plus six by Lothar Serra Mari (2024-04-29 to 05-01):
 
 ### ecm, hg.pushbx.org/ecm/msdos4 rev `63a05668c5f3`
 
-Original source of lotharsm `500867d`. Not inspected: the site uses a proof-of-work bot challenge and Mercurial is not installed. **License unverified**; use ecm's work only via lotharsm's MIT fork until checked manually.
+Original source of lotharsm `500867d`. The repository requires a password, so its license cannot be verified. Because `500867d` was committed by Lothar Serra Mari on ecm's behalf, the fork's MIT license does not clearly cover it. **Not used.** Including it would need ecm's permission.
 
 ### chasonr/MS-DOS
 
@@ -120,7 +120,7 @@ The three independent restorations (hharte, ecm, chasonr) agree on every assembl
 ### Restoration basis for GR-DOS
 
 1. hharte `1f50610`: all 20 damaged files.
-2. lotharsm `500867d` (ecm): `PANELS.ASM`, `SCROLL.ASM`, `USA.INF`. Fixes `WR_PIIND` and keeps these files ASCII.
+2. GR-DOS fix: `SELECT/SCROLL.ASM` `WR_PIIND DB 0FEh`, the value independently restored by chasonr (`0ecc065`, `f4a7323`) and ecm.
 3. Build fixes as separate commits: `SETENV.BAT` paths (lotharsm), and chasonr's CRLF / `^Z` handling where the original DOS tools are used (preferably done by build scripts rather than in the tree, per decision 2).
 
 Each applied patch records the source commit hash and author.
@@ -134,4 +134,3 @@ Ubuntu 26.04.1, QEMU 10.2.1, NASM 3.01, GNU Make 4.4.1, DOSBox and DOSBox-X inst
 - Reference build under DOSBox-X with `TOOLS/` binaries, recording hashes of every intermediate (`.IDX`, `.CL*`, `.CTL`, `BOOT.INC`) as the specification for reimplemented tools.
 - Whether `MASM` 5 and `NMAKE` accept LF-only sources or need CRLF restored (chasonr reports `NOSRVBLD` and `EXE2BIN` need CRLF input).
 - Review chasonr `linux-build-2` before designing M2; it may already solve the Watcom port, including `BUILDMSG`/`NOSRVBLD` replacement.
-- Verify ecm's repository license manually.
