@@ -5,8 +5,9 @@ the MIT license. It is built on Linux with open tools, booted in QEMU, and
 tested in GitHub Actions.
 
 Today the build produces the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM,
-and a bootable 1.44 MB floppy image. The binaries are byte-identical to the
-original MASM/LINK build. The GR-DOS branding is not done yet. See
+and a bootable 1.44 MB floppy image. Apart from the GR-DOS branding of the
+banner and `VER` (`patches/branding`), the binaries are byte-identical to
+the original MASM/LINK build. See
 [`docs/00-mvp.md`](docs/00-mvp.md) for the plan and its status.
 
 ## Building
@@ -19,7 +20,7 @@ You need:
 
 ```sh
 make          # build into build/linux, fetching JWasm and Open Watcom into build/tools
-make check    # compare with the MS-DOS 4.00 reference build
+make check    # build without the branding and compare with the MS-DOS 4.00 reference build
 make test     # boot the image in QEMU and check a scripted session
 make dist     # collect the image, binaries and checksums in build/linux/dist
 ```

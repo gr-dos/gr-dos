@@ -44,10 +44,10 @@ jobs:
           scripts/fetch-jwasm
           scripts/fetch-watcom
 
-      - name: Build and compare with the M1 reference
+      - name: Build, and compare an unbranded build with the M1 reference
         run: |
           mkdir -p build
-          make -j"$(nproc)" check 2>&1 | tee build/make.log
+          make -j"$(nproc)" all check 2>&1 | tee build/make.log
 
       - name: Boot smoke test in QEMU
         run: make test 2>&1 | tee build/test.log

@@ -1,6 +1,6 @@
 # GR-DOS — MVP Design
 
-**Status:** In progress. M0–M3 are complete and M4's CI is running; branding (decision 7) and the 86Box check (decision 9) remain.  
+**Status:** In progress. M0–M3 are complete, M4's CI is running and the branding (decision 7) is done; the 86Box check (decision 9) remains.  
 **Name:** GR-DOS (*Graham DOS*)  
 **Upstream:** Microsoft/IBM MS-DOS 4.00 source published by Microsoft under MIT  
 **Target:** 8086-compatible, usable DOS built on Linux, with GitHub Actions CI
@@ -76,7 +76,7 @@ Result: with the source edits on `graham/impl` all 102 files assemble, and with 
 4. **Reference build tools.** If the original Microsoft build tools are not MIT-covered, M1 may run them under emulation locally only, documented, never in CI and never redistributed.
 5. **Boot media.** Start with a 1.44 MB floppy image. Hard disk images come later.
 6. **Minimum components.** IO.SYS, MSDOS.SYS, COMMAND.COM and whatever the smoke tests require. FORMAT, SYS and FDISK are deferred because the image is built on Linux. Other utilities are a fast follow after MVP.
-7. **Branding.** Change the banner and `VER` output to GR-DOS. The DOS version reported to programs stays 4.00.
+7. **Branding.** Change the banner and `VER` output to GR-DOS. The DOS version reported to programs stays 4.00. Done by `patches/branding`, applied to a copy of `v4.0/src` at build time, since branding cannot keep the M1 build identical as the edits of decision 19 must. Only COMMAND's banner (message 464) and `VER` (1040) are shown on screen; MSDOS.SYS's own "MS-DOS version" header is not assembled (`IBM` is true), and the copyright string of `INC/COPYRIGH.INC` is never displayed. Messages of components outside the MVP (FDISK, VDISK and others) are branded when those are built. `make check` builds without the patches.
 8. **License.** New GR-DOS scripts, patches and documentation are MIT.
 9. **Hardware validation.** The 8086/V20 check in 86Box is a documented manual step, since many machine ROMs are not redistributable. CI uses QEMU only.
 10. **Open Watcom version.** Pin open-watcom-v2 release `2026-10-01-Build`, locally and in CI. The installer asset `open-watcom-2_0-c-linux-x64` (`sha256:a961f3e02ce27bcd88428345dc57483457a623b6e718b6cee52c48d24ab8065f`) is not used; the `ow-snapshot.tar.xz` asset (`sha256:e6aa1b1e40ac8bbf97658d2c70fff8a4242d6ca4a1c60806f2baa5317083d4fe`) is used instead: it unpacks to a ready-to-use tree with no installer (`scripts/fetch-watcom`). Rolling `Current-build`/`Last-CI-build` tags are not used. Fallback if a regression is found: `2026-09-01-Build`.
@@ -96,7 +96,7 @@ Result: with the source edits on `graham/impl` all 102 files assemble, and with 
 
 **M1: Reference build.** *Complete.* Reproduce a documented successful DOS 4 build and boot, recording hashes and exact tools. See `docs/m1-reference-build.md`.
 
-**M2: Linux build.** *Complete* for the MVP core (boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM). Replace interactive/historical steps with scripted Linux execution; aim for Linux-native cross-tools, clearly label any remaining emulation. `make` uses no emulation, and `make check` confirms the output is byte-identical to M1. See `docs/m2-jwasm.md`.
+**M2: Linux build.** *Complete* for the MVP core (boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM). Replace interactive/historical steps with scripted Linux execution; aim for Linux-native cross-tools, clearly label any remaining emulation. `make` uses no emulation, and `make check` confirms that a build without the branding patches is byte-identical to M1. See `docs/m2-jwasm.md`.
 
 **M3: Boot image and tests.** *Complete.* Generate a bootable image; verify prompt, directory listing, file creation/copy/read, and a small DOS test program. See `docs/m3-boot.md`.
 
@@ -106,11 +106,11 @@ Result: with the source edits on `graham/impl` all 102 files assemble, and with 
 
 - [x] Fresh Linux environment can run one documented build command without manually launching DOS/Windows. (`make`; CI does it from scratch on `ubuntu-24.04`.)
 - [x] Required inputs have documented legal redistribution or acquisition paths. (`docs/provenance.md`; tools are fetched from their published releases.)
-- [ ] Output image boots to GR-DOS prompt in an emulator. (Boots to the prompt in QEMU; it still says MS-DOS until branding, decision 7.)
+- [x] Output image boots to GR-DOS prompt in an emulator. (`make test` boots it in QEMU and checks the GR-DOS banner and `VER`.)
 - [x] Basic disk I/O and external program execution work. (`make test`: `DIR`, `COPY`, `TYPE`, `DEL`, `MD`, the Watcom-built `HELLO.COM` and its exit code.)
 - [x] GitHub Actions builds, boots/tests and uploads artifacts.
 - [x] Build and test versions/hashes are pinned or recorded. (Tools, Perl and actions are pinned; `BUILDINFO` records the runner, QEMU and mtools versions.)
-- [ ] 8086/V20 compatibility is preserved or deviations are documented. (The binaries are byte-identical to the MASM build of MS-DOS 4.00, but the 86Box check of decision 9 has not been done.)
+- [ ] 8086/V20 compatibility is preserved or deviations are documented. (Without the branding the binaries are byte-identical to the MASM build of MS-DOS 4.00, and the branding changes only message text in COMMAND.COM, but the 86Box check of decision 9 has not been done.)
 
 ## Non-goals
 

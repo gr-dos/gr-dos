@@ -46,7 +46,10 @@ test covers:
 - creating a file with `ECHO`, copying it with `COPY` and reading it with
   `TYPE`;
 - `DEL` and `MD`;
-- running `HELLO.COM` and testing its exit code with `IF ERRORLEVEL`.
+- running `HELLO.COM` and testing its exit code with `IF ERRORLEVEL`;
+- the GR-DOS banner, with the Microsoft copyright line, from a second
+  `COMMAND` that reads `EXIT` from a file (the first `COMMAND` writes its
+  banner to the screen, which the test does not capture).
 
 QEMU is stopped when the line `GRDOS-TEST-END` arrives, or after 60 seconds.
 Each regular expression in `tests/smoke/expect` must then match a line of
@@ -56,15 +59,15 @@ the output, in order. The output is saved in
 ```text
 GRDOS-TEST-BEGIN
 
-MS-DOS Version 4.00
+GR-DOS Version 4.00
 
  Volume in drive A has no label
- Volume Serial Number is 6ADB-6E21
+ Volume Serial Number is 6ADB-7673
  Directory of  A:\
 
-COMMAND  COM     37556 10-23-26   8:24a
-AUTOEXEC BAT       339 10-23-26   8:24a
-HELLO    COM        58 10-23-26   8:24a
+COMMAND  COM     37540 10-23-26   3:00p
+AUTOEXEC BAT       383 10-23-26   3:00p
+HELLO    COM        58 10-23-26   3:00p
         3 File(s)    1347584 bytes free
         1 File(s) copied
 hello
@@ -72,6 +75,12 @@ GRDOS-DEL-OK
 GRDOS-MD-OK
 GRDOS-HELLO DOS 4.00
 GRDOS-ERRORLEVEL-7
+
+
+GR-DOS Version 4.00
+             (C)Copyright Microsoft Corp 1981-1988
+
+A>EXIT
 GRDOS-TEST-END
 ```
 

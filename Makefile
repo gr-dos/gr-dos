@@ -2,8 +2,9 @@
 #
 #   make          build the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM,
 #                 and the bootable floppy image build/linux/gr-dos.img
-#   make check    compare them, and the generated message files, with the
-#                 M1 reference build (docs/m1/reference-build.sha256)
+#   make check    build without the branding patches, in build/linux/reference,
+#                 and compare the binaries and generated message files with
+#                 the M1 reference build (docs/m1/reference-build.sha256)
 #   make test     boot a copy of the image with a test AUTOEXEC.BAT and
 #                 program in QEMU and check its serial output (tests/smoke)
 #   make dist     collect the image, binaries, checksums and build details in
@@ -14,13 +15,19 @@
 # git, curl and xz; mtools for the image and qemu-system-i386 for the test.
 # JWasm and Open Watcom are fetched into build/tools.
 #
-# The source tree is prepared in build/linux/SRC (CRLF text, case aliases)
-# and built in place, like the original DOS build: each object is next to
-# its source and every output is at the path the DOS makefiles give it.
+# The source tree is v4.0/src with the patches in PATCHES applied (the
+# GR-DOS branding, decision 7). It is prepared in build/linux/SRC (CRLF
+# text, case aliases) and built in place, like the original DOS build: each
+# object is next to its source and every output is at the path the DOS
+# makefiles give it.
 
 BUILD := build/linux
 SRC   := $(BUILD)/SRC
 MSG   := $(SRC)/MESSAGES/USA-MS.MSG
+TOOLS := $(BUILD)/tools.env
+
+# Patches to v4.0/src, applied in order with patch -p1 (no fuzz).
+PATCHES := $(sort $(wildcard patches/branding/*.patch))
 
 JWFLAGS := -q -Zj -Zm -Zg -Cx -I. -I$(CURDIR)/$(SRC)/INC -I$(CURDIR)/$(SRC)/DOS
 
@@ -46,7 +53,12 @@ TESTS := $(BUILD)/tests
 
 all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGE)
 
-check: all
+# The reference build shares the fetched tools.
+check: $(TOOLS)
+	$(MAKE) BUILD=$(BUILD)/reference TOOLS=$(TOOLS) PATCHES= check-tree
+
+# Used by check, in a tree built without PATCHES.
+check-tree: $(addprefix $(SRC)/,$(OUTPUTS))
 	printf '%s\n' $(REFERENCE) \
 	  | awk 'NR == FNR { want[$$0]; next } $$2 in want' - docs/m1/reference-build.sha256 \
 	  > $(BUILD)/reference.sha256
@@ -63,7 +75,7 @@ dist: all
 	mkdir -p $(DIST)
 	cp $(IMAGE) $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM) $(DIST)/
 	cd $(DIST) && sha256sum * > SHA256SUMS
-	. ./$(BUILD)/tools.env && { \
+	. ./$(TOOLS) && { \
 	  echo "GR-DOS $$(cat VERSION)"; \
 	  echo "commit $$(git describe --always --dirty --abbrev=40)"; \
 	  perl -e 'print "perl $$^V\n"'; \
@@ -74,19 +86,26 @@ dist: all
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all check test dist clean
+.PHONY: all check check-tree test dist clean
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
-$(BUILD)/tools.env: scripts/fetch-jwasm scripts/fetch-watcom $(wildcard patches/jwasm/*.patch)
-	mkdir -p $(BUILD)
+$(TOOLS): scripts/fetch-jwasm scripts/fetch-watcom $(wildcard patches/jwasm/*.patch)
+	mkdir -p $(@D)
 	jwasm=$$(scripts/fetch-jwasm) && watcom=$$(scripts/fetch-watcom) \
 	  && printf 'JWASM=%s\nWATCOM=%s\nexport WATCOM\n' "$$jwasm" "$$watcom" > $@
 
-$(BUILD)/tree.stamp: $(shell find v4.0/src -type f) scripts/prepare-dos-tree
-	rm -rf $(SRC)
+# The patches are applied to an LF copy of v4.0/src: GNU patch will not apply
+# LF hunks to CRLF files.
+$(BUILD)/tree.stamp: $(shell find v4.0/src -type f) $(PATCHES) scripts/prepare-dos-tree
+	rm -rf $(SRC) $(BUILD)/upstream
 	mkdir -p $(BUILD)
-	scripts/prepare-dos-tree v4.0/src $(SRC) > /dev/null
+	cp -R v4.0/src $(BUILD)/upstream
+	for p in $(PATCHES); do \
+	  patch -s -p1 -F0 --no-backup-if-mismatch -d $(BUILD)/upstream < $$p || exit 1; \
+	done
+	scripts/prepare-dos-tree $(BUILD)/upstream $(SRC) > /dev/null
+	rm -rf $(BUILD)/upstream
 	touch $@
 
 # Message files (BUILDMSG/NOSRVBLD); the case aliases cover their references too.
@@ -98,8 +117,8 @@ $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/case-alias
 	scripts/case-alias $(SRC) > /dev/null
 	touch $@
 
-$(SRC)/%.OBJ: $(BUILD)/messages.stamp $(BUILD)/tools.env
-	. ./$(BUILD)/tools.env && cd $(@D) && "$$JWASM" $(JWFLAGS) -Fo$(@F) $(notdir $*).ASM
+$(SRC)/%.OBJ: $(BUILD)/messages.stamp $(TOOLS)
+	. ./$(TOOLS) && cd $(@D) && "$$JWASM" $(JWFLAGS) -Fo$(@F) $(notdir $*).ASM
 
 $(SRC)/BOOT/MSBOOT.EXE:         $(BOOT_OBJS)
 $(SRC)/BIOS/MSLOAD.EXE:         $(MSLOAD_OBJS)
@@ -110,8 +129,8 @@ $(SRC)/CMD/COMMAND/COMMAND.EXE: $(COMMAND_OBJS)
 EXES := $(addprefix $(SRC)/,BOOT/MSBOOT.EXE BIOS/MSLOAD.EXE BIOS/MSBIO.EXE DOS/MSDOS.EXE \
 	CMD/COMMAND/COMMAND.EXE)
 
-$(EXES): %.EXE: $(BUILD)/tools.env scripts/mslink scripts/mslink-layout
-	. ./$(BUILD)/tools.env && scripts/mslink $@ $(filter %.OBJ,$^)
+$(EXES): %.EXE: $(TOOLS) scripts/mslink scripts/mslink-layout
+	. ./$(TOOLS) && scripts/mslink $@ $(filter %.OBJ,$^)
 
 # EXE2BIN; the image is padded to the size Microsoft LINK gives it.
 size = $$(scripts/mslink-layout --size $(filter %.OBJ,$^))
@@ -150,9 +169,9 @@ $(IMAGE): $(CORE) scripts/mkimage scripts/check-image
 
 # Smoke test: the image plus AUTOEXEC.BAT and a program built with Open
 # Watcom, independently of the DOS tree (decisions 13 and 14).
-$(TESTS)/HELLO.COM: tests/hello/hello.asm $(BUILD)/tools.env
+$(TESTS)/HELLO.COM: tests/hello/hello.asm $(TOOLS)
 	mkdir -p $(@D)
-	. ./$(BUILD)/tools.env && PATH=$$WATCOM/binl64:$$PATH \
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
 	  && wasm -q -fo=$(@D)/HELLO.OBJ $< \
 	  && wlink option quiet format dos com name $@ file $(@D)/HELLO.OBJ
 

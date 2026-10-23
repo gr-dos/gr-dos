@@ -2,8 +2,8 @@
 # Perl regular expression per line (scripts/smoke-test).
 
 ^GRDOS-TEST-BEGIN$
-# VER
-^MS-DOS Version 4\.00$
+# VER: GR-DOS branding (decision 7)
+^GR-DOS Version 4\.00$
 # DIR: IO.SYS and MSDOS.SYS are hidden
 ^ Volume in drive A has no label$
 ^COMMAND  COM +\d+ 
@@ -16,7 +16,11 @@
 # DEL, MD
 ^GRDOS-DEL-OK$
 ^GRDOS-MD-OK$
-# the Watcom-built test program and its exit code
+# the Watcom-built test program, which sees DOS 4.00, and its exit code
 ^GRDOS-HELLO DOS 4\.00$
 ^GRDOS-ERRORLEVEL-7$
+# a second COMMAND, reading EXIT from a file: its banner, with the Microsoft
+# copyright line (decision 16)
+^GR-DOS Version 4\.00$
+^ +\(C\)Copyright Microsoft Corp 1981-1988$
 ^GRDOS-TEST-END$

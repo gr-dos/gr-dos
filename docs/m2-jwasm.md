@@ -43,13 +43,15 @@ comparing with its output:
 
 ```sh
 make          # build/linux/SRC/{BOOT/MSBOOT.BIN,BIOS/IO.SYS,DOS/MSDOS.SYS,CMD/COMMAND/COMMAND.COM}
-make check    # compare them and the message files with docs/m1/reference-build.sha256
+make check    # build without patches/branding and compare with docs/m1/reference-build.sha256
 ```
 
 The build needs Perl 5.42 as `perl` on `PATH`, plus a C compiler, git, curl
 and xz to fetch and build the tools into `build/tools`. The `Makefile`
-prepares the source tree in `build/linux/SRC` (`scripts/prepare-dos-tree`),
-generates the message files and adds case aliases (`scripts/case-alias`).
+applies the branding patches (`patches/branding`, decision 7) to a copy of
+`v4.0/src`, prepares the source tree in `build/linux/SRC`
+(`scripts/prepare-dos-tree`), generates the message files and adds case
+aliases (`scripts/case-alias`).
 It then builds in place the way the DOS makefiles do:
 
 1. It assembles each object listed in the Microsoft LINK response files
@@ -58,8 +60,10 @@ It then builds in place the way the DOS makefiles do:
    `scripts/mslink-layout` order.
 3. It converts the result with `scripts/exe2bin`.
 
-`make check` compares 24 files: the four binaries, MSLOAD.COM and the 19
-message files.
+`make check` builds a second tree without the branding patches, in
+`build/linux/reference`, and compares 24 files: the four binaries,
+MSLOAD.COM and the 19 message files. The branding changes only COMMAND.COM
+and two of its message files (`COMMAND.CLB`, `COMMAND.CLF`).
 
 ## Source edits
 
