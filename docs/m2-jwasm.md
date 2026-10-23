@@ -39,6 +39,28 @@ comparing with its output:
 - The text always comes from the message file. The text after `:def` in the
   skeleton is ignored, and in places it differs from the message file.
 
+## Building
+
+```sh
+make          # build/linux/SRC/{BOOT/MSBOOT.BIN,BIOS/IO.SYS,DOS/MSDOS.SYS,CMD/COMMAND/COMMAND.COM}
+make check    # compare them and the message files with docs/m1/reference-build.sha256
+```
+
+The build needs Perl 5.42 as `perl` on `PATH`, plus a C compiler, git, curl
+and xz to fetch and build the tools into `build/tools`. The `Makefile`
+prepares the source tree in `build/linux/SRC` (`scripts/prepare-dos-tree`),
+generates the message files and adds case aliases (`scripts/case-alias`).
+It then builds in place the way the DOS makefiles do:
+
+1. It assembles each object listed in the Microsoft LINK response files
+   (`scripts/lnk-objects`) with JWasm.
+2. It links with `scripts/mslink`, which runs `wlink` with the
+   `scripts/mslink-layout` order.
+3. It converts the result with `scripts/exe2bin`.
+
+`make check` compares 24 files: the four binaries, MSLOAD.COM and the 19
+message files.
+
 ## Source edits
 
 The JWasm compatibility edits to `v4.0` are separate commits. Each one keeps
