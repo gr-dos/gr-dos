@@ -3,6 +3,8 @@
 #   make          build the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM
 #   make check    compare them, and the generated message files, with the
 #                 M1 reference build (docs/m1/reference-build.sha256)
+#   make dist     collect the binaries, checksums and build details in
+#                 build/linux/dist (the CI artifacts)
 #   make clean    remove build/linux (fetched tools in build/tools are kept)
 #
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
@@ -44,10 +46,25 @@ check: all
 	test $$(wc -l < $(BUILD)/reference.sha256) -eq $(words $(REFERENCE))
 	cd $(SRC) && sha256sum -c ../reference.sha256
 
+DIST := $(BUILD)/dist
+
+dist: all
+	rm -rf $(DIST)
+	mkdir -p $(DIST)
+	cp $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM) $(DIST)/
+	cd $(DIST) && sha256sum * > SHA256SUMS
+	. ./$(BUILD)/tools.env && { \
+	  echo "GR-DOS $$(cat VERSION)"; \
+	  echo "commit $$(git describe --always --dirty --abbrev=40)"; \
+	  perl -e 'print "perl $$^V\n"'; \
+	  echo "jwasm $$(basename $$(dirname $$(dirname $$(dirname $$JWASM))))"; \
+	  echo "watcom $$(basename $$WATCOM)"; \
+	} > $(DIST)/BUILDINFO
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all check clean
+.PHONY: all check dist clean
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
