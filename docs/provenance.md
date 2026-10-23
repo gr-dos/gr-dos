@@ -9,7 +9,8 @@
 
 Upstream history is a single squashed commit, so there is no earlier published state of `v4.0` to compare against.
 
-- **License:** `v4.0/LICENSE` is MIT, "Copyright (c) IBM and Microsoft Corporation". The repository root `LICENSE` names Microsoft alone; `v4.0` carries its own.
+- **License:** `v4.0/LICENSE` is MIT, "Copyright (c) IBM and Microsoft Corporation". Upstream's repository root `LICENSE` names Microsoft alone; `v4.0` carries its own.
+- **GR-DOS license:** the root `LICENSE` (MIT, Graham Ollis) covers GR-DOS's own scripts, patches and documentation (decision 8). It does not relicense `v4.0`. The JWasm patches in `patches/jwasm` modify JWasm, which is under the Sybase Open Watcom Public License.
 - **Not vendored:** `v1.25`, `v2.0` (unrelated versions) and `v4.0-ozzie` (Multitasking DOS 4 beta binaries and PDFs, not the source used here).
 
 ## Tree contents
