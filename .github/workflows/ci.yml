@@ -1,7 +1,7 @@
-# Build and verify GR-DOS (decisions 13, 17 and 18). The job `ci` is the
-# required status check on main. When a push to main carries a VERSION with
-# no release yet, `release` tags that commit v<VERSION> and publishes the
-# CI artifacts as a GitHub Release.
+# Build and verify GR-DOS, and boot it in QEMU (decisions 13, 17 and 18).
+# The job `ci` is the required status check on main. When a push to main
+# carries a VERSION with no release yet, `release` tags that commit
+# v<VERSION> and publishes the CI artifacts as a GitHub Release.
 
 name: ci
 
@@ -34,6 +34,11 @@ jobs:
           path: build/tools
           key: tools-ubuntu-24.04-${{ hashFiles('scripts/fetch-jwasm', 'scripts/fetch-watcom', 'patches/jwasm/*.patch') }}
 
+      - name: Install mtools and QEMU
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends mtools qemu-system-x86
+
       - name: Fetch tools
         run: |
           scripts/fetch-jwasm
@@ -44,11 +49,19 @@ jobs:
           mkdir -p build
           make -j"$(nproc)" check 2>&1 | tee build/make.log
 
+      - name: Boot smoke test in QEMU
+        run: make test 2>&1 | tee build/test.log
+
       - name: Collect artifacts
         run: |
           make dist
-          cp build/make.log build/linux/dist/
-          { echo "runner $ImageOS $ImageVersion"; uname -srm; } >> build/linux/dist/BUILDINFO
+          cp build/make.log build/test.log build/linux/dist/
+          {
+            echo "runner $ImageOS $ImageVersion"
+            uname -srm
+            head -1 build/linux/tests/smoke/qemu.version
+            mformat --version | head -1
+          } >> build/linux/dist/BUILDINFO
           cat build/linux/dist/BUILDINFO
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

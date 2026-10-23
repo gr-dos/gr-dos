@@ -1,14 +1,18 @@
 # GR-DOS Linux build (decisions 11 and 19).
 #
-#   make          build the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM
+#   make          build the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM,
+#                 and the bootable floppy image build/linux/gr-dos.img
 #   make check    compare them, and the generated message files, with the
 #                 M1 reference build (docs/m1/reference-build.sha256)
-#   make dist     collect the binaries, checksums and build details in
+#   make test     boot a copy of the image with a test AUTOEXEC.BAT and
+#                 program in QEMU and check its serial output (tests/smoke)
+#   make dist     collect the image, binaries, checksums and build details in
 #                 build/linux/dist (the CI artifacts)
 #   make clean    remove build/linux (fetched tools in build/tools are kept)
 #
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
-# git, curl and xz. JWasm and Open Watcom are fetched into build/tools.
+# git, curl and xz; mtools for the image and qemu-system-i386 for the test.
+# JWasm and Open Watcom are fetched into build/tools.
 #
 # The source tree is prepared in build/linux/SRC (CRLF text, case aliases)
 # and built in place, like the original DOS build: each object is next to
@@ -37,7 +41,10 @@ MESSAGES := BOOT/BOOT.CL1 \
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
 	CMD/COMMAND/COMMAND.COM
 
-all: $(addprefix $(SRC)/,$(OUTPUTS))
+IMAGE := $(BUILD)/gr-dos.img
+TESTS := $(BUILD)/tests
+
+all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGE)
 
 check: all
 	printf '%s\n' $(REFERENCE) \
@@ -46,12 +53,15 @@ check: all
 	test $$(wc -l < $(BUILD)/reference.sha256) -eq $(words $(REFERENCE))
 	cd $(SRC) && sha256sum -c ../reference.sha256
 
+test: $(TESTS)/smoke.img
+	scripts/smoke-test $< tests/smoke/expect $(TESTS)/smoke
+
 DIST := $(BUILD)/dist
 
 dist: all
 	rm -rf $(DIST)
 	mkdir -p $(DIST)
-	cp $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM) $(DIST)/
+	cp $(IMAGE) $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM) $(DIST)/
 	cd $(DIST) && sha256sum * > SHA256SUMS
 	. ./$(BUILD)/tools.env && { \
 	  echo "GR-DOS $$(cat VERSION)"; \
@@ -64,7 +74,7 @@ dist: all
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all check dist clean
+.PHONY: all check test dist clean
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -131,3 +141,24 @@ $(SRC)/CMD/COMMAND/COMMAND.COM: $(SRC)/CMD/COMMAND/COMMAND.EXE $(COMMAND_OBJS)
 # DBOF: the boot sector for FORMAT and SYS.
 $(SRC)/INC/BOOT.INC: $(SRC)/BOOT/MSBOOT.BIN scripts/dbof
 	scripts/dbof $< $@ 7c00 200
+
+# The bootable floppy image (decisions 5 and 12).
+CORE := $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM)
+
+$(IMAGE): $(CORE) scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC)
+
+# Smoke test: the image plus AUTOEXEC.BAT and a program built with Open
+# Watcom, independently of the DOS tree (decisions 13 and 14).
+$(TESTS)/HELLO.COM: tests/hello/hello.asm $(BUILD)/tools.env
+	mkdir -p $(@D)
+	. ./$(BUILD)/tools.env && PATH=$$WATCOM/binl64:$$PATH \
+	  && wasm -q -fo=$(@D)/HELLO.OBJ $< \
+	  && wlink option quiet format dos com name $@ file $(@D)/HELLO.OBJ
+
+$(TESTS)/AUTOEXEC.BAT: tests/smoke/autoexec.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/smoke.img: $(CORE) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM
