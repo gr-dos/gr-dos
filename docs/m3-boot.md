@@ -87,3 +87,41 @@ GRDOS-TEST-END
 CI installs mtools and QEMU from the `ubuntu-24.04` runner's packages. It
 records their versions in `BUILDINFO` and ships the image, the binaries,
 `SHA256SUMS` and the logs as artifacts.
+
+## 86Box check (decision 9)
+
+The 8086/V20 check is a manual step in 86Box, since the machine ROMs are not
+redistributable. `scripts/86box-vm` sets up a VM: it copies the image into
+the VM directory and writes an `86box.cfg` for an Xi 8088 board with 640 KB,
+CGA and a 3.5" 1.44 MB drive, at 4.77 MHz:
+
+```sh
+make
+vm=$(scripts/86box-vm --cpu necv20 "$HOME/.local/share/86Box/Virtual Machines/gr-dos-xi8088")
+86Box -R ROMDIR -P "$vm"
+```
+
+Run it again with `--cpu 8088` for the Intel 8088. Answer the date and time
+prompts, then use the prompt (`VER`, `DIR`, `COPY`, `TYPE`, `MD`, `DEL`).
+The Xi 8088 BIOS reports an invalid NVRAM checksum on the first boot and
+loads its defaults, which is harmless.
+
+Two things to avoid:
+
+- **XT floppy controllers.** The IBM PC/XT boards and GLaBIOS in 86Box have
+  an XT floppy controller, which cannot read a 1.44 MB disk ("Disk Boot
+  Fail"), as on real hardware. The Xi 8088 has an AT-style controller.
+- **An unreadable config.** If 86Box cannot use the config, for example
+  because `-P` was given an unquoted path with a space in it, it starts with
+  its defaults, an IBM PC with 64 KB and ROM BASIC, and saves them over
+  `86box.cfg` on exit. Run `scripts/86box-vm` again after that.
+
+### Result
+
+2026-10-23, the image from commit `a3a1ba8`, 86Box Linux AppImage build
+9001 with Xi 8088 BIOS 0.9.9:
+
+| CPU | Result |
+|---|---|
+| NEC V20, 4.77 MHz | Boots to the prompt; GR-DOS banner with the Microsoft copyright line; `VER` shows `GR-DOS Version 4.00`; checked interactively. |
+| Intel 8088, 4.77 MHz | The same. |

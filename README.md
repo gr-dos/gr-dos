@@ -42,7 +42,8 @@ Releases are created from `VERSION` by CI and include the image.
   build run under DOSBox-X, used as the reference.
 - [`docs/m2-jwasm.md`](docs/m2-jwasm.md): the Linux build with JWasm and
   `wlink`.
-- [`docs/m3-boot.md`](docs/m3-boot.md): the boot image and smoke test.
+- [`docs/m3-boot.md`](docs/m3-boot.md): the boot image and smoke test, and the
+  86Box check on an 8088 and a V20.
 
 ## License
 

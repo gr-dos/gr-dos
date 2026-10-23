@@ -1,6 +1,6 @@
 # GR-DOS — MVP Design
 
-**Status:** In progress. M0–M3 are complete, M4's CI is running and the branding (decision 7) is done; the 86Box check (decision 9) remains.  
+**Status:** MVP complete. M0–M4 are done, including the branding (decision 7) and the 86Box check (decision 9).  
 **Name:** GR-DOS (*Graham DOS*)  
 **Upstream:** Microsoft/IBM MS-DOS 4.00 source published by Microsoft under MIT  
 **Target:** 8086-compatible, usable DOS built on Linux, with GitHub Actions CI
@@ -100,7 +100,7 @@ Result: with the source edits on `graham/impl` all 102 files assemble, and with 
 
 **M3: Boot image and tests.** *Complete.* Generate a bootable image; verify prompt, directory listing, file creation/copy/read, and a small DOS test program. See `docs/m3-boot.md`.
 
-**M4: CI.** *CI complete; 86Box validation not done.* Build and smoke-test on GitHub Actions, preferably with headless QEMU for automation; separately validate in 86Box. `.github/workflows/ci.yml` builds, runs `make check` and `make test`, and uploads the artifacts.
+**M4: CI.** *Complete.* Build and smoke-test on GitHub Actions, preferably with headless QEMU for automation; separately validate in 86Box. `.github/workflows/ci.yml` builds, runs `make check` and `make test`, and uploads the artifacts. The 86Box check is in `docs/m3-boot.md`.
 
 ## Acceptance criteria
 
@@ -110,7 +110,7 @@ Result: with the source edits on `graham/impl` all 102 files assemble, and with 
 - [x] Basic disk I/O and external program execution work. (`make test`: `DIR`, `COPY`, `TYPE`, `DEL`, `MD`, the Watcom-built `HELLO.COM` and its exit code.)
 - [x] GitHub Actions builds, boots/tests and uploads artifacts.
 - [x] Build and test versions/hashes are pinned or recorded. (Tools, Perl and actions are pinned; `BUILDINFO` records the runner, QEMU and mtools versions.)
-- [ ] 8086/V20 compatibility is preserved or deviations are documented. (Without the branding the binaries are byte-identical to the MASM build of MS-DOS 4.00, and the branding changes only message text in COMMAND.COM, but the 86Box check of decision 9 has not been done.)
+- [x] 8086/V20 compatibility is preserved or deviations are documented. (Without the branding the binaries are byte-identical to the MASM build of MS-DOS 4.00, and the branding changes only message text in COMMAND.COM. The image boots in 86Box on an Intel 8088 and an NEC V20, `scripts/86box-vm`.)
 
 ## Non-goals
 
