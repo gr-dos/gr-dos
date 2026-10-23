@@ -61,6 +61,19 @@ Open questions to resolve experimentally:
 
 **Fallback: JWasm/UASM** as assembler, paired with `wlink`, if `wasm` proves incompatible with the DOS 4 sources.
 
+## Decisions
+
+1. **Source import.** Vendor only `v4.0` from microsoft/MS-DOS, unmodified, in a single commit recording the upstream commit hash. All repairs follow as separate, reviewable commits.
+2. **Encoding.** Keep sources in the repository byte-for-byte as published (CP437, CRLF). Build scripts perform any transformation deterministically.
+3. **Community restorations.** Take fixes only from sources with a verified license (currently the hharte and lotharsm forks, MIT), recording commit hash and author per patch. Do not use the felsqualle archives or images. ecm's patches require a license check first.
+4. **Reference build tools.** If the original Microsoft build tools are not MIT-covered, M1 may run them under emulation locally only, documented, never in CI and never redistributed.
+5. **Boot media.** Start with a 1.44 MB floppy image. Hard disk images come later.
+6. **Minimum components.** IO.SYS, MSDOS.SYS, COMMAND.COM and whatever the smoke tests require. FORMAT, SYS and FDISK are deferred because the image is built on Linux. Other utilities are a fast follow after MVP.
+7. **Branding.** Change the banner and `VER` output to GR-DOS. The DOS version reported to programs stays 4.00.
+8. **License.** New GR-DOS scripts, patches and documentation are MIT.
+9. **Hardware validation.** The 8086/V20 check in 86Box is a documented manual step, since many machine ROMs are not redistributable. CI uses QEMU only.
+10. **Open Watcom version.** Pin open-watcom-v2 release `2026-10-01-Build`, locally and in CI. Use the Linux x64 C asset `open-watcom-2_0-c-linux-x64` (`sha256:a961f3e02ce27bcd88428345dc57483457a623b6e718b6cee52c48d24ab8065f`). The `ow-snapshot.tar.xz` asset (`sha256:e6aa1b1e40ac8bbf97658d2c70fff8a4242d6ca4a1c60806f2baa5317083d4fe`) may be evaluated in M0 as an installer-free alternative. Rolling `Current-build`/`Last-CI-build` tags are not used. Fallback if a regression is found: `2026-09-01-Build`.
+
 ## Proposed milestones
 
 **M0: Provenance.** Inventory published sources, missing files, license notices, build scripts, historical tools and community patches.
