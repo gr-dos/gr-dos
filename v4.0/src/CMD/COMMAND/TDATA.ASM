@@ -25,6 +25,12 @@ btab	macro	b,sym
     dw	    offset trangroup:sym
     endm
 
+; dirent.inc uses BREAK, so define it before the includes
+BREAK	MACRO	subtitle
+	SUBTTL	subtitle
+	PAGE
+ENDM
+
 .xlist
 .xcref
 	INCLUDE comsw.asm				;AC000;
@@ -33,11 +39,6 @@ btab	macro	b,sym
 	INCLUDE dirent.inc				;AN042;
 .list
 .cref
-
-BREAK	MACRO	subtitle
-	SUBTTL	subtitle
-	PAGE
-ENDM
 
 ;
 ; WARNING: DO NOT INCLUDE DOSSYM.INC BECAUSE IT DESTROYS THE MACRO 'FMT' THAT

@@ -1,3 +1,7 @@
+IFNDEF ?stackdepth
+?stackdepth = 0
+ENDIF
+
 	IF1								  ;3.30
 
 SaveReg MACRO	reglist 		;; push those registers

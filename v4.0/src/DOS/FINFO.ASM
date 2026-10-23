@@ -36,7 +36,7 @@ Installed = TRUE
 	i_need	NoSetDir,BYTE
 	i_need	THISDRV,BYTE
 	I_need	EXTERR_CLASS,BYTE
-	I_need	EXTERR_ACTION set
+	I_need	EXTERR_ACTION,BYTE
 	I_need	EXTERR_LOCUS,BYTE
 	i_need	DMAADD,DWORD
 	i_need	FastOpenFlg,BYTE

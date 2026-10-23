@@ -176,7 +176,7 @@ START:
 if	$ le BIOS$_L
 	%OUT Don't destroy unexcuted code yet!!!
 endif
-	repz	movsb			;AN000;
+	rep 	movsb			;AN000;
 	push	es			;AN000;
 	pop	ds			;AN000; DS = ES = code = 0.
 	assume	ds:code 		;AN000;

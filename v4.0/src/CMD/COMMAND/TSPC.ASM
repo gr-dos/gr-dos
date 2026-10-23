@@ -404,11 +404,11 @@ comptr		dw	?			; ptr into combuf
 fbuf	find_buf	<>			; dma buffer for findfirst/findnext
 pathinfo	DW	3 DUP (?)		; ES, SI(old), and SI(new) of user path
 psep_char	DB	?			; '/' or '\'
-search_best	DB	(?)			; best code, best filename so far
+search_best	DB	?  			; best code, best filename so far
 fname_max_len	equ	13
 search_best_buf DB	fname_max_len DUP (?)
 search_curdir_buf DB	64 DUP (?)		; a place for CurDir info, if successful
-search_error	DW	(?)			; address of error message to be printed
+search_error	DW	?  			; address of error message to be printed
 
 ; Data declarations taken out of tbatch.asm
 if_not_count	DW	?

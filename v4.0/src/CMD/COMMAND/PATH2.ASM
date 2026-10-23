@@ -417,15 +417,15 @@ save_ptr_loop:
 	jl	save_done
 	mov	BX, CX				; get arg index and
 	invoke	argv_calc			; convert to a pointer
-	mov	DX, DS:arg.argv[BX].argpointer
+	mov	DX, WORD PTR DS:arg.argv[BX].argpointer
 	sub	DX, SI				; adjust argpointer
-	mov	ES:argv[BX].argpointer, DX
-	mov	DX, DS:arg.argv[BX].argstartel
+	mov	WORD PTR ES:argv[BX].argpointer, DX
+	mov	DX, WORD PTR DS:arg.argv[BX].argstartel
 	sub	DX, SI				; and adjust argstartel
-	mov	ES:argv[BX].argstartel, DX
-	mov	DX, DS:arg.argv[BX].arg_ocomptr
+	mov	WORD PTR ES:argv[BX].argstartel, DX
+	mov	DX, WORD PTR DS:arg.argv[BX].arg_ocomptr
 	sub	DX, SI				; and adjust arg_ocomptr
-	mov	ES:argv[BX].arg_ocomptr, DX
+	mov	WORD PTR ES:argv[BX].arg_ocomptr, DX
 	jmp	save_ptr_loop
 
 save_done:

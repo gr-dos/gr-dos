@@ -3,4 +3,8 @@
 
 include version.inc
 
+IFDEF __JWASM__
+	OPTION NOKEYWORD:<NAME ECHO GOTO ADDR>
+ENDIF
+
 

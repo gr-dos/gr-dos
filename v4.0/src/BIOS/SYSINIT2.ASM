@@ -28,7 +28,11 @@ TITLE	BIOS SYSTEM INITIALIZATION
 ;AN015; D526 Add /NC parameter when installing SHARE.EXE	   04/28/88 J.K.
 ;==============================================================================
 
+IFDEF __JWASM__
+TRUE	    EQU -1	; JWasm evaluates NOT in 32 bits
+ELSE
 TRUE	    EQU 0FFFFh
+ENDIF
 FALSE	    EQU 0
 LF	equ	10
 CR	equ	13
@@ -77,14 +81,14 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 ;	 EXTRN	 BADSIZ_POST:BYTE,BADLD_POST:BYTE
 	EXTRN	SYSSIZE:BYTE,BADCOUNTRY:BYTE
 
-	EXTRN  dosinfo:dword,entry_point:dword,
+	EXTRN  dosinfo:dword,entry_point:dword
 	EXTRN  MEMORY_SIZE:WORD,fcbs:byte,keep:byte
 	EXTRN  DEFAULT_DRIVE:BYTE,confbot:word,alloclim:word
 	EXTRN  BUFFERS:WORD,zero:byte,sepchr:byte
 	EXTRN  FILES:BYTE
 	EXTRN  count:word,chrptr:word
 	EXTRN  bufptr:byte,memlo:word,prmblk:byte,memhi:word
-	EXTRN  ldoff:word,area:word,PACKET:BYTE,UNITCOUNT:BYTE,
+	EXTRN  ldoff:word,area:word,PACKET:BYTE,UNITCOUNT:BYTE
 	EXTRN  BREAK_ADDR:DWORD,BPB_ADDR:DWORD,drivenumber:byte
 	extrn  COM_Level:byte, CMMT:byte, CMMT1:byte, CMMT2:byte
 	extrn  Cmd_Indicator:byte
@@ -345,7 +349,7 @@ Set_RecBPB:
 	mov	di,offset DeviceParameters.DP_BPB	 ; es:di -> BPB
 	mov	cx,size a_BPB
 	cld
-	repe	movsb
+	rep 	movsb
 	pop	es
 ASSUME ES:NOTHING
 	test	word ptr switches,flagseclim

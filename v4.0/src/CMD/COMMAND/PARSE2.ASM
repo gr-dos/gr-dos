@@ -343,7 +343,9 @@ break <Arg_Switch>
 
 TRANSPACE	SEGMENT PUBLIC BYTE		;AC000;
     extrn   switch_list:byte
+IFNDEF __JWASM__		; unused; JWasm rejects EQU of an external difference
     switch_count    EQU     $-switch_list
+ENDIF
 transpace   ends
 
 ;---------------
