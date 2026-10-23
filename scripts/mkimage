@@ -19,7 +19,9 @@ src=$2
 shift 2
 
 SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git -C "$root" log -1 --format=%ct)}
-export SOURCE_DATE_EPOCH
+# mtools writes directory times in local time.
+TZ=UTC
+export SOURCE_DATE_EPOCH TZ
 serial=$(printf '%08X' "$SOURCE_DATE_EPOCH")
 
 tmp=$(mktemp -d)
@@ -35,9 +37,12 @@ tail -c 512 "$src/BOOT/MSBOOT.BIN" > "$tmp/bootsect.bin"
 printf '\000' | dd of="$tmp/bootsect.bin" bs=1 seek=36 conv=notrunc status=none
 
 # No volume label: it would take the first directory entry, where the boot
-# sector expects IO.SYS.
+# sector expects IO.SYS. The image is zero-filled first and formatted in
+# place: mformat -C (mtools 4.0.43) leaves uninitialised memory in the last
+# sector.
 rm -f "$img"
-mformat -i "$img" -C -f 1440 -N "$serial" -B "$tmp/bootsect.bin" ::
+truncate -s 1474560 "$img"
+mformat -i "$img" -f 1440 -N "$serial" -B "$tmp/bootsect.bin" ::
 
 # IO.SYS and MSDOS.SYS first, so they are the first directory entries and
 # contiguous from the start of the data area.
