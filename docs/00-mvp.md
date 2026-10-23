@@ -64,7 +64,7 @@ Open questions to resolve experimentally:
 ## Decisions
 
 1. **Source import.** Vendor only `v4.0` from microsoft/MS-DOS, unmodified, in a single commit recording the upstream commit hash. All repairs follow as separate, reviewable commits.
-2. **Encoding.** Keep sources in the repository byte-for-byte as published (CP437, CRLF). Build scripts perform any transformation deterministically.
+2. **Encoding.** Keep sources in the repository byte-for-byte as published (upstream ships LF line endings and raw CP437 bytes; see `docs/provenance.md`). Build scripts perform any transformation deterministically.
 3. **Community restorations.** Take fixes only from sources with a verified license (currently the hharte and lotharsm forks, MIT), recording commit hash and author per patch. Do not use the felsqualle archives or images. ecm's patches require a license check first.
 4. **Reference build tools.** If the original Microsoft build tools are not MIT-covered, M1 may run them under emulation locally only, documented, never in CI and never redistributed.
 5. **Boot media.** Start with a 1.44 MB floppy image. Hard disk images come later.
