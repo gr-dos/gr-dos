@@ -49,7 +49,7 @@ Investigate MASM-compatible assemblers (JWasm/UASM, Open Watcom components) and 
 
 - `wlink`: OMF linker producing DOS EXE/COM.
 - `ms2wlink`: converts Microsoft LINK command lines/response files, as used by the DOS 4 makefiles.
-- `exe2bin`: replaces the historical EXE2BIN step.
+- `exe2bin`: not used; it loses the carry when adding a base segment to a relocated word. `scripts/exe2bin` (Perl) replaces EXE2BIN.
 - `wcc`/`wcl`/`owcc`: 16-bit C compiler with DOS libraries (`lib286`) for the C-based components.
 - `wlib`, `wdis`: librarian and disassembler for comparing objects against the M1 reference build.
 
@@ -65,6 +65,8 @@ Surveyed by assembling the 102 sources behind the boot sector, IO.SYS, MSDOS.SYS
 
 - **`wasm -zcm=masm -cx`** (Open Watcom `2026-10-01-Build`): 101 of 102 files fail, 1,875 errors, mostly cascading from MASM 5 idioms it does not support (`EQU` redefinition, segment/group handling, macro label tricks). Not viable.
 - **JWasm v2.20 `-Zm -Zg -Cx`** (MASM 5.1 compatibility, MASM-identical code generation, MASM `/Mx` case handling): 1,918 errors, of which about 70% come from DOS's own `invoke` macro colliding with the MASM 6 `INVOKE` directive. Renaming that macro alone leaves 578, concentrated in a few macro patterns. chasonr's `linux-build-2` shows the remaining work is tractable.
+
+Result: with the source edits on `graham/impl` all 102 files assemble, and with two JWasm patches (`patches/jwasm`, adding `-Zj` for MASM 5 code generation) every object matches MASM's. Linked with `wlink` in Microsoft LINK's layout (`scripts/mslink-layout`) and converted by `scripts/exe2bin`, the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM are byte-identical to M1. See `docs/m2-jwasm.md`.
 
 ## Decisions
 
@@ -86,7 +88,7 @@ Surveyed by assembling the 102 sources behind the boot sector, IO.SYS, MSDOS.SYS
 16. **Copyright notice.** The GR-DOS banner retains the Microsoft copyright line, satisfying the MIT notice requirement without suggesting endorsement.
 17. **Versioning and releases.** The version lives in a top-level `VERSION` file, starting at `0.01`. When a merge to `main` changes `VERSION`, CI tags that merge commit `v<VERSION>` (first: `v0.01`), creates a GitHub Release and attaches the image, checksums and logs. Other builds publish Actions artifacts only.
 18. **Workflow.** All changes reach `main` through pull requests. `main` is protected: pull requests required, CI status check `ci` must pass, and administrators are not exempt. The CI workflow's job must therefore be named `ci`.
-19. **Assembler.** JWasm v2.20 (commit `ac54827ff40b77ecd6e77ed0866a43fc60cd5fe1`, Sybase Open Watcom Public License), built from source by `scripts/fetch-jwasm`, with `-Zm -Zg -Cx`. Compatibility edits to `v4.0` are committed as small patches, and each must leave the original MASM build (M1) byte-identical to `docs/m1/reference-build.sha256`. M2 targets JWasm + `wlink` output byte-identical to M1 for the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM.
+19. **Assembler.** JWasm v2.20 (commit `ac54827ff40b77ecd6e77ed0866a43fc60cd5fe1`, Sybase Open Watcom Public License), built from source by `scripts/fetch-jwasm` with the patches in `patches/jwasm` applied, and run with `-Zj -Zm -Zg -Cx`. Linking uses `wlink` with the segment layout of Microsoft LINK computed by `scripts/mslink-layout`. Compatibility edits to `v4.0` are committed as small patches, and each must leave the original MASM build (M1) byte-identical to `docs/m1/reference-build.sha256`. M2 targets JWasm + `wlink` output byte-identical to M1 for the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM.
 
 ## Proposed milestones
 
