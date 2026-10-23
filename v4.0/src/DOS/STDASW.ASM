@@ -1,5 +1,9 @@
 ;	SCCSID = @(#)stdasw.asm	1.1 85/04/10
+IFDEF __JWASM__
+TRUE    EQU     -1	; JWasm evaluates NOT in 32 bits
+ELSE
 TRUE    EQU     0FFFFH
+ENDIF
 FALSE   EQU     NOT TRUE
 
 ; Use the switches below to produce the standard Microsoft version or the IBM

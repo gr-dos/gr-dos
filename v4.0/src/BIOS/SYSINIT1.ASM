@@ -40,7 +40,11 @@ TITLE	BIOS SYSTEM INITIALIZATION
 ;AN030; P4934 P4759 INT 2Fh handler number be changed to 1Bh	  05/20/88 J.K.
 ;==============================================================================
 
+IFDEF __JWASM__
+TRUE	    EQU -1	; JWasm evaluates NOT in 32 bits
+ELSE
 TRUE	    EQU 0FFFFh
+ENDIF
 FALSE	    EQU 0
 CR	    equ 13
 LF	    equ 10

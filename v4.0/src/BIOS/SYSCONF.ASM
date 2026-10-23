@@ -45,7 +45,11 @@ TITLE	BIOS SYSTEM INITIALIZATION
 ;AN034; P5128 EMS INT 2FH HANDLER BUG				   06/24/88
 ;==============================================================================
 
+IFDEF __JWASM__
+TRUE	    EQU -1	; JWasm evaluates NOT in 32 bits
+ELSE
 TRUE	    EQU 0FFFFh
+ENDIF
 FALSE	    EQU 0
 LF	equ	10
 CR	equ	13

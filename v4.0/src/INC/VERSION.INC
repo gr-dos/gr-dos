@@ -1,6 +1,10 @@
 ; Some modules really want TRUE to be 0FFH.  Best to let them have their way.
 ifndef TRUE
+IFDEF __JWASM__
+	TRUE	   EQU	   -1	; JWasm evaluates NOT in 32 bits
+ELSE
 	TRUE	   EQU	   0FFFFh
+ENDIF
 endif
 ifndef TRUEBYTE
 	TRUEBYTE   EQU     0FFh

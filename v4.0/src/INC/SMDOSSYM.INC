@@ -1,7 +1,11 @@
 ;	SCCSID = @(#)dossym.asm 1.1 85/04/10
 ;	SCCSID = @(#)dossym.asm 1.1 85/04/10
 	PAGE 80,132
+IFDEF __JWASM__
+TRUE	    EQU -1	; JWasm evaluates NOT in 32 bits
+ELSE
 TRUE	    EQU 0FFFFh
+ENDIF
 FALSE	    EQU 0
 
 Installed   = TRUE
