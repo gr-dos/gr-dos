@@ -4,7 +4,15 @@
 ; Macro file for MSDOS.
 ;
 
+IFDEF __JWASM__
+	OPTION NOKEYWORD:<INVOKE>
+ENDIF
+
+IFDEF __JWASM__
+TRUE    EQU -1	; JWasm evaluates NOT in 32 bits
+ELSE
 TRUE    EQU 0FFFFh
+ENDIF
 FALSE   EQU 0
 
 SUBTTL BREAK a listing into pages and give new subtitles
@@ -116,6 +124,37 @@ long_addr   MACRO   name
 	DD  name
 ENDM
 .xcref  long_addr
+
+;
+; JWasm treats IF2 as always true, so the IF2/IFNDEF tests above would
+; declare a procedure defined later in the same module as EXTRN.  EXTERNDEF
+; declares the name external only if the module does not define it.
+;
+IFDEF __JWASM__
+invoke  MACRO   name
+	EXTERNDEF name:NEAR
+	CALL    name
+ENDM
+
+transfer    MACRO   name
+	EXTERNDEF name:NEAR
+	JUMP    name
+ENDM
+
+short_addr  MACRO   name
+    IFDIF   <name>,<?>
+	EXTERNDEF name:NEAR
+	DW  OFFSET DOSGROUP:name
+    ELSE
+	DW  ?
+    ENDIF
+ENDM
+
+long_addr   MACRO   name
+	EXTERNDEF name:NEAR
+	DD  name
+ENDM
+ENDIF
 
 ;
 ; declare a PROC near or far but PUBLIC nonetheless
