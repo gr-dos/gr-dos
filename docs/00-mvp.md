@@ -41,6 +41,26 @@ Official MIT DOS 4 source
 
 Investigate MASM-compatible assemblers (JWasm/UASM, Open Watcom components) and appropriate OMF linkers; verify compatibility experimentally. Avoid wholesale assembly syntax conversion until the original build is understood. Keep CP437/line-ending transformations deterministic.
 
+## Toolchain candidates
+
+**Preferred: Open Watcom 2.0.** Linux-native (x64 and x86) and covers most of the build:
+
+- `wasm`: MASM-compatible assembler.
+- `wlink`: OMF linker producing DOS EXE/COM.
+- `ms2wlink`: converts Microsoft LINK command lines/response files, as used by the DOS 4 makefiles.
+- `exe2bin`: replaces the historical EXE2BIN step.
+- `wcc`/`wcl`/`owcc`: 16-bit C compiler with DOS libraries (`lib286`) for the C-based components.
+- `wlib`, `wdis`: librarian and disassembler for comparing objects against the M1 reference build.
+
+Open questions to resolve experimentally:
+
+- **MASM dialect.** DOS 4 sources target MASM 4/5; `wasm` differs in places (e.g. `%OUT`, segment ordering, implicit `ASSUME`). Test against real sources before committing.
+- **C portability.** DOS 4 C utilities assume Microsoft C 5.x pragmas, calling conventions and runtime. Treat them as "missing until ported" rather than assumed buildable.
+- **Version pinning.** OW 2.0 is a rolling beta. CI must fetch a specific dated snapshot from the open-watcom-v2 GitHub releases and verify its hash; record the snapshot used locally.
+- **License.** Open Watcom Public License is acceptable for a build tool. If Watcom runtime code is linked into image components, document it.
+
+**Fallback: JWasm/UASM** as assembler, paired with `wlink`, if `wasm` proves incompatible with the DOS 4 sources.
+
 ## Proposed milestones
 
 **M0: Provenance.** Inventory published sources, missing files, license notices, build scripts, historical tools and community patches.
