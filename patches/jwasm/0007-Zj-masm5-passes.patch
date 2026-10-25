@@ -1,0 +1,241 @@
+JWasm: -Zj reads the source in every pass and evaluates IF1/IF2 by pass
+
+MASM 5 reads the source again in each pass. JWasm normally saves the
+lines of pass one and replays them, which it can't do here: STRUC.INC's
+macros generate different code in pass two (IFDEF of labels defined later
+in pass one, IF1/IF2), so the lines are not the same. Under -Zj:
+
+- the saved-lines optimisation (fastpass.c) is off, every pass reads the
+  source again;
+- IF1 is true in pass one only, IF2 in later passes only, as in MASM 5
+  (JWasm: IF1 is always true, IF2 an error);
+- IFDEF/IFNDEF of a symbol defined in pass one is true in later passes,
+  before its definition is reached again (STRUC.INC's forward labels);
+- IFDEF/IFNDEF accept the name in angle brackets (ifndef <$ll&l>);
+- OPTION NOKEYWORD acts in every pass, and the keywords it disabled are
+  enabled again at the end of each pass, so that a line before the OPTION
+  (COMMAND1.ASM's NAME, before COMSW.ASM's OPTION NOKEYWORD:<NAME ...>)
+  means the same in every pass;
+- an EXTRN first seen after pass one (in IF2: COMMAND's INIT.ASM) gets
+  an EXTDEF, as MASM 5 writes the object in pass two: the header, written
+  after pass one, is written again and the module assembled once more;
+- the warning for too many macro arguments is given in pass one only.
+
+diff --git a/src/H/globals.h b/src/H/globals.h
+index 5c90d9b..efd68a9 100644
+--- a/src/H/globals.h
++++ b/src/H/globals.h
+@@ -888,6 +888,7 @@ extern int              AssembleModule( const char * );
+ #endif
+ extern void             AddLinnumDataRef( unsigned, uint_32 );
+ extern void             SetMasm510( bool );
++extern bool             Masm5NewExtern;
+ extern void             close_files( void );
+ extern char             *myltoa( uint_32 value, char *buffer, unsigned radix, bool sign, bool addzero );
+ #if COFF_SUPPORT || PE_SUPPORT
+diff --git a/src/assemble.c b/src/assemble.c
+index 65dcd87..6aa5f0d 100644
+--- a/src/assemble.c
++++ b/src/assemble.c
+@@ -105,6 +105,7 @@ unsigned int            Parse_Pass;     /* assembly pass */
+ struct qdesc            LinnumQueue;    /* queue of line_num_info items */
+ 
+ //bool write_to_file;     /* write object module */
++bool Masm5NewExtern;        /* -Zj: an external was created after pass one */
+ 
+ 
+ #if 0
+@@ -975,6 +976,8 @@ static void PassOneChecks( void )
+  *    - restore the state
+  *    - read preprocessed lines and feed ParseLine() with it
+  */
++static void DisableOptionKeywords( void );
++
+ static int OnePass( void )
+ /************************/
+ {
+@@ -1054,6 +1057,12 @@ static int OnePass( void )
+ 
+     LinnumFini();
+     ResWordsFini( FALSE ); /* v2.17: renamed keywords must be restored at pass end */
++    /* -Zj: as the source is read again (fastpass.c), each pass starts with
++     * the keywords that OPTION NOKEYWORD disabled enabled again */
++    if ( Options.masm5_compat ) {
++        ResWordsFini( TRUE );
++        DisableOptionKeywords();
++    }
+ 
+     if ( Parse_Pass == PASS_1 )
+         PassOneChecks();
+@@ -1151,10 +1160,10 @@ static void ModuleInit( void )
+     return;
+ }
+ 
+-static void ReswTableInit( void )
+-/*******************************/
++/* keywords disabled by the command line options */
++static void DisableOptionKeywords( void )
++/***************************************/
+ {
+-    ResWordsInit();
+     if ( Options.output_format == OFORMAT_OMF ) {
+         /* DebugMsg(("InitAsm: disable IMAGEREL+SECTIONREL\n")); */
+         /* for OMF, IMAGEREL and SECTIONREL are disabled */
+@@ -1171,7 +1180,13 @@ static void ReswTableInit( void )
+         DisableKeyword( T_INCBIN );
+         DisableKeyword( T_FASTCALL );
+     }
++}
+ 
++static void ReswTableInit( void )
++/*******************************/
++{
++    ResWordsInit();
++    DisableOptionKeywords();
+     return;
+ }
+ 
+@@ -1459,6 +1474,7 @@ int EXPQUAL AssembleModule( const char *source )
+     seg->sym.state = SYM_UNDEFINED;
+ #endif
+ 
++    Masm5NewExtern = FALSE;
+     for( Parse_Pass = PASS_1; ; Parse_Pass++ ) {
+ 
+         DebugMsg(( "*************\npass %u\n*************\n", Parse_Pass + 1 ));
+@@ -1481,6 +1497,18 @@ int EXPQUAL AssembleModule( const char *source )
+                       seg->e.seginfo->bytes_written ));
+         }
+ 
++        /* -Zj: Masm 5 writes the object in pass two, so an EXTRN first seen
++         * there (INIT.ASM's IF2 EXTRN READ_DISK_PROC) has an EXTDEF too. The
++         * header, written after pass one, is written again, and the module
++         * assembled once more after it. */
++        if ( Options.masm5_compat && Masm5NewExtern && write_to_file &&
++            Options.output_format == OFORMAT_OMF && ModuleInfo.g.Pass1Checks ) {
++            Masm5NewExtern = FALSE;
++            fseek( CurrFile[OBJ], 0, SEEK_SET );
++            ModuleInfo.g.Pass1Checks( &ModuleInfo );
++            ModuleInfo.PhaseError = TRUE;
++        }
++
+         /* if there's no phase error and size of segments didn't change, we're done */
+         DebugMsg(("AssembleModule(%u): PhaseError=%u, prev_written=%" I32_SPEC "X, curr_written=%" I32_SPEC "X\n", Parse_Pass + 1, ModuleInfo.PhaseError, prev_written, curr_written));
+         if( !ModuleInfo.PhaseError && prev_written == curr_written )
+diff --git a/src/condasm.c b/src/condasm.c
+index 90079e5..4bffd8c 100644
+--- a/src/condasm.c
++++ b/src/condasm.c
+@@ -184,6 +184,10 @@ static bool check_defd( const char *name )
+             DebugMsg1(("check_defd(%s): state=%u defined=%u\n", name, sym->state, sym->isdefined ));
+             /* v2.04: changed. the "defined" flag is active for ALL symbols */
+             //if ( sym->state == SYM_INTERNAL || sym->state == SYM_MACRO || sym->state == SYM_TMACRO || sym->state == SYM_UNDEFINED ) {
++            /* -Zj: in Masm 5, a symbol defined in pass one is defined in
++             * pass two, before its definition (STRUC.INC's forward labels) */
++            if ( Options.masm5_compat && Parse_Pass > PASS_1 && sym->state != SYM_UNDEFINED )
++                return( TRUE );
+             return( sym->isdefined );
+         }
+         DebugMsg1(("check_defd(%s): sym=NULL\n", name ));
+@@ -338,11 +342,21 @@ ret_code CondAsmDirective( int i, struct asm_tok tokenarray[] )
+         }
+         break;
+     case CC_PASS1: /* [ELSE]IF1 */
++        /* -Zj: the source is read again in every pass (fastpass.c), and
++         * IF1 and IF2 are true in the pass they name, as in Masm 5 */
++        if ( Options.masm5_compat ) {
++            NextIfState = ((Parse_Pass == PASS_1) ? BLOCK_ACTIVE : BLOCK_INACTIVE);
++            break;
++        }
+         /* v2.04: changed */
+         //NextIfState = ((Parse_Pass == PASS_1) ? BLOCK_ACTIVE : BLOCK_INACTIVE);
+         NextIfState = BLOCK_ACTIVE;
+         break;
+     case CC_PASS2: /* [ELSE]IF2 */
++        if ( Options.masm5_compat ) {
++            NextIfState = ((Parse_Pass == PASS_1) ? BLOCK_INACTIVE : BLOCK_ACTIVE);
++            break;
++        }
+         if ( ModuleInfo.setif2 == FALSE ) {
+             EmitError( IF2_NOT_ALLOWED );
+             break;
+@@ -381,6 +395,12 @@ ret_code CondAsmDirective( int i, struct asm_tok tokenarray[] )
+                 NextIfState = ( check_defd( tokenarray[i].string_ptr )  ? BLOCK_ACTIVE : BLOCK_INACTIVE );
+             }
+             i++;
++        } else if ( Options.masm5_compat && tokenarray[i].token == T_STRING &&
++                   tokenarray[i].string_delim == '<' && tokenarray[i+1].token == T_FINAL ) {
++            /* -Zj: Masm 5 accepts the name in angle brackets (STRUC.INC's
++             * ifndef <$ll&l>) */
++            NextIfState = ( check_defd( tokenarray[i].string_ptr )  ? BLOCK_ACTIVE : BLOCK_INACTIVE );
++            i++;
+         } else if ( tokenarray[i].token == T_RES_ID && tokenarray[i].tokval == T_FLAT ) {
+             /* v2.09: special treatment of FLAT added */
+             NextIfState = (( ModuleInfo.g.flat_grp && ModuleInfo.g.flat_grp->sym.isdefined ) ? BLOCK_ACTIVE : BLOCK_INACTIVE );
+diff --git a/src/expans.c b/src/expans.c
+index db573d2..54b4adc 100644
+--- a/src/expans.c
++++ b/src/expans.c
+@@ -577,7 +577,9 @@ int RunMacro( struct dsym *macro, int idx, struct asm_tok tokenarray[], char *ou
+             } else {
+                 DebugMsg1(("RunMacro(%s): expected ')', found >%s<\n", macro->sym.name, tokenarray[i].tokpos ));
+                 /* v2.09: changed to a warning only (Masm-compatible) */
+-                EmitWarn( 1, TOO_MANY_ARGUMENTS_IN_MACRO_CALL, macro->sym.name, tokenarray[i].tokpos );
++                /* -Zj: once, not in every pass (fastpass.c) */
++                if ( Parse_Pass == PASS_1 || Options.masm5_compat == FALSE )
++                    EmitWarn( 1, TOO_MANY_ARGUMENTS_IN_MACRO_CALL, macro->sym.name, tokenarray[i].tokpos );
+             }
+         }
+         idx++;
+@@ -588,7 +590,7 @@ int RunMacro( struct dsym *macro, int idx, struct asm_tok tokenarray[], char *ou
+         /* v2.09: don't emit a warning if it's a FOR directive
+          * (in this case, the caller knows better what to do ).
+          */
+-        if ( !(mflags & MF_IGNARGS) )
++        if ( !(mflags & MF_IGNARGS) && ( Parse_Pass == PASS_1 || Options.masm5_compat == FALSE ) )
+             EmitWarn( 1, TOO_MANY_ARGUMENTS_IN_MACRO_CALL, macro->sym.name, tokenarray[idx].tokpos );
+         //return( -1 );
+     }
+diff --git a/src/extern.c b/src/extern.c
+index f41b25d..fb69ca3 100644
+--- a/src/extern.c
++++ b/src/extern.c
+@@ -100,6 +100,9 @@ static struct asym *CreateExternal( struct asym *sym, const char *name, char wea
+         sym->iscomm = FALSE;
+         sym->weak = weak;
+         sym_add_table( &SymTables[TAB_EXT], (struct dsym *)sym ); /* add EXTERNAL */
++        /* -Zj: an EXTRN first seen after pass one (in IF2) */
++        if ( Parse_Pass > PASS_1 )
++            Masm5NewExtern = TRUE;
+     }
+     return( sym );
+ }
+diff --git a/src/fastpass.c b/src/fastpass.c
+index adf1e99..a8ca320 100644
+--- a/src/fastpass.c
++++ b/src/fastpass.c
+@@ -422,7 +422,9 @@ void FastpassInit( void )
+     LineStore.head = NULL;
+     LineStore.tail = NULL;
+     UseSavedState = FALSE;
+-    ReqSavedState = TRUE;
++    /* -Zj: like Masm 5, read the source again in every pass, so that IF1,
++     * IFDEF of forward references and macros are evaluated anew (STRUC.INC) */
++    ReqSavedState = ( Options.masm5_compat == FALSE );
+ }
+ 
+ #endif
+diff --git a/src/option.c b/src/option.c
+index 3c94f28..a463f76 100644
+--- a/src/option.c
++++ b/src/option.c
+@@ -246,7 +246,8 @@ OPTFUNC( SetNoKeyword )
+     unsigned index;
+     char *p;
+ 
+-    if( Parse_Pass != PASS_1 ) {
++    /* -Zj: in every pass, see OnePass() */
++    if( Parse_Pass != PASS_1 && Options.masm5_compat == FALSE ) {
+         SkipOption( pi, tokenarray );
+         return( NOT_ERROR);
+     }

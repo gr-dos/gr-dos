@@ -1,0 +1,79 @@
+JWasm: OMF fixups of an assembly-time variable keep its segment
+
+A fixup on an '=' variable holding a label address refers to the
+variable. The OMF writer looked up the variable's segment when the
+object was written, after the variable may have been set to another
+value; if that was a constant, assembly failed with "No segment
+information to create fixup". The COFF and ELF writers save the segment
+in the fixup (segment_var), but for OMF that member shares storage with
+the frame. store_fixup() now saves it in a new member, var_segment, for
+'=' variables (not '$'), and omf_set_logref() uses it.
+
+Needed for the message tables of CHKDSK (CHKMSG.INC) and FORMAT
+(FORMSG.INC), where Sublist = dg:label is followed by Sublist = None.
+
+diff --git a/src/H/fixup.h b/src/H/fixup.h
+index 23855dc..2fd1465 100644
+--- a/src/H/fixup.h
++++ b/src/H/fixup.h
+@@ -127,6 +127,7 @@ struct fixup {
+         struct asym         *segment_var;   /* symbol's segment if assembly time var */
+     };
+     struct dsym             *def_seg;       /* segment the fixup is in - pass 1 only */
++    struct asym             *var_segment;   /* OMF: segment of an '=' variable's value when the fixup was stored */
+     struct asym             *sym;
+ };
+ 
+diff --git a/src/fixup.c b/src/fixup.c
+index 70ff4ef..8abf3fe 100644
+--- a/src/fixup.c
++++ b/src/fixup.c
+@@ -78,6 +78,7 @@ struct fixup *FixupCreate( struct asym *sym, enum fixup_types type, enum fixup_o
+     fixup->nextbp = NULL;
+     fixup->nextrlc = NULL;
+     fixup->flags = 0; /* v2.14: moved up here so count won't be overwritten */
++    fixup->var_segment = NULL;
+ 
+     /* add the fixup to the symbol's linked list (used for backpatch)
+      * this is done for pass 1 only.
+@@ -243,6 +244,10 @@ void store_fixup( struct fixup *fixup, struct dsym *seg, int_32 *pdata )
+         if( fixup->type != FIX_SEG && fixup->sym ) {
+             *pdata += fixup->sym->offset;
+         }
++        /* an '=' variable may be set to another value, even a constant,
++         * before the object is written; keep the segment of its current value */
++        if( fixup->sym && fixup->sym->isvariable && fixup->sym->isequate )
++            fixup->var_segment = fixup->sym->segment;
+ 
+     } else {
+ 
+diff --git a/src/omffixup.c b/src/omffixup.c
+index 43f0221..d5b4826 100644
+--- a/src/omffixup.c
++++ b/src/omffixup.c
+@@ -357,20 +357,21 @@ static int omf_set_logref( const struct fixup *fixup, struct logref *lr )
+                 DebugMsg1(("omf_seg_logref: assembly-time variable branch\n" ));
+             } else
+ #endif
+-            if ( sym->segment == NULL ) { /* shouldn't happen */
++            struct asym *segment = fixup->var_segment ? fixup->var_segment : sym->segment;
++            if ( segment == NULL ) { /* shouldn't happen */
+                 EmitErr( SEGMENT_MISSING_FOR_FIXUP, sym->name );
+                 return ( 0 );
+ #if COMDATSUPP
+-            } else if ( ( (struct dsym *)sym->segment)->e.seginfo->comdat_selection ) {
++            } else if ( ( (struct dsym *)segment)->e.seginfo->comdat_selection ) {
+                 DebugMsg1(("omf_set_logref: comdat selection\n" ));
+                 lr->target_meth = TARGET_EXT;
+-                lr->target_datum = ((struct dsym *)sym->segment)->e.seginfo->seg_idx;
++                lr->target_datum = ((struct dsym *)segment)->e.seginfo->seg_idx;
+                 lr->frame_meth = FRAME_TARG;
+                 return( 1 );
+ #endif
+             } else {
+                 lr->target_meth = TARGET_SEG;
+-                lr->target_datum = GetSegIdx( sym->segment );
++                lr->target_datum = GetSegIdx( segment );
+             }
+         }
+ 

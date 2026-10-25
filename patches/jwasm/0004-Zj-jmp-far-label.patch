@@ -1,0 +1,32 @@
+JWasm: -Zj makes a JMP to a FAR label short or far, never near
+
+MASM 5 does not make a near JMP to a label of type FAR in the current
+segment. A JMP back to one is short if the label is within range and a
+far JMP (EAh) otherwise. A forward JMP was sized in pass one, before the
+label's type was known, and is left to the forward JMP rule (3 bytes,
+EB xx 90 when short). JWasm made both backward cases a near JMP (E9h).
+
+Needed for CHKDSK (CHKPROC.ASM), which jumps to NODDOT, NULLDIRERR and
+DDSIZOK, all LABEL FAR.
+
+diff --git a/src/branch.c b/src/branch.c
+index acf7588..79b71ad 100644
+--- a/src/branch.c
++++ b/src/branch.c
+@@ -262,6 +262,16 @@ ret_code process_branch( struct code_info *CodeInfo, unsigned CurrOpnd, const st
+     }
+ 
+     if ( state != SYM_EXTERNAL ) {
++        /* -Zj: MASM 5 never makes a near JMP to a FAR label in the current
++         * segment: a JMP back to one is short if it can be, and far
++         * otherwise. A forward JMP was sized in pass one, before the label's
++         * type was known, and is left alone. */
++        if ( Options.masm5_compat && CodeInfo->token == T_JMP &&
++            CodeInfo->mem_type == MT_EMPTY && sym->mem_type == MT_FAR &&
++            opndx->instr != T_SHORT && state == SYM_INTERNAL &&
++            sym->offset < GetCurrOffset() &&
++            (int_32)sym->offset - (int_32)( GetCurrOffset() + 2 ) < SCHAR_MIN )
++            CodeInfo->mem_type = MT_FAR;
+         /* v1.94: if a segment override is active,
+          check if it's matching the assumed value of CS.
+          If no, assume a FAR call.

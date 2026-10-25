@@ -1,0 +1,80 @@
+JWasm: -Zj separates macro arguments by blanks as well as commas
+
+MASM 5 takes a blank between two items of a macro call as an argument
+separator, as a comma is. JWasm takes the whole text up to the next
+comma as one argument.
+
+Needed for STRUC.INC, whose structured-programming macros are called as
+.IF <x EQ y> THEN, .WHILE <...> AND <...> and so on (MORE, MODE, FIND,
+CHKDSK): the operands and the conjunctions are separate arguments.
+
+Not for macro functions, the loop directives (anonymous macros) or a
+macro's VARARG parameter, which keeps the rest of the line.
+
+diff --git a/src/expans.c b/src/expans.c
+index 6982d23..db573d2 100644
+--- a/src/expans.c
++++ b/src/expans.c
+@@ -138,6 +138,7 @@ int RunMacro( struct dsym *macro, int idx, struct asm_tok tokenarray[], char *ou
+     int         bracket_level = -1;/* () level (needed for macro functions) */
+     int         parm_end_delim;   /* parameter end delimiter */
+     bool        skipcomma;
++    bool        blanksep;         /* -Zj: blanks separate arguments, as in Masm 5 */
+     //char        addprefix;
+     char        *ptr;
+     char        *parmstrings;
+@@ -218,6 +219,13 @@ int RunMacro( struct dsym *macro, int idx, struct asm_tok tokenarray[], char *ou
+     /* v2.08: allow T_FINAL to be chained, lastidx==0 is true final */
+     tokenarray[Token_Count].lastidx = 0;
+ 
++    /* -Zj: Masm 5 separates the arguments of a macro call by blanks as well
++     * as commas (STRUC.INC's .IF <x EQ y> THEN). Not for macro functions and
++     * loop directives (anonymous macros), which Masm 5 didn't have or
++     * delimits otherwise. */
++    blanksep = ( Options.masm5_compat && bracket_level < 0 &&
++                *macro->sym.name != NULLC && ( mflags & MF_IGNARGS ) == 0 );
++
+     for( varargcnt = 0, skipcomma = FALSE; parmidx < info->parmcnt; parmidx++ ) {
+ 
+         /* v2.09: don't skip comma if it was the last argument.
+@@ -251,12 +259,13 @@ int RunMacro( struct dsym *macro, int idx, struct asm_tok tokenarray[], char *ou
+             int  inside_literal = 0;
+             int  inside_angle_brackets = 0;
+             int  old_tokencount = Token_Count;
++            bool argend = FALSE; /* -Zj: a blank ended the argument */
+ 
+             *currparm = NULLC;
+ 
+             DebugMsg1(( "RunMacro(%s.%u), >%s<\n", macro->sym.name, parmidx, tokenarray[idx].tokpos ));
+ 
+-            for( ptr = currparm; ( tokenarray[idx].token != T_FINAL && tokenarray[idx].token != T_COMMA ) || inside_literal; idx++ ) {
++            for( ptr = currparm; ( ( tokenarray[idx].token != T_FINAL && tokenarray[idx].token != T_COMMA ) || inside_literal ) && !argend; idx++ ) {
+ 
+                 /* if were're inside a literal, go up one level and continue scanning the argument */
+                 if ( tokenarray[idx].token == T_FINAL ) {
+@@ -267,6 +276,10 @@ int RunMacro( struct dsym *macro, int idx, struct asm_tok tokenarray[], char *ou
+                     else {
+                         *ptr++ = '}';
+                     }
++                    if ( blanksep && inside_literal == 0 &&
++                        tokenarray[idx+1].token != T_FINAL && tokenarray[idx+1].token != T_COMMA &&
++                        isspace( *(tokenarray[idx+1].tokpos - 1) ) )
++                        argend = TRUE;
+                     continue;
+                 }
+ 
+@@ -486,8 +499,13 @@ int RunMacro( struct dsym *macro, int idx, struct asm_tok tokenarray[], char *ou
+                 }
+                 /* get length of item */
+                 i = tokenarray[idx+1].tokpos - tokenarray[idx].tokpos;
++                if ( blanksep && !inside_literal &&
++                    tokenarray[idx+1].token != T_FINAL && tokenarray[idx+1].token != T_COMMA &&
++                    isspace( *(tokenarray[idx+1].tokpos - 1) ) &&
++                    ( macro->sym.mac_vararg == FALSE || parmidx != info->parmcnt - 1 ) )
++                    argend = TRUE;
+                 if ( !inside_literal && ( tokenarray[idx+1].token == T_COMMA ||
+-                    tokenarray[idx+1].token == parm_end_delim ) ) {
++                    tokenarray[idx+1].token == parm_end_delim || argend ) ) {
+                     while ( isspace( *(tokenarray[idx].tokpos+i-1 ) ) ) i--;
+                 }
+                 /* the literal character operator ! is valid for macro arguments */

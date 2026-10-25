@@ -1,0 +1,312 @@
+JWasm: -Zj keys the pass one instruction sizes by source position
+
+Patch 0002 records the size of each instruction in pass one and pads it
+with NOPs in later passes, matching each instruction to pass one's by
+its index in the instruction sequence. With STRUC.INC, the sequence is
+not the same in pass two (a JMP becomes JMP SHORT and NOP, labels are
+renamed, IF1 code drops out), and every instruction after the first
+difference lost its padding.
+
+Each recorded size is now keyed by the instruction's position: the
+source file, its inclusion number in the pass (a file can be included
+more than once), the line (a macro's instructions are at the line that
+invoked it), the instruction's text (mnemonic and whether it says SHORT)
+and its occurrence number among the same instructions of that line.
+Later passes look the position up in a hash table and pad only the same
+instruction.
+
+diff --git a/src/H/input.h b/src/H/input.h
+index ae4635e..c08b15d 100644
+--- a/src/H/input.h
++++ b/src/H/input.h
+@@ -83,6 +83,7 @@ extern void     PopInputStatus( struct input_status * );
+ extern int      GetCurrSrcPos( char * );
+ extern void     ClearSrcStack( void );
+ extern unsigned get_curr_srcfile( void );
++extern void     get_curr_srcpos( unsigned *, uint_32 *, uint_32 * );
+ #if FASTPASS
+ extern void     set_curr_srcfile( unsigned, uint_32 );
+ #endif
+diff --git a/src/H/parser.h b/src/H/parser.h
+index 96670ee..c71e1f1 100644
+--- a/src/H/parser.h
++++ b/src/H/parser.h
+@@ -319,6 +319,7 @@ extern void       set_frame2( const struct asym *sym );
+ extern ret_code   ParseLine( struct asm_tok[] );
+ extern void       ProcessFile( struct asm_tok[] );
+ extern void       Masm5PassInit( void );
++extern void       Masm5Begin( const char * );
+ extern bool       Masm5FwdRef;
+ extern void       Masm5Pad( enum instr_token, uint_32 );
+ 
+diff --git a/src/input.c b/src/input.c
+index 2675efb..bf71aec 100644
+--- a/src/input.c
++++ b/src/input.c
+@@ -70,6 +70,7 @@ struct src_item {
+         struct macro_instance *mi;  /* if item is a macro */
+     };
+     uint_32             line_num;   /* current line # */
++    uint_32             visit;      /* SIT_FILE: inclusion # of the file in this pass */
+     /* v2.11 field macro moved to struct macro_instance */
+     //struct asym         *macro;     /* the symbol if it is a macro */
+ };
+@@ -77,6 +78,10 @@ struct src_item {
+ /* v2.11: introduced a list of unused src_items */
+ static struct src_item *SrcFree;
+ 
++/* -Zj: how often each file has been included in this pass */
++static uint_32 *FileVisits;
++static unsigned FileVisitsMax;
++
+ #define src_stack  ModuleInfo.g.src_stack
+ 
+ #if FILESEQ
+@@ -453,6 +458,26 @@ bool MacroInUse( struct dsym *macro )
+ }
+ #endif
+ 
++/* -Zj: the position in the source files of the current line: the file,
++ * its inclusion # and the line, as the line of the innermost file
++ * (a macro's lines are at the line that invoked it).
++ */
++void get_curr_srcpos( unsigned *file, uint_32 *visit, uint_32 *line )
++/*******************************************************************/
++{
++    struct src_item *curr;
++    for ( curr = src_stack; curr ; curr = curr->next )
++        if ( curr->type == SIT_FILE ) {
++            *file = curr->srcfile;
++            *visit = curr->visit;
++            *line = curr->line_num;
++            return;
++        }
++    *file = ModuleInfo.srcfile;
++    *visit = 0;
++    *line = 0;
++}
++
+ unsigned get_curr_srcfile( void )
+ /*******************************/
+ {
+@@ -675,6 +700,15 @@ FILE *SearchFile( const char *path, bool queue )
+     if ( queue ) {
+         fl = PushSrcItem( SIT_FILE, file );
+         fl->srcfile = AddFile( path );
++        if ( fl->srcfile >= FileVisitsMax ) {
++            unsigned max = fl->srcfile + 64;
++            FileVisits = realloc( FileVisits, max * sizeof( *FileVisits ) );
++            if ( FileVisits == NULL )
++                Fatal( OUT_OF_MEMORY );
++            memset( FileVisits + FileVisitsMax, 0, ( max - FileVisitsMax ) * sizeof( *FileVisits ) );
++            FileVisitsMax = max;
++        }
++        fl->visit = ++FileVisits[fl->srcfile];
+         FileCur->string_ptr = GetFName( fl->srcfile )->fname;
+ #if FILESEQ
+         if ( Options.line_numbers && Parse_Pass == PASS_1 )
+@@ -943,6 +977,7 @@ void InputInit( void )
+ 
+     fl = PushSrcItem( SIT_FILE, CurrFile[ASM] );
+     fl->srcfile = ModuleInfo.srcfile = AddFile( CurrFName[ASM] );
++    fl->visit = 0;
+     /* setting a function pointer won't work for text macros! */
+     //FileCur->sfunc_ptr = &GetFileCur;
+     FileCur->string_ptr = GetFName( fl->srcfile )->fname;
+@@ -957,6 +992,8 @@ void InputPassInit( void )
+ {
+     DebugMsg(( "InputPassInit() enter\n" ));
+     src_stack->line_num = 0;
++    if ( FileVisits )
++        memset( FileVisits, 0, FileVisitsMax * sizeof( *FileVisits ) );
+     //inside_comment = NULLC;
+     CurrSource = srclinebuffer;
+     *CurrSource = NULLC;
+diff --git a/src/parser.c b/src/parser.c
+index c7014ab..86d8615 100644
+--- a/src/parser.c
++++ b/src/parser.c
+@@ -61,17 +61,37 @@
+  * variable, and pads the instruction with NOPs in pass two if it turns out
+  * shorter. A forward reference in a displacement keeps its 16-bit size.
+  * The pass one size of each instruction is recorded here, indexed by its
+- * position in the source, and later passes pad up to it.
++ * position in the source: the file, its inclusion #, the line, the
++ * instruction (its mnemonic, and whether it says SHORT) and its number
++ * among the instructions of that line that are the same (macros may
++ * generate several, and different ones in pass two: STRUC.INC turns a
++ * JMP into JMP SHORT and NOP, with labels renamed). Later passes pad the
++ * same instruction up to it.
+  */
+ 
++struct masm5_pos {
++    unsigned file;
++    uint_32 visit;
++    uint_32 line;
++    uint_32 text;       /* the instruction: mnemonic, SHORT */
++    uint_32 seq;
++};
+ static struct {
++    struct masm5_pos pos;
+     enum instr_token token;
+     uint_8  dispmask;   /* operands with a 16-bit displacement */
+     uint_32 size;
+ } *Masm5Sizes;
+ static unsigned Masm5Count;
+ static unsigned Masm5Max;
+-static unsigned Masm5Index;
++static int *Masm5Hash;          /* indices into Masm5Sizes, -1 if free */
++static unsigned Masm5HashSize;  /* a power of 2 */
++static struct masm5_pos Masm5Pos; /* of the current instruction */
++#define MASM5_LINE_TEXTS 64
++static uint_32 Masm5LineText[MASM5_LINE_TEXTS]; /* texts of the line so far */
++static uint_32 Masm5LineCount[MASM5_LINE_TEXTS]; /* and how often each occurred */
++static unsigned Masm5LineTexts;
++static int Masm5Cur;            /* its pass one entry, or -1 */
+ bool Masm5FwdRef;              /* expression had a forward reference */
+ static uint_8 Masm5OpndFwd;    /* operands with forward references */
+ static uint_8 Masm5DispMask;   /* operands with a forced 16-bit displacement */
+@@ -599,9 +619,9 @@ static ret_code set_rm_sib( struct code_info *CodeInfo, unsigned CurrOpnd, char
+         if ( Parse_Pass == PASS_1 ) {
+             if ( Masm5OpndFwd & ( 1 << CurrOpnd ) )
+                 Masm5DispMask |= 1 << CurrOpnd;
+-        } else if ( Masm5Index < Masm5Count &&
+-                   Masm5Sizes[Masm5Index].token == CodeInfo->token &&
+-                   ( Masm5Sizes[Masm5Index].dispmask & ( 1 << CurrOpnd ) ) )
++        } else if ( Masm5Cur >= 0 &&
++                   Masm5Sizes[Masm5Cur].token == CodeInfo->token &&
++                   ( Masm5Sizes[Masm5Cur].dispmask & ( 1 << CurrOpnd ) ) )
+             Masm5DispMask |= 1 << CurrOpnd;
+         if ( Masm5DispMask & ( 1 << CurrOpnd ) )
+             mod_field = MOD_10;
+@@ -3299,6 +3319,9 @@ ret_code ParseLine( struct asm_tok tokenarray[] )
+     if ( ModuleInfo.CommentDataInCode )
+         omf_OutSelect( FALSE );
+ 
++    if ( Options.masm5_compat )
++        Masm5Begin( tokenarray[i-1].tokpos );
++
+     /* get the instruction's arguments.
+      * This loop accepts up to 4 arguments if AVXSUPP is on */
+ 
+@@ -3615,12 +3638,93 @@ ret_code ParseLine( struct asm_tok tokenarray[] )
+     return( NOT_ERROR );
+ }
+ 
++static unsigned Masm5HashPos( const struct masm5_pos *pos )
++/*********************************************************/
++{
++    uint_32 h = pos->file * 0x9E3779B1UL;
++    h = ( h ^ pos->visit ) * 0x85EBCA77UL;
++    h = ( h ^ pos->line ) * 0xC2B2AE3DUL;
++    h = ( h ^ pos->text ) * 0x165667B1UL;
++    h = ( h ^ pos->seq ) * 0x27D4EB2FUL;
++    return( ( h ^ ( h >> 15 ) ) & ( Masm5HashSize - 1 ) );
++}
++
++static bool Masm5SamePos( const struct masm5_pos *a, const struct masm5_pos *b )
++/******************************************************************************/
++{
++    return( a->file == b->file && a->visit == b->visit && a->line == b->line &&
++           a->text == b->text && a->seq == b->seq );
++}
++
+ void Masm5PassInit( void )
+ /************************/
+ {
+-    if ( Parse_Pass == PASS_1 )
++    unsigned i;
++    unsigned h;
++
++    if ( Parse_Pass == PASS_1 ) {
+         Masm5Count = 0;
+-    Masm5Index = 0;
++        free( Masm5Hash );
++        Masm5Hash = NULL;
++    } else if ( Masm5Hash == NULL ) {
++        /* index the pass one sizes by position */
++        for ( Masm5HashSize = 1024; Masm5HashSize < 2 * Masm5Count; Masm5HashSize *= 2 );
++        Masm5Hash = malloc( Masm5HashSize * sizeof( *Masm5Hash ) );
++        if ( Masm5Hash == NULL )
++            Fatal( OUT_OF_MEMORY );
++        memset( Masm5Hash, -1, Masm5HashSize * sizeof( *Masm5Hash ) );
++        for ( i = 0; i < Masm5Count; i++ ) {
++            for ( h = Masm5HashPos( &Masm5Sizes[i].pos ); Masm5Hash[h] >= 0; h = ( h + 1 ) & ( Masm5HashSize - 1 ) );
++            Masm5Hash[h] = i;
++        }
++    }
++    Masm5Pos.file = (unsigned)-1;
++    Masm5LineTexts = 0;
++    Masm5Cur = -1;
++}
++
++/* called before an instruction is parsed: determine its position and, in
++ * later passes, its pass one entry.
++ */
++void Masm5Begin( const char *text )
++/*********************************/
++{
++    struct masm5_pos pos;
++    unsigned h;
++    unsigned i;
++
++    /* FNV-1a of the mnemonic, and a bit for SHORT */
++    for ( pos.text = 0x811C9DC5UL; *text && !isspace( *text ); text++ )
++        pos.text = ( pos.text ^ toupper( *text ) ) * 0x01000193UL;
++    pos.text &= ~1UL;
++    for ( ; *text; text++ )
++        if ( _memicmp( text, "SHORT", 5 ) == 0 && !is_valid_id_char( *(text+5) ) &&
++            ( !is_valid_id_char( *(text-1) ) ) ) {
++            pos.text |= 1;
++            break;
++        }
++    get_curr_srcpos( &pos.file, &pos.visit, &pos.line );
++    if ( pos.file != Masm5Pos.file || pos.visit != Masm5Pos.visit || pos.line != Masm5Pos.line )
++        Masm5LineTexts = 0;
++    for ( i = 0; i < Masm5LineTexts && Masm5LineText[i] != pos.text; i++ );
++    if ( i == Masm5LineTexts ) {
++        if ( i == MASM5_LINE_TEXTS )
++            i--; /* very long expansion: share the last slot */
++        else
++            Masm5LineTexts++;
++        Masm5LineText[i] = pos.text;
++        Masm5LineCount[i] = 0;
++    }
++    pos.seq = Masm5LineCount[i]++;
++    Masm5Pos = pos;
++    Masm5Cur = -1;
++    if ( Parse_Pass == PASS_1 || Masm5Hash == NULL )
++        return;
++    for ( h = Masm5HashPos( &pos ); Masm5Hash[h] >= 0; h = ( h + 1 ) & ( Masm5HashSize - 1 ) )
++        if ( Masm5SamePos( &Masm5Sizes[Masm5Hash[h]].pos, &pos ) ) {
++            Masm5Cur = Masm5Hash[h];
++            break;
++        }
+ }
+ 
+ void Masm5Pad( enum instr_token token, uint_32 size )
+@@ -3633,20 +3737,18 @@ void Masm5Pad( enum instr_token token, uint_32 size )
+             if ( Masm5Sizes == NULL )
+                 Fatal( OUT_OF_MEMORY );
+         }
++        Masm5Sizes[Masm5Count].pos = Masm5Pos;
+         Masm5Sizes[Masm5Count].token = token;
+         Masm5Sizes[Masm5Count].dispmask = Masm5DispMask;
+         Masm5Sizes[Masm5Count].size = size;
+         Masm5Count++;
+         return;
+     }
+-    if ( Masm5Index >= Masm5Count || Masm5Sizes[Masm5Index].token != token ) {
+-        /* the instruction sequence differs from pass one */
+-        Masm5Index = Masm5Count;
++    /* no padding if the instruction differs from pass one's */
++    if ( Masm5Cur < 0 || Masm5Sizes[Masm5Cur].token != token )
+         return;
+-    }
+-    for ( ; size < Masm5Sizes[Masm5Index].size; size++ )
++    for ( ; size < Masm5Sizes[Masm5Cur].size; size++ )
+         OutputByte( 0x90 );
+-    Masm5Index++;
+ }
+ 
+ /* process a file. introduced in v2.11 */
