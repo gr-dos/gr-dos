@@ -8,7 +8,7 @@ use List::Util qw( first pairkeys pairvalues );
 
 =head1 SYNOPSIS
 
- scripts/check-image [--format 1440|1200] IMAGE IO.SYS MSDOS.SYS
+ scripts/check-image [--format 1440|1200|720|360] IMAGE IO.SYS MSDOS.SYS
 
 =head1 DESCRIPTION
 
@@ -19,9 +19,9 @@ Checks the layout the MS-DOS 4.00 boot sector and MSLOAD depend on
 
 =item *
 
-the image size and the BPB match the floppy format: C<--format 1440>, a
-3.5" 1.44 MB disk, or C<--format 1200>, a 5.25" 1.2 MB disk (see
-L</FORMATS>). Without C<--format> the format is chosen by the image size;
+the image size and the BPB match the floppy format given by C<--format>, the
+size in KB (see L</FORMATS>). Without C<--format> the format is chosen by the
+image size;
 
 =item *
 
@@ -44,21 +44,27 @@ Dies with a description of the first problem found.
 
 =head1 FORMATS
 
-The BPB of each format is the one DOS FORMAT writes: 512-byte sectors, one
-sector per cluster, one reserved sector, two FATs and 224 root directory
-entries.
+The BPB of each format is the one DOS FORMAT writes, with 512-byte sectors,
+one reserved sector, two FATs and two heads:
 
- format  bytes      cylinders  heads  sectors  media  sectors per FAT
- 1440    1,474,560  80         2      18       F0h    9
- 1200    1,228,800  80         2      15       F9h    7
+ format  disk        bytes      cylinders  sectors  cluster  root  media  FAT
+ 1440    3.5" HD     1,474,560  80         18       1        224   F0h    9
+ 1200    5.25" HD    1,228,800  80         15       1        224   F9h    7
+ 720     3.5" DD       737,280  80          9       2        112   F9h    3
+ 360     5.25" DD      368,640  40          9       2        112   FDh    2
+
+(sectors per track, sectors per cluster, root directory entries, media
+byte and sectors per FAT).
 
 =cut
 
-my %common = (bps => 512, spc => 1, reserved => 1, nfats => 2, nroot => 224, heads => 2);
+my %common = (bps => 512, reserved => 1, nfats => 2, heads => 2);
 
 my %formats = (
-  1440 => { %common, sectors => 2880, media => 0xf0, spf => 9, spt => 18 },
-  1200 => { %common, sectors => 2400, media => 0xf9, spf => 7, spt => 15 },
+  1440 => { %common, sectors => 2880, spc => 1, nroot => 224, media => 0xf0, spf => 9, spt => 18 },
+  1200 => { %common, sectors => 2400, spc => 1, nroot => 224, media => 0xf9, spf => 7, spt => 15 },
+  720  => { %common, sectors => 1440, spc => 2, nroot => 112, media => 0xf9, spf => 3, spt => 9 },
+  360  => { %common, sectors => 720,  spc => 2, nroot => 112, media => 0xfd, spf => 2, spt => 9 },
 );
 
 # BPB fields from offset 0Bh, in order, and their unpack templates.
@@ -80,12 +86,12 @@ sub fat12 ($fat, $n) {
 }
 
 sub main (@args) {
-  my $usage = "usage: $0 [--format 1440|1200] IMAGE IO.SYS MSDOS.SYS\n";
+  my $usage = "usage: $0 [--format 1440|1200|720|360] IMAGE IO.SYS MSDOS.SYS\n";
   my $format;
   if(@args && $args[0] eq '--format') {
     shift @args;
     $format = shift @args;
-    die "$0: --format must be one of @{[ sort keys %formats ]}\n"
+    die "$0: --format must be one of @{[ sort { $b <=> $a } keys %formats ]}\n"
       unless defined $format && $formats{$format};
   }
   die $usage unless @args == 3;

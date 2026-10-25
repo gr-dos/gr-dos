@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Download the pinned tico16 release asset, tico.exe, and the license from
+# the release's commit, and check both against their pinned SHA-256. tico16
+# is not built here. Prints the directory holding TICO.EXE and LICENSE on
+# stdout. Reuses an existing verified copy.
+#
+# usage: scripts/fetch-tico [DESTDIR]     (default: build/tools)
+
+set -eu
+
+release=v0.02
+commit=5769a9a6bc9d74f612966eebef4d7dde62220e90
+exe_sha256=f55cbcee0623a4982bb20eada3b084024d73d41e03c21530c3e0ff14b7a35a76
+license_sha256=a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+exe_url="https://github.com/tico-edit/tico16/releases/download/$release/tico.exe"
+license_url="https://raw.githubusercontent.com/tico-edit/tico16/$commit/LICENSE"
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+dest=${1:-"$root/build/tools"}
+tico="$dest/tico16-$release"
+
+verified() {
+  printf '%s  %s\n%s  %s\n' "$exe_sha256" "$tico/TICO.EXE" "$license_sha256" "$tico/LICENSE" \
+    | sha256sum -c --status > /dev/null 2>&1
+}
+
+if ! verified; then
+  rm -rf "$tico.tmp"
+  mkdir -p "$tico.tmp"
+  curl -fsSL -o "$tico.tmp/TICO.EXE" "$exe_url"
+  curl -fsSL -o "$tico.tmp/LICENSE" "$license_url"
+  printf '%s  %s\n%s  %s\n' "$exe_sha256" "$tico.tmp/TICO.EXE" "$license_sha256" "$tico.tmp/LICENSE" \
+    | sha256sum -c --quiet
+  rm -rf "$tico"
+  mv "$tico.tmp" "$tico"
+fi
+
+echo "$tico"

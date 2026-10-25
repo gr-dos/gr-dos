@@ -4,11 +4,14 @@
 # tree: the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM, then any further
 # FILEs into the root directory. Checks the result with scripts/check-image.
 #
-# usage: scripts/mkimage [--format 1440|1200] OUT.IMG SRCDIR [FILE...]
+# usage: scripts/mkimage [--format 1440|1200|720|360] OUT.IMG SRCDIR [FILE...]
 #
-# --format picks the disk: 1440 (the default) is a 3.5" 1.44 MB disk, 80
-# cylinders, 2 heads and 18 sectors per track; 1200 is a 5.25" 1.2 MB disk,
-# 80 cylinders, 2 heads and 15 sectors per track.
+# --format picks the disk, by its size in KB (cylinders/heads/sectors):
+#
+#   1440  3.5" HD, 80/2/18 (the default)
+#   1200  5.25" HD, 80/2/15
+#   720   3.5" DD, 80/2/9
+#   360   5.25" DD, 40/2/9
 #
 # SOURCE_DATE_EPOCH sets the file times and the volume serial number, so the
 # image is reproducible (default: the time of the last git commit).
@@ -16,15 +19,15 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-usage="usage: $0 [--format 1440|1200] OUT.IMG SRCDIR [FILE...]"
+usage="usage: $0 [--format 1440|1200|720|360] OUT.IMG SRCDIR [FILE...]"
 format=1440
 if [ "${1:-}" = --format ]; then
   format=${2:?$usage}
   shift 2
 fi
 case $format in
-  1440|1200) ;;
-  *) echo "$0: --format must be 1440 or 1200" >&2; exit 2 ;;
+  1440|1200|720|360) ;;
+  *) echo "$0: --format must be 1440, 1200, 720 or 360" >&2; exit 2 ;;
 esac
 [ $# -ge 2 ] || { echo "$usage" >&2; exit 2; }
 img=$1

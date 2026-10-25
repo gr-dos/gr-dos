@@ -1,0 +1,3 @@
+@ECHO OFF
+PROMPT $P$G
+PATH A:\

@@ -4,12 +4,24 @@
 ^GRDOS-TEST-BEGIN$
 # VER: GR-DOS branding (decision 7)
 ^GR-DOS Version 4\.00$
-# DIR: IO.SYS and MSDOS.SYS are hidden
+# DIR: IO.SYS and MSDOS.SYS are hidden; the files of every image (issue
+# #4), then the test's
 ^ Volume in drive A has no label$
 ^COMMAND  COM +\d+ 
+^FORMAT   COM +\d+ 
+^SYS      COM +\d+ 
+^CHKDSK   COM +\d+ 
+^DISKCOPY COM +\d+ 
+^ATTRIB   EXE +\d+ 
+^MORE     COM +\d+ 
+^FIND     EXE +\d+ 
+^DEBUG    COM +\d+ 
+^MEM      EXE +\d+ 
+^MODE     COM +\d+ 
+^TICO     EXE +29702 
 ^AUTOEXEC BAT +\d+ 
 ^HELLO    COM +\d+ 
-^ +3 File\(s\) +\d+ bytes free$
+^ +14 File\(s\) +\d+ bytes free$
 # COPY and TYPE
 ^ +1 File\(s\) copied$
 ^hello$

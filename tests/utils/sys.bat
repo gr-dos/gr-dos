@@ -1,0 +1,14 @@
+@ECHO OFF
+REM FORMAT and SYS tests (make test-sys-*). Drive B: is a disposable image
+REM of the format under test, @SIZE@ KB; the Makefile gives the FORMAT line.
+CTTY AUX
+ECHO GRDOS-TEST-BEGIN
+@FORMAT@
+IF NOT ERRORLEVEL 1 ECHO GRDOS-FORMAT-OK
+SYS B:
+COPY COMMAND.COM B:
+COPY BOOTB.BAT B:AUTOEXEC.BAT
+DIR B:
+CHKDSK B:
+ECHO GRDOS-TEST-END
+CTTY CON

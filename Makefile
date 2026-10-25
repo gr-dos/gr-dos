@@ -1,22 +1,26 @@
 # GR-DOS Linux build (decisions 11 and 19).
 #
-#   make          build the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM,
-#                 and the bootable floppy images build/linux/gr-dos-1440k.img
-#                 (3.5" 1.44 MB) and build/linux/gr-dos-1200k.img (5.25" 1.2 MB)
+#   make          build the boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM and
+#                 the utilities, and the bootable floppy images
+#                 build/linux/gr-dos-{1440,1200,720,360}k.img (3.5" 1.44 MB,
+#                 5.25" 1.2 MB, 3.5" 720 KB, 5.25" 360 KB), which all hold the
+#                 same files (build/linux/manifest.txt)
 #   make check    build without the branding patches, in build/linux/reference,
 #                 and compare the binaries and generated message files with
 #                 the M1 reference build (docs/m1/reference-build.sha256)
 #   make test     boot a copy of each image with a test AUTOEXEC.BAT and
-#                 program in QEMU and check its serial output (tests/smoke);
-#                 make test-1440 or make test-1200 boots just one
-#   make dist     write the release assets to build/linux/release: the two
+#                 program in QEMU and check its serial output (tests/smoke),
+#                 and test the utilities (tests/utils); make test-1440 (or
+#                 test-1200, test-720, test-360) boots just one image, and
+#                 make test-utils runs just the utility tests
+#   make dist     write the release assets to build/linux/release: the four
 #                 images, a ZIP of the binaries, README, build details and
 #                 logs, and SHA256SUMS; the ZIP's tree is build/linux/dist
 #   make clean    remove build/linux (fetched tools in build/tools are kept)
 #
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
 # git, curl and xz; mtools for the image and qemu-system-i386 for the test.
-# JWasm and Open Watcom are fetched into build/tools.
+# JWasm, Open Watcom and TICO.EXE (tico16) are fetched into build/tools.
 #
 # The source tree is v4.0/src with the patches in PATCHES applied (the
 # GR-DOS branding, decision 7). It is prepared in build/linux/SRC (CRLF
@@ -34,30 +38,70 @@ PATCHES := $(sort $(wildcard patches/branding/*.patch))
 
 JWFLAGS := -q -Zj -Zm -Zg -Cx -I. -I$(CURDIR)/$(SRC)/INC -I$(CURDIR)/$(SRC)/DOS
 
+# ATTRIB and MEM are C, compiled with Open Watcom C for Microsoft C 5.1's
+# small model, packed structures and C calling convention (compat/msc.h).
+WCFLAGS := -q -w0 -zld -ms -os -zp1 -s -ecc -j -ei -bt=dos -fi=$(CURDIR)/compat/msc.h \
+	-I. -I$(CURDIR)/$(SRC)/H
+
 BOOT_OBJS    := $(SRC)/BOOT/MSBOOT.OBJ
 MSLOAD_OBJS  := $(SRC)/BIOS/MSLOAD.OBJ
 MSBIO_OBJS   := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src BIOS/MSBIO.LNK))
 MSDOS_OBJS   := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DOS/MSDOS.LNK))
 COMMAND_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src CMD/COMMAND/COMMAND.LNK))
 
-OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM
+# The utilities on the system disk (issue #4), in the order they are copied
+# to it; each CMD/X directory but MEM's has its X.LNK.
+UTILITIES := CMD/FORMAT/FORMAT.COM CMD/SYS/SYS.COM CMD/CHKDSK/CHKDSK.COM \
+	CMD/DISKCOPY/DISKCOPY.COM CMD/ATTRIB/ATTRIB.EXE CMD/MORE/MORE.COM CMD/FIND/FIND.EXE \
+	CMD/DEBUG/DEBUG.COM CMD/MEM/MEM.EXE CMD/MODE/MODE.COM
+UTILITY_DIRS := $(patsubst CMD/%/,%,$(dir $(UTILITIES)))
+$(foreach u,$(filter-out MEM,$(UTILITY_DIRS)),\
+  $(eval $(u)_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src CMD/$(u)/$(u).LNK))))
+# MEM's makefile links mem+_msgret+_parse.
+MEM_OBJS := $(addprefix $(SRC)/CMD/MEM/,MEM.OBJ _MSGRET.OBJ _PARSE.OBJ)
+
+OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM \
+	$(UTILITIES)
+
+# The message files of utility $(1): X.CL$(c) for each c of $(2), and X.CTL.
+utility_messages = $(foreach c,$(2),CMD/$(1)/$(1).CL$(c)) CMD/$(1)/$(1).CTL
 
 # Generated message files compared by `make check`.
 MESSAGES := BOOT/BOOT.CL1 \
 	$(foreach c,1 2 3 4 5,BIOS/MSBIO.CL$(c)) \
 	DOS/MSDOS.CL1 DOS/MSDOS.CL3 \
-	$(foreach c,1 2 3 4 A B C D E F,CMD/COMMAND/COMMAND.CL$(c)) CMD/COMMAND/COMMAND.CTL
+	$(foreach c,1 2 3 4 A B C D E F,CMD/COMMAND/COMMAND.CL$(c)) CMD/COMMAND/COMMAND.CTL \
+	$(call utility_messages,ATTRIB,1 2 A B) $(call utility_messages,CHKDSK,1 2 A B C D) \
+	$(call utility_messages,DEBUG,1 2 A B C D) $(call utility_messages,DISKCOPY,1 2 A) \
+	$(call utility_messages,FIND,1 2 A) $(call utility_messages,FORMAT,1 2 A B C) \
+	CMD/FORMAT/BOOT.CL1 $(call utility_messages,MEM,1 2 A B) \
+	$(call utility_messages,MODE,1 2 A B) $(call utility_messages,MORE,1 2 A) \
+	$(call utility_messages,SYS,1 2 A B C D)
 
+# ATTRIB.EXE and MEM.EXE are built with Open Watcom C, not Microsoft C 5.1,
+# so they are not compared. CONVERT makes CHKDSK.EXE into CHKDSK.COM.
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
-	CMD/COMMAND/COMMAND.COM
+	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE,$(UTILITIES)) \
+	CMD/CHKDSK/CHKDSK.EXE
 
 # Floppy formats, by size in KB (scripts/mkimage --format); 1440 is the
 # default.
-FORMATS := 1440 1200
+FORMATS := 1440 1200 720 360
 IMAGES  := $(foreach f,$(FORMATS),$(BUILD)/gr-dos-$(f)k.img)
 TESTS   := $(BUILD)/tests
 
-all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES)
+# TICO.EXE, from the pinned tico16 release, and its license.
+TICO := $(BUILD)/tico/TICO.EXE
+
+# The programs after IO.SYS, MSDOS.SYS and COMMAND.COM on every image, and
+# all the files. FIND.EXE is linked again without EXEPACK for the images:
+# LINK's EXEPACK loader fails ("Packed file is corrupt") when DOS loads the
+# program in the first 64 KB of memory, as GR-DOS does.
+PROGRAMS := $(patsubst $(SRC)/CMD/FIND/FIND.EXE,$(BUILD)/image/FIND.EXE,\
+	$(addprefix $(SRC)/,$(UTILITIES))) $(TICO)
+FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
+
+all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES) $(BUILD)/manifest.txt
 
 # The reference build shares the fetched tools.
 check: $(TOOLS)
@@ -72,15 +116,44 @@ check-tree: $(addprefix $(SRC)/,$(OUTPUTS))
 	cd $(SRC) && sha256sum -c ../reference.sha256
 
 TEST_FORMATS := $(addprefix test-,$(FORMATS))
+TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 
-test: $(TEST_FORMATS)
+test: $(TEST_FORMATS) test-utils $(TEST_SYS)
 
 $(TEST_FORMATS): test-%: $(TESTS)/smoke-%k.img
 	scripts/smoke-test --expect tests/smoke/expect-$*k $< tests/smoke/expect $(TESTS)/smoke-$*k
 
+# The utility tests (tests/utils): the programs, then DISKCOPY and FORMAT /S
+# to a blank 1.44 MB disk in drive B:, which is then booted; and FORMAT and
+# SYS to a blank disk of each format, booted in turn. The B: disks are
+# disposable images in $(TESTS).
+#
+# QEMU's drives are high density, and its BIOS has no INT 13h AH=18h, which
+# FORMAT needs to format a 720 KB disk in a 1.44 MB drive ("Parameters not
+# supported"). The 720 KB disk is formatted by mformat instead, and only SYS
+# is tested on it. A 360 KB disk in a 1.2 MB drive needs /F:360.
+SYS_FORMAT_1440 := FORMAT B: /V:GRSYS <FORMAT.IN
+SYS_FORMAT_1200 := FORMAT B: /V:GRSYS <FORMAT.IN
+SYS_FORMAT_720  := REM B: is formatted by mformat
+SYS_FORMAT_360  := FORMAT B: /V:GRSYS /F:360 <FORMAT.IN
+
+test-utils: $(TESTS)/utils.img
+	rm -f $(TESTS)/utils-b.img
+	truncate -s $$((1440 * 1024)) $(TESTS)/utils-b.img
+	scripts/smoke-test --timeout 300 --drive-b $(TESTS)/utils-b.img $< tests/utils/expect $(TESTS)/utils
+	scripts/smoke-test $(TESTS)/utils-b.img tests/utils/expect-boot $(TESTS)/utils-boot
+
+$(TEST_SYS): test-sys-%: $(TESTS)/sys-%k.img
+	rm -f $(TESTS)/sys-$*k-b.img
+	truncate -s $$(($* * 1024)) $(TESTS)/sys-$*k-b.img
+	$(if $(filter 720,$*),mformat -i $(TESTS)/sys-$*k-b.img -f $* -v GRSYS ::)
+	scripts/smoke-test --timeout 300 --drive-b $(TESTS)/sys-$*k-b.img --expect tests/utils/expect-sys-$*k \
+	  $< tests/utils/expect-sys $(TESTS)/sys-$*k
+	scripts/smoke-test $(TESTS)/sys-$*k-b.img tests/utils/expect-boot $(TESTS)/sys-$*k-boot
+
 # Release assets (decision 17): the images, a reproducible ZIP of everything
-# else and SHA256SUMS of the three, in $(RELEASE). The ZIP's unpacked tree is
-# kept in $(DIST).
+# else and SHA256SUMS of the images and the ZIP, in $(RELEASE). The ZIP's
+# unpacked tree is kept in $(DIST).
 VERSION := $(shell cat VERSION)
 NAME    := gr-dos-$(VERSION)
 DIST    := $(BUILD)/dist
@@ -94,11 +167,12 @@ DIST_INFO ?=
 dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip
 	rm -rf $(DIST) $(RELEASE)
 	mkdir -p $(DIST)/$(NAME)/BIN $(RELEASE)
-	cp $(CORE) $(DIST)/$(NAME)/BIN/
+	cp $(CORE) $(FILES) $(DIST)/$(NAME)/BIN/
 	{ \
 	  sed 's/@VERSION@/$(VERSION)/g' release/README.txt; \
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
+	  printf '\ntico16 (TICO.EXE)\n-----------------\n\n'; cat $(dir $(TICO))LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	. ./$(TOOLS) && { \
 	  echo "GR-DOS $(VERSION)"; \
@@ -121,7 +195,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all check check-tree test $(TEST_FORMATS) dist clean
+.PHONY: all check check-tree test $(TEST_FORMATS) test-utils $(TEST_SYS) dist clean
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -149,23 +223,51 @@ $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/case-alias
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/BIOS/MSBIO.SKL
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/DOS/MSDOS.SKL
 	scripts/buildmsg $(MSG) $(SRC)/CMD/COMMAND/COMMAND.SKL
+	for u in $(UTILITY_DIRS); do scripts/buildmsg $(MSG) $(SRC)/CMD/$$u/$$u.SKL || exit 1; done
+	cp $(SRC)/BOOT/BOOT.CL1 $(SRC)/CMD/FORMAT/
 	scripts/case-alias $(SRC) > /dev/null
 	touch $@
 
 $(SRC)/%.OBJ: $(BUILD)/messages.stamp $(TOOLS)
 	. ./$(TOOLS) && cd $(@D) && "$$JWASM" $(JWFLAGS) -Fo$(@F) $(notdir $*).ASM
 
+# FORMAT and SYS include the boot sector.
+$(SRC)/CMD/FORMAT/MSFOR.OBJ $(SRC)/CMD/SYS/SYS1.OBJ: $(SRC)/INC/BOOT.INC
+
+C_OBJS := $(SRC)/CMD/ATTRIB/ATTRIB.OBJ $(SRC)/CMD/MEM/MEM.OBJ
+
+$(C_OBJS): %.OBJ: $(BUILD)/messages.stamp $(TOOLS) compat/msc.h
+	. ./$(TOOLS) && cd $(@D) && PATH=$$WATCOM/binl64:$$PATH INCLUDE=$$WATCOM/h \
+	  wcc $(WCFLAGS) -fo=$(@F) $(notdir $*).C
+
 $(SRC)/BOOT/MSBOOT.EXE:         $(BOOT_OBJS)
 $(SRC)/BIOS/MSLOAD.EXE:         $(MSLOAD_OBJS)
 $(SRC)/BIOS/MSBIO.EXE:          $(MSBIO_OBJS)
 $(SRC)/DOS/MSDOS.EXE:           $(MSDOS_OBJS)
 $(SRC)/CMD/COMMAND/COMMAND.EXE: $(COMMAND_OBJS)
+$(foreach u,$(filter-out ATTRIB MEM,$(UTILITY_DIRS)),$(eval $(SRC)/CMD/$(u)/$(u).EXE: $($(u)_OBJS)))
 
 EXES := $(addprefix $(SRC)/,BOOT/MSBOOT.EXE BIOS/MSLOAD.EXE BIOS/MSBIO.EXE DOS/MSDOS.EXE \
-	CMD/COMMAND/COMMAND.EXE)
+	CMD/COMMAND/COMMAND.EXE) \
+	$(foreach u,$(filter-out ATTRIB MEM,$(UTILITY_DIRS)),$(SRC)/CMD/$(u)/$(u).EXE)
 
-$(EXES): %.EXE: $(TOOLS) scripts/mslink scripts/mslink-layout
-	. ./$(TOOLS) && scripts/mslink $@ $(filter %.OBJ,$^)
+# The programs CONVERT makes into .COM files are linked as Microsoft LINK
+# writes them, and FIND as LINK /EXEPACK writes it.
+CONVERTED := FORMAT CHKDSK DEBUG
+$(foreach u,$(CONVERTED),$(SRC)/CMD/$(u)/$(u).EXE): MSLINK := --exe
+$(SRC)/CMD/FIND/FIND.EXE: MSLINK := --exepack
+
+$(EXES): %.EXE: $(TOOLS) scripts/mslink scripts/mslink-layout scripts/msexe
+	. ./$(TOOLS) && scripts/mslink $(MSLINK) $@ $(filter %.OBJ,$^)
+
+# ATTRIB and MEM, with the Open Watcom C runtime instead of Microsoft C's.
+$(SRC)/CMD/ATTRIB/ATTRIB.EXE: $(ATTRIB_OBJS)
+$(SRC)/CMD/MEM/MEM.EXE:       $(MEM_OBJS)
+
+$(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE: $(TOOLS)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet system dos \
+	  option nocaseexact name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) \
+	  libpath $$WATCOM/lib286/dos libpath $$WATCOM/lib286 library clibs
 
 # EXE2BIN; the image is padded to the size Microsoft LINK gives it.
 size = $$(scripts/mslink-layout --size $(filter %.OBJ,$^))
@@ -192,6 +294,16 @@ $(SRC)/DOS/MSDOS.SYS: $(SRC)/DOS/MSDOS.EXE $(MSDOS_OBJS)
 $(SRC)/CMD/COMMAND/COMMAND.COM: $(SRC)/CMD/COMMAND/COMMAND.EXE $(COMMAND_OBJS)
 	scripts/exe2bin --size $(size) $< $@
 
+EXE2BIN := SYS MORE DISKCOPY MODE
+$(foreach u,$(EXE2BIN),$(eval $(SRC)/CMD/$(u)/$(u).COM: $($(u)_OBJS)))
+
+$(foreach u,$(EXE2BIN),$(SRC)/CMD/$(u)/$(u).COM): %.COM: %.EXE scripts/exe2bin scripts/mslink-layout
+	scripts/exe2bin --size $(size) $< $@
+
+# CONVERT: a .COM program that loads the .EXE it holds.
+$(foreach u,$(CONVERTED),$(SRC)/CMD/$(u)/$(u).COM): %.COM: %.EXE scripts/convert
+	scripts/convert $< $@
+
 # DBOF: the boot sector for FORMAT and SYS.
 $(SRC)/INC/BOOT.INC: $(SRC)/BOOT/MSBOOT.BIN scripts/dbof
 	scripts/dbof $< $@ 7c00 200
@@ -199,8 +311,32 @@ $(SRC)/INC/BOOT.INC: $(SRC)/BOOT/MSBOOT.BIN scripts/dbof
 # The bootable floppy images (decisions 5 and 12).
 CORE := $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM)
 
-$(BUILD)/gr-dos-%k.img: $(CORE) scripts/mkimage scripts/check-image
-	scripts/mkimage --format $* $@ $(SRC)
+$(BUILD)/gr-dos-%k.img: $(CORE) $(FILES) scripts/mkimage scripts/check-image
+	scripts/mkimage --format $* $@ $(SRC) $(FILES)
+
+# Every image must hold the same files, with the same contents (issue #4):
+# exactly IO.SYS, MSDOS.SYS, COMMAND.COM and FILES.
+$(BUILD)/manifest.txt: $(IMAGES) scripts/image-manifest
+	scripts/image-manifest $< > $@.tmp
+	for i in $(IMAGES); do \
+	  scripts/image-manifest $$i | cmp -s - $@.tmp || { echo "$$i: files differ from $<" >&2; exit 1; }; \
+	done
+	printf '%s\n' IO.SYS MSDOS.SYS COMMAND.COM $(notdir $(FILES)) > $@.names
+	awk '{ print $$NF }' $@.tmp | cmp -s - $@.names || { echo "$<: not the files of FILES" >&2; exit 1; }
+	rm $@.names
+	mv $@.tmp $@
+
+$(TICO): scripts/fetch-tico
+	mkdir -p $(@D)
+	tico=$$(scripts/fetch-tico) && cp $$tico/TICO.EXE $$tico/LICENSE $(@D)/
+
+$(BUILD)/image/AUTOEXEC.BAT: image/autoexec.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(BUILD)/image/FIND.EXE: $(FIND_OBJS) $(TOOLS) scripts/mslink scripts/mslink-layout scripts/msexe
+	mkdir -p $(@D)
+	. ./$(TOOLS) && scripts/mslink --exe $@ $(filter %.OBJ,$^)
 
 # Smoke test: the image plus AUTOEXEC.BAT and a program built with Open
 # Watcom, independently of the DOS tree (decisions 13 and 14).
@@ -214,5 +350,31 @@ $(TESTS)/AUTOEXEC.BAT: tests/smoke/autoexec.bat
 	mkdir -p $(@D)
 	sed 's/$$/\r/' $< > $@
 
-$(TESTS)/smoke-%k.img: $(CORE) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM scripts/mkimage scripts/check-image
-	scripts/mkimage --format $* $@ $(SRC) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM
+$(TESTS)/smoke-%k.img: $(CORE) $(PROGRAMS) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM scripts/mkimage \
+	scripts/check-image
+	scripts/mkimage --format $* $@ $(SRC) $(PROGRAMS) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM
+
+# The utility tests' disks: the system files, with their AUTOEXEC.BAT and
+# input files (CRLF text, named in capitals by mkimage).
+UTILS_FILES := $(addprefix $(TESTS)/files/,lines.txt debug.in debugu.in diskcopy.in format.in bootb.bat)
+SYS_FILES   := $(addprefix $(TESTS)/files/,format.in bootb.bat)
+
+$(TESTS)/files/%: tests/utils/%
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/autoexec-utils/AUTOEXEC.BAT: tests/utils/utils.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/autoexec-sys-%k/AUTOEXEC.BAT: tests/utils/sys.bat
+	mkdir -p $(@D)
+	sed 's|@SIZE@|$*|g; s|@FORMAT@|$(SYS_FORMAT_$*)|; s/$$/\r/' $< > $@
+
+$(TESTS)/utils.img: $(CORE) $(PROGRAMS) $(TESTS)/autoexec-utils/AUTOEXEC.BAT $(UTILS_FILES) scripts/mkimage \
+	scripts/check-image
+	scripts/mkimage $@ $(SRC) $(PROGRAMS) $(TESTS)/autoexec-utils/AUTOEXEC.BAT $(UTILS_FILES)
+
+$(TESTS)/sys-%k.img: $(CORE) $(PROGRAMS) $(TESTS)/autoexec-sys-%k/AUTOEXEC.BAT $(SYS_FILES) scripts/mkimage \
+	scripts/check-image
+	scripts/mkimage $@ $(SRC) $(PROGRAMS) $(TESTS)/autoexec-sys-$*k/AUTOEXEC.BAT $(SYS_FILES)
