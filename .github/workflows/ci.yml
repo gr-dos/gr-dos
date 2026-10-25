@@ -1,8 +1,9 @@
-# Build and verify GR-DOS, and boot both floppy images in QEMU (decisions 13,
-# 17 and 18). The job `ci` is the required status check on main. When a push
-# to main carries a VERSION with no release yet, `release` tags that commit
-# v<VERSION> and publishes the `gr-dos` artifact, exactly four assets (the
-# 1.44 MB and 1.2 MB images, the ZIP and SHA256SUMS), as a GitHub Release.
+# Build and verify GR-DOS, boot the four floppy images and test the utilities
+# in QEMU (decisions 13, 17 and 18, issue #4). The job `ci` is the required
+# status check on main. When a push to main carries a VERSION with no release
+# yet, `release` tags that commit v<VERSION> and publishes the `gr-dos`
+# artifact, exactly six assets (the 1.44 MB, 1.2 MB, 720 KB and 360 KB
+# images, the ZIP and SHA256SUMS), as a GitHub Release.
 
 name: ci
 
@@ -33,7 +34,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/tools
-          key: tools-ubuntu-24.04-${{ hashFiles('scripts/fetch-jwasm', 'scripts/fetch-watcom', 'patches/jwasm/*.patch') }}
+          key: tools-ubuntu-24.04-${{ hashFiles('scripts/fetch-jwasm', 'scripts/fetch-watcom', 'scripts/fetch-tico', 'patches/jwasm/*.patch') }}
 
       - name: Install mtools and QEMU
         run: |
@@ -44,13 +45,14 @@ jobs:
         run: |
           scripts/fetch-jwasm
           scripts/fetch-watcom
+          scripts/fetch-tico
 
       - name: Build, and compare an unbranded build with the M1 reference
         run: |
           mkdir -p build
           make -j"$(nproc)" all check 2>&1 | tee build/make.log
 
-      - name: Boot smoke test of both images in QEMU
+      - name: Boot the images and test the utilities in QEMU
         run: make test 2>&1 | tee build/test.log
 
       - name: Package the release assets
@@ -63,7 +65,7 @@ jobs:
           make dist DIST_LOGS="build/make.log build/test.log" DIST_INFO=build/ci.info
           cat build/linux/dist/gr-dos-*/BUILDINFO
           cd build/linux/release
-          test "$(ls | wc -l)" -eq 4
+          test "$(ls | wc -l)" -eq 6
           sha256sum -c SHA256SUMS
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -73,7 +75,7 @@ jobs:
           if-no-files-found: error
 
       # Unpacked, for debugging: the ZIP's tree, the logs and the QEMU
-      # serial output of each smoke test, also when a step failed.
+      # output of each test, also when a step failed.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
@@ -82,7 +84,8 @@ jobs:
             build/make.log
             build/test.log
             build/linux/dist/
-            build/linux/tests/smoke-*/
+            build/linux/tests/*/serial.txt
+            build/linux/tests/*/qemu.log
           if-no-files-found: warn
 
   release:
@@ -122,6 +125,8 @@ jobs:
           assets=(
             "dist/gr-dos-$version-1440k.img"
             "dist/gr-dos-$version-1200k.img"
+            "dist/gr-dos-$version-720k.img"
+            "dist/gr-dos-$version-360k.img"
             "dist/gr-dos-$version.zip"
             dist/SHA256SUMS
           )
@@ -130,4 +135,4 @@ jobs:
           gh release create "$TAG" "${assets[@]}" \
             --target "$GITHUB_SHA" \
             --title "GR-DOS $version" \
-            --notes "Built by CI from $GITHUB_SHA. gr-dos-$version-1440k.img is a 3.5\" 1.44 MB boot floppy and gr-dos-$version-1200k.img a 5.25\" 1.2 MB one. gr-dos-$version.zip holds the system files, BUILDINFO (tool versions) and the build and test logs. SHA256SUMS covers the images and the ZIP."
+            --notes "Built by CI from $GITHUB_SHA. The four images are GR-DOS system floppies with the same files: gr-dos-$version-1440k.img is a 3.5\" 1.44 MB disk, gr-dos-$version-1200k.img a 5.25\" 1.2 MB one, gr-dos-$version-720k.img a 3.5\" 720 KB one and gr-dos-$version-360k.img a 5.25\" 360 KB one; write them to a floppy with dd (README.txt in the ZIP). gr-dos-$version.zip holds the system files and utilities, BUILDINFO (tool versions) and the build and test logs. SHA256SUMS covers the images and the ZIP."
