@@ -1,0 +1,119 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Basename ();
+use File::Find ();
+use File::Spec ();
+use IO::Compress::Zip qw( $ZipError :zip_method );
+use POSIX ();
+
+# ABSTRACT: Write a reproducible ZIP archive of a directory
+
+=head1 SYNOPSIS
+
+ scripts/mkzip OUT.ZIP DIR
+
+=head1 DESCRIPTION
+
+Writes F<OUT.ZIP> holding F<DIR> and everything below it, under the name of
+F<DIR> itself (the archive of F<build/linux/dist/gr-dos-0.02> unpacks to
+F<gr-dos-0.02/>).  The archive depends only on the names and contents of
+the files, so the same tree always gives the same bytes (with the same
+zlib):
+
+=over 4
+
+=item *
+
+entries are in sorted order, each directory before its contents;
+
+=item *
+
+every entry has the time C<SOURCE_DATE_EPOCH> (default: the time of the last
+git commit), as UTC;
+
+=item *
+
+files are mode C<0644> and directories C<0755>, with no owner and no extra
+fields;
+
+=item *
+
+files are deflated and directories stored.
+
+=back
+
+Only plain files and directories are allowed.
+
+=cut
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub source_date_epoch () {
+  return $ENV{SOURCE_DATE_EPOCH} if defined $ENV{SOURCE_DATE_EPOCH};
+  my $root = File::Spec->catdir((File::Basename::fileparse(File::Spec->rel2abs(__FILE__)))[1], File::Spec->updir);
+  my $time = `git -C '$root' log -1 --format=%ct`;
+  die "SOURCE_DATE_EPOCH is not set and git has no commit time\n" unless $? == 0 && $time =~ /^(\d+)$/;
+  return $1;
+}
+
+# Archive names of the entries below $dir, directories with a trailing slash.
+sub entries ($dir, $prefix) {
+  my @entries = ("$prefix/");
+  File::Find::find({
+    no_chdir => 1,
+    wanted   => sub {
+      return if $_ eq $dir;
+      my $name = "$prefix/" . File::Spec->abs2rel($_, $dir);
+      if(-l $_ || !(-f _ || -d _)) {
+        die "$_: not a plain file or directory\n";
+      }
+      push @entries, -d _ ? "$name/" : $name;
+    },
+  }, $dir);
+  return sort @entries;
+}
+
+sub main (@args) {
+  die "usage: $0 OUT.ZIP DIR\n" unless @args == 2;
+  my($out, $dir) = @args;
+  $dir =~ s{/+$}{};
+  die "$dir: not a directory\n" unless -d $dir;
+  my $prefix = (File::Spec->splitdir(File::Spec->rel2abs($dir)))[-1];
+
+  my $time = source_date_epoch();
+  # Zip headers hold local time.
+  $ENV{TZ} = 'UTC';
+  POSIX::tzset();
+
+  my $zip;
+  for my $name (entries($dir, $prefix)) {
+    my $is_dir = $name =~ m{/$};
+    my %opts = (
+      Name    => $name,
+      Time    => $time,
+      ExtAttr => $is_dir ? (040755 << 16) | 0x10 : 0100644 << 16,
+      Method  => $is_dir ? ZIP_CM_STORE : ZIP_CM_DEFLATE,
+      $is_dir ? () : (Level => 9),
+    );
+    if($zip) {
+      $zip->newStream(%opts) or die "$out: $ZipError\n";
+    } else {
+      unlink $out;
+      $zip = IO::Compress::Zip->new($out, %opts, Stream => 0, Zip64 => 0)
+        or die "$out: $ZipError\n";
+    }
+    next if $is_dir;
+    my $path = File::Spec->catfile($dir, substr $name, length "$prefix/");
+    $zip->print(slurp($path)) or die "$out: $ZipError\n";
+  }
+  $zip->close or die "$out: $ZipError\n";
+  return 0;
+}
+
+exit main(@ARGV);

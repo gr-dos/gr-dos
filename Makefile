@@ -1,14 +1,17 @@
 # GR-DOS Linux build (decisions 11 and 19).
 #
 #   make          build the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM,
-#                 and the bootable floppy image build/linux/gr-dos.img
+#                 and the bootable floppy images build/linux/gr-dos-1440k.img
+#                 (3.5" 1.44 MB) and build/linux/gr-dos-1200k.img (5.25" 1.2 MB)
 #   make check    build without the branding patches, in build/linux/reference,
 #                 and compare the binaries and generated message files with
 #                 the M1 reference build (docs/m1/reference-build.sha256)
-#   make test     boot a copy of the image with a test AUTOEXEC.BAT and
-#                 program in QEMU and check its serial output (tests/smoke)
-#   make dist     collect the image, binaries, checksums and build details in
-#                 build/linux/dist (the CI artifacts)
+#   make test     boot a copy of each image with a test AUTOEXEC.BAT and
+#                 program in QEMU and check its serial output (tests/smoke);
+#                 make test-1440 or make test-1200 boots just one
+#   make dist     write the release assets to build/linux/release: the two
+#                 images, a ZIP of the binaries, README, build details and
+#                 logs, and SHA256SUMS; the ZIP's tree is build/linux/dist
 #   make clean    remove build/linux (fetched tools in build/tools are kept)
 #
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
@@ -48,10 +51,13 @@ MESSAGES := BOOT/BOOT.CL1 \
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
 	CMD/COMMAND/COMMAND.COM
 
-IMAGE := $(BUILD)/gr-dos.img
-TESTS := $(BUILD)/tests
+# Floppy formats, by size in KB (scripts/mkimage --format); 1440 is the
+# default.
+FORMATS := 1440 1200
+IMAGES  := $(foreach f,$(FORMATS),$(BUILD)/gr-dos-$(f)k.img)
+TESTS   := $(BUILD)/tests
 
-all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGE)
+all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES)
 
 # The reference build shares the fetched tools.
 check: $(TOOLS)
@@ -65,28 +71,57 @@ check-tree: $(addprefix $(SRC)/,$(OUTPUTS))
 	test $$(wc -l < $(BUILD)/reference.sha256) -eq $(words $(REFERENCE))
 	cd $(SRC) && sha256sum -c ../reference.sha256
 
-test: $(TESTS)/smoke.img
-	scripts/smoke-test $< tests/smoke/expect $(TESTS)/smoke
+TEST_FORMATS := $(addprefix test-,$(FORMATS))
 
-DIST := $(BUILD)/dist
+test: $(TEST_FORMATS)
 
-dist: all
-	rm -rf $(DIST)
-	mkdir -p $(DIST)
-	cp $(IMAGE) $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM) $(DIST)/
-	cd $(DIST) && sha256sum * > SHA256SUMS
+$(TEST_FORMATS): test-%: $(TESTS)/smoke-%k.img
+	scripts/smoke-test --expect tests/smoke/expect-$*k $< tests/smoke/expect $(TESTS)/smoke-$*k
+
+# Release assets (decision 17): the images, a reproducible ZIP of everything
+# else and SHA256SUMS of the three, in $(RELEASE). The ZIP's unpacked tree is
+# kept in $(DIST).
+VERSION := $(shell cat VERSION)
+NAME    := gr-dos-$(VERSION)
+DIST    := $(BUILD)/dist
+RELEASE := $(BUILD)/release
+
+# Logs for the ZIP's LOGS directory (CI gives make.log and test.log), and a
+# file of further BUILDINFO lines (CI gives the runner details).
+DIST_LOGS ?= $(wildcard build/make.log build/test.log)
+DIST_INFO ?=
+
+dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip
+	rm -rf $(DIST) $(RELEASE)
+	mkdir -p $(DIST)/$(NAME)/BIN $(RELEASE)
+	cp $(CORE) $(DIST)/$(NAME)/BIN/
+	{ \
+	  sed 's/@VERSION@/$(VERSION)/g' release/README.txt; \
+	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
+	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
+	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	. ./$(TOOLS) && { \
-	  echo "GR-DOS $$(cat VERSION)"; \
+	  echo "GR-DOS $(VERSION)"; \
 	  echo "commit $$(git describe --always --dirty --abbrev=40)"; \
 	  perl -e 'print "perl $$^V\n"'; \
 	  echo "jwasm $$(basename $$(dirname $$(dirname $$(dirname $$JWASM))))"; \
 	  echo "watcom $$(basename $$WATCOM)"; \
-	} > $(DIST)/BUILDINFO
+	  mformat --version | head -1; \
+	  perl -MCompress::Raw::Zlib -e 'print "zlib ", Compress::Raw::Zlib::zlib_version(), "\n"'; \
+	  $(if $(DIST_INFO),cat $(DIST_INFO);) \
+	} > $(DIST)/$(NAME)/BUILDINFO
+	$(if $(DIST_LOGS),mkdir -p $(DIST)/$(NAME)/LOGS && cp $(DIST_LOGS) $(DIST)/$(NAME)/LOGS/)
+	cd $(DIST)/$(NAME) && find . -type f | sed 's|^\./||' | LC_ALL=C sort | xargs sha256sum > ../SHA256SUMS \
+	  && mv ../SHA256SUMS SHA256SUMS
+	scripts/mkzip $(RELEASE)/$(NAME).zip $(DIST)/$(NAME)
+	$(foreach f,$(FORMATS),cp $(BUILD)/gr-dos-$(f)k.img $(RELEASE)/$(NAME)-$(f)k.img;)
+	cd $(RELEASE) && sha256sum $(foreach f,$(FORMATS),$(NAME)-$(f)k.img) $(NAME).zip > SHA256SUMS
+	ls -l $(RELEASE)
 
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all check check-tree test dist clean
+.PHONY: all check check-tree test $(TEST_FORMATS) dist clean
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -161,11 +196,11 @@ $(SRC)/CMD/COMMAND/COMMAND.COM: $(SRC)/CMD/COMMAND/COMMAND.EXE $(COMMAND_OBJS)
 $(SRC)/INC/BOOT.INC: $(SRC)/BOOT/MSBOOT.BIN scripts/dbof
 	scripts/dbof $< $@ 7c00 200
 
-# The bootable floppy image (decisions 5 and 12).
+# The bootable floppy images (decisions 5 and 12).
 CORE := $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM)
 
-$(IMAGE): $(CORE) scripts/mkimage scripts/check-image
-	scripts/mkimage $@ $(SRC)
+$(BUILD)/gr-dos-%k.img: $(CORE) scripts/mkimage scripts/check-image
+	scripts/mkimage --format $* $@ $(SRC)
 
 # Smoke test: the image plus AUTOEXEC.BAT and a program built with Open
 # Watcom, independently of the DOS tree (decisions 13 and 14).
@@ -179,5 +214,5 @@ $(TESTS)/AUTOEXEC.BAT: tests/smoke/autoexec.bat
 	mkdir -p $(@D)
 	sed 's/$$/\r/' $< > $@
 
-$(TESTS)/smoke.img: $(CORE) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM scripts/mkimage scripts/check-image
-	scripts/mkimage $@ $(SRC) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM
+$(TESTS)/smoke-%k.img: $(CORE) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM scripts/mkimage scripts/check-image
+	scripts/mkimage --format $* $@ $(SRC) $(TESTS)/AUTOEXEC.BAT $(TESTS)/HELLO.COM

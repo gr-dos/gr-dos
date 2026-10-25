@@ -8,7 +8,7 @@ use Time::HiRes qw( sleep time );
 
 =head1 SYNOPSIS
 
- scripts/smoke-test [--timeout SECONDS] IMAGE EXPECT OUTDIR
+ scripts/smoke-test [--timeout SECONDS] [--expect FILE]... IMAGE EXPECT OUTDIR
 
 =head1 DESCRIPTION
 
@@ -22,7 +22,10 @@ The serial output, without carriage returns, is printed and saved as
 F<OUTDIR/serial.txt>, and the QEMU version as F<OUTDIR/qemu.version>.  The
 file C<EXPECT> holds one Perl regular expression per line (blank lines and
 lines starting with C<#> are ignored); each must match a line of the output,
-in order.  Exits non-zero if any does not.
+in order.  Each C<--expect> FILE is checked against the output in the same
+way, on its own: F<tests/smoke/expect-1200k>, for example, holds the free
+space C<DIR> reports on a 1.2 MB disk.  Exits non-zero if any pattern is
+not found.
 
 =cut
 
@@ -71,14 +74,45 @@ sub boot ($image, $outdir, $timeout) {
   return slurp($serial) =~ s/\r//gr;
 }
 
+# Match each pattern of the file $expect against a line of @$lines, in
+# order; returns 1 if any is not found.
+sub check ($lines, $expect) {
+  my $at = 0;
+  my $failed = 0;
+  for my $pattern (grep { /\S/ && !/^#/ } split /\n/, slurp($expect)) {
+    my $re = qr/$pattern/;
+    my $found;
+    for my $i ($at .. $lines->$#*) {
+      if($lines->[$i] =~ $re) {
+        $found = $i;
+        last;
+      }
+    }
+    if(defined $found) {
+      $at = $found + 1;
+    } else {
+      say "smoke-test: not found in $expect: $pattern";
+      $failed = 1;
+    }
+  }
+  return $failed;
+}
+
 sub main (@args) {
   my $timeout = 60;
-  if(@args && $args[0] eq '--timeout') {
+  my @also;
+  while(@args && $args[0] =~ /^--(timeout|expect)$/) {
     shift @args;
-    $timeout = shift @args;
+    die "$0: --$1 needs a value\n" unless @args;
+    if($1 eq 'timeout') {
+      $timeout = shift @args;
+    } else {
+      push @also, shift @args;
+    }
   }
-  die "usage: $0 [--timeout SECONDS] IMAGE EXPECT OUTDIR\n" unless @args == 3;
+  die "usage: $0 [--timeout SECONDS] [--expect FILE]... IMAGE EXPECT OUTDIR\n" unless @args == 3;
   my($image, $expect, $outdir) = @args;
+  -r $_ or die "unable to read $_\n" for $expect, @also;
   mkdir $outdir unless -d $outdir;
 
   my $version = `qemu-system-i386 --version`;
@@ -96,24 +130,8 @@ sub main (@args) {
   print $output;
 
   my @lines = split /\n/, $output;
-  my $at = 0;
   my $failed = 0;
-  for my $pattern (grep { /\S/ && !/^#/ } split /\n/, slurp($expect)) {
-    my $re = qr/$pattern/;
-    my $found;
-    for my $i ($at .. $#lines) {
-      if($lines[$i] =~ $re) {
-        $found = $i;
-        last;
-      }
-    }
-    if(defined $found) {
-      $at = $found + 1;
-    } else {
-      say "smoke-test: not found: $pattern";
-      $failed = 1;
-    }
-  }
+  $failed |= check(\@lines, $_) for $expect, @also;
   say $failed ? 'smoke-test: FAILED' : 'smoke-test: passed';
   return $failed;
 }

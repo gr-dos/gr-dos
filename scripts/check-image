@@ -2,12 +2,13 @@
 
 use 5.042;
 use warnings;
+use List::Util qw( first pairkeys pairvalues );
 
 # ABSTRACT: Check that a FAT12 floppy image can boot GR-DOS
 
 =head1 SYNOPSIS
 
- scripts/check-image IMAGE IO.SYS MSDOS.SYS
+ scripts/check-image [--format 1440|1200] IMAGE IO.SYS MSDOS.SYS
 
 =head1 DESCRIPTION
 
@@ -15,6 +16,12 @@ Checks the layout the MS-DOS 4.00 boot sector and MSLOAD depend on
 (decision 12):
 
 =over 4
+
+=item *
+
+the image size and the BPB match the floppy format: C<--format 1440>, a
+3.5" 1.44 MB disk, or C<--format 1200>, a 5.25" 1.2 MB disk (see
+L</FORMATS>). Without C<--format> the format is chosen by the image size;
 
 =item *
 
@@ -35,7 +42,30 @@ occupy contiguous clusters, F<MSDOS.SYS> directly after F<IO.SYS>.
 
 Dies with a description of the first problem found.
 
+=head1 FORMATS
+
+The BPB of each format is the one DOS FORMAT writes: 512-byte sectors, one
+sector per cluster, one reserved sector, two FATs and 224 root directory
+entries.
+
+ format  bytes      cylinders  heads  sectors  media  sectors per FAT
+ 1440    1,474,560  80         2      18       F0h    9
+ 1200    1,228,800  80         2      15       F9h    7
+
 =cut
+
+my %common = (bps => 512, spc => 1, reserved => 1, nfats => 2, nroot => 224, heads => 2);
+
+my %formats = (
+  1440 => { %common, sectors => 2880, media => 0xf0, spf => 9, spt => 18 },
+  1200 => { %common, sectors => 2400, media => 0xf9, spf => 7, spt => 15 },
+);
+
+# BPB fields from offset 0Bh, in order, and their unpack templates.
+my @bpb = (
+  bps => 'v', spc => 'C', reserved => 'v', nfats => 'C', nroot => 'v',
+  sectors => 'v', media => 'C', spf => 'v', spt => 'v', heads => 'v',
+);
 
 sub slurp ($path) {
   open my $fh, '<:raw', $path or die "unable to read $path: $!";
@@ -50,18 +80,42 @@ sub fat12 ($fat, $n) {
 }
 
 sub main (@args) {
-  die "usage: $0 IMAGE IO.SYS MSDOS.SYS\n" unless @args == 3;
+  my $usage = "usage: $0 [--format 1440|1200] IMAGE IO.SYS MSDOS.SYS\n";
+  my $format;
+  if(@args && $args[0] eq '--format') {
+    shift @args;
+    $format = shift @args;
+    die "$0: --format must be one of @{[ sort keys %formats ]}\n"
+      unless defined $format && $formats{$format};
+  }
+  die $usage unless @args == 3;
   my($path, @expect) = @args;
   my $img = slurp($path);
+
+  $format //= first { $formats{$_}->{sectors} * 512 == length $img } sort keys %formats;
+  die sprintf "%s: %d bytes is not a supported floppy size\n", $path, length $img
+    unless defined $format;
+  my $geometry = $formats{$format};
+  die sprintf "%s: %d bytes, not %d for a %s image\n", $path, length $img,
+    $geometry->{sectors} * 512, $format
+    unless length $img == $geometry->{sectors} * 512;
 
   die "$path: no boot signature\n" unless substr($img, 510, 2) eq "\x55\xaa";
   my $drive = ord substr($img, 0x24, 1);
   die sprintf "%s: boot drive number is %02Xh, not 00h\n", $path, $drive if $drive;
 
-  my($bps, $spc, $reserved, $nfats, $nroot, undef, undef, $spf)
-    = unpack 'v C v C v v C v', substr($img, 11, 13);
-  die "$path: not a FAT12 floppy BPB\n" unless $bps == 512 && $spc && $nfats && $nroot;
+  my @names = pairkeys @bpb;
+  my %got;
+  @got{@names} = unpack join(' ', pairvalues @bpb), substr($img, 11, 19);
+  for my $name (@names) {
+    die sprintf "%s: BPB %s is %d, not %d for a %s image\n", $path, $name, $got{$name},
+      $geometry->{$name}, $format
+      unless $got{$name} == $geometry->{$name};
+  }
+  my($bps, $spc, $reserved, $nfats, $nroot, $spf) = @got{qw( bps spc reserved nfats nroot spf )};
   my $fat = substr $img, $reserved * $bps, $spf * $bps;
+  die sprintf "%s: FAT media byte is %02Xh, not %02Xh\n", $path, ord $fat, $geometry->{media}
+    unless ord $fat == $geometry->{media};
   my $root_at = ($reserved + $nfats * $spf) * $bps;
   my $data_at = $root_at + $nroot * 32;
   my $cluster_bytes = $spc * $bps;

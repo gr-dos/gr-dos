@@ -1,11 +1,14 @@
 #!/bin/sh
 #
-# Build a bootable 1.44 MB GR-DOS floppy image (decisions 5 and 12) from a
-# built tree: the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM, then any
-# further FILEs into the root directory. Checks the result with
-# scripts/check-image.
+# Build a bootable GR-DOS floppy image (decisions 5 and 12) from a built
+# tree: the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM, then any further
+# FILEs into the root directory. Checks the result with scripts/check-image.
 #
-# usage: scripts/mkimage OUT.IMG SRCDIR [FILE...]
+# usage: scripts/mkimage [--format 1440|1200] OUT.IMG SRCDIR [FILE...]
+#
+# --format picks the disk: 1440 (the default) is a 3.5" 1.44 MB disk, 80
+# cylinders, 2 heads and 18 sectors per track; 1200 is a 5.25" 1.2 MB disk,
+# 80 cylinders, 2 heads and 15 sectors per track.
 #
 # SOURCE_DATE_EPOCH sets the file times and the volume serial number, so the
 # image is reproducible (default: the time of the last git commit).
@@ -13,7 +16,17 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-[ $# -ge 2 ] || { echo "usage: $0 OUT.IMG SRCDIR [FILE...]" >&2; exit 2; }
+usage="usage: $0 [--format 1440|1200] OUT.IMG SRCDIR [FILE...]"
+format=1440
+if [ "${1:-}" = --format ]; then
+  format=${2:?$usage}
+  shift 2
+fi
+case $format in
+  1440|1200) ;;
+  *) echo "$0: --format must be 1440 or 1200" >&2; exit 2 ;;
+esac
+[ $# -ge 2 ] || { echo "$usage" >&2; exit 2; }
 img=$1
 src=$2
 shift 2
@@ -41,8 +54,8 @@ printf '\000' | dd of="$tmp/bootsect.bin" bs=1 seek=36 conv=notrunc status=none
 # place: mformat -C (mtools 4.0.43) leaves uninitialised memory in the last
 # sector.
 rm -f "$img"
-truncate -s 1474560 "$img"
-mformat -i "$img" -f 1440 -N "$serial" -B "$tmp/bootsect.bin" ::
+truncate -s $((format * 1024)) "$img"
+mformat -i "$img" -f "$format" -N "$serial" -B "$tmp/bootsect.bin" ::
 
 # IO.SYS and MSDOS.SYS first, so they are the first directory entries and
 # contiguous from the start of the data area.
@@ -54,4 +67,4 @@ for f in "$src/BIOS/IO.SYS" "$src/DOS/MSDOS.SYS" "$src/CMD/COMMAND/COMMAND.COM" 
 done
 mattrib -i "$img" +s +h +r ::IO.SYS ::MSDOS.SYS
 
-"$root/scripts/check-image" "$img" "$src/BIOS/IO.SYS" "$src/DOS/MSDOS.SYS"
+"$root/scripts/check-image" --format "$format" "$img" "$src/BIOS/IO.SYS" "$src/DOS/MSDOS.SYS"

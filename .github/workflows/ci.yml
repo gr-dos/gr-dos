@@ -1,7 +1,8 @@
-# Build and verify GR-DOS, and boot it in QEMU (decisions 13, 17 and 18).
-# The job `ci` is the required status check on main. When a push to main
-# carries a VERSION with no release yet, `release` tags that commit
-# v<VERSION> and publishes the CI artifacts as a GitHub Release.
+# Build and verify GR-DOS, and boot both floppy images in QEMU (decisions 13,
+# 17 and 18). The job `ci` is the required status check on main. When a push
+# to main carries a VERSION with no release yet, `release` tags that commit
+# v<VERSION> and publishes the `gr-dos` artifact, exactly four assets (the
+# 1.44 MB and 1.2 MB images, the ZIP and SHA256SUMS), as a GitHub Release.
 
 name: ci
 
@@ -49,26 +50,40 @@ jobs:
           mkdir -p build
           make -j"$(nproc)" all check 2>&1 | tee build/make.log
 
-      - name: Boot smoke test in QEMU
+      - name: Boot smoke test of both images in QEMU
         run: make test 2>&1 | tee build/test.log
 
-      - name: Collect artifacts
+      - name: Package the release assets
         run: |
-          make dist
-          cp build/make.log build/test.log build/linux/dist/
           {
             echo "runner $ImageOS $ImageVersion"
             uname -srm
-            head -1 build/linux/tests/smoke/qemu.version
-            mformat --version | head -1
-          } >> build/linux/dist/BUILDINFO
-          cat build/linux/dist/BUILDINFO
+            head -1 build/linux/tests/smoke-1440k/qemu.version
+          } > build/ci.info
+          make dist DIST_LOGS="build/make.log build/test.log" DIST_INFO=build/ci.info
+          cat build/linux/dist/gr-dos-*/BUILDINFO
+          cd build/linux/release
+          test "$(ls | wc -l)" -eq 4
+          sha256sum -c SHA256SUMS
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gr-dos
-          path: build/linux/dist/
+          path: build/linux/release/
           if-no-files-found: error
+
+      # Unpacked, for debugging: the ZIP's tree, the logs and the QEMU
+      # serial output of each smoke test, also when a step failed.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: gr-dos-unpacked
+          path: |
+            build/make.log
+            build/test.log
+            build/linux/dist/
+            build/linux/tests/smoke-*/
+          if-no-files-found: warn
 
   release:
     needs: ci
@@ -103,7 +118,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          gh release create "$TAG" dist/* \
+          version=${TAG#v}
+          assets=(
+            "dist/gr-dos-$version-1440k.img"
+            "dist/gr-dos-$version-1200k.img"
+            "dist/gr-dos-$version.zip"
+            dist/SHA256SUMS
+          )
+          test "$(ls dist | wc -l)" -eq "${#assets[@]}"
+          (cd dist && sha256sum -c SHA256SUMS)
+          gh release create "$TAG" "${assets[@]}" \
             --target "$GITHUB_SHA" \
-            --title "GR-DOS ${TAG#v}" \
-            --notes "Built by CI from $GITHUB_SHA. See BUILDINFO for tool versions and SHA256SUMS for checksums."
+            --title "GR-DOS $version" \
+            --notes "Built by CI from $GITHUB_SHA. gr-dos-$version-1440k.img is a 3.5\" 1.44 MB boot floppy and gr-dos-$version-1200k.img a 5.25\" 1.2 MB one. gr-dos-$version.zip holds the system files, BUILDINFO (tool versions) and the build and test logs. SHA256SUMS covers the images and the ZIP."
