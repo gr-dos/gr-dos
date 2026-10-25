@@ -102,7 +102,7 @@ format.
 Checking the downloads
 ----------------------
 
-The release's SHA256SUMS covers the two images and this archive:
+The release's SHA256SUMS covers the four images and this archive:
 
   sha256sum -c SHA256SUMS
 
