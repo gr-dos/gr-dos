@@ -74,7 +74,11 @@
     unsigned char max_width;                                                    /* max width of replaceable field       */       /* ;an000; */
     unsigned char min_width;                                                    /* min width of replaceable field       */       /* ;an000; */
     unsigned char pad_char;                                                     /* pad character for replaceable field  */       /* ;an000; */
+#ifdef __WATCOMC__
+  } sublist[5];  /* sublist[1] to sublist[4] are used: MS C overran [4] */
+#else
   } sublist[4];                                                                                                                  /* ;an000; */
+#endif
                                                                                                                                  /* ;an000; */
 /*----------------------------------------------------------------------+
 |       define structure used by parser                                 |
@@ -177,6 +181,9 @@ struct p_value_blk p_noval;                                                     
 #define BLANK   ' '                                                                                                              /* ;an000; */
                                                                                                                                  /* ;an000; */
 extern  unsigned DOS_TopOfMemory;         /* PSP Top of memory from 'C' init code  */                                            /* ;an005; */
+#ifdef __WATCOMC__
+unsigned DOS_TopOfMemory;                 /* MEM.LIB's start-up code set it, main() does here */
+#endif
 
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -269,6 +276,9 @@ void     main(argc,argv)                                                        
 int      argc;                                                                                                                   /* ;an000; */
 char     *argv[];                                                                                                                /* ;an000; */
 {                                                                                                                                /* ;an000; */
+#ifdef __WATCOMC__
+        DOS_TopOfMemory = *(unsigned far *)MK_FP(_psp, 2);
+#endif
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */

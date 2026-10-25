@@ -35,6 +35,10 @@ XABORT	   equ	 1			;AN000; ;errorlevel return in al
 	   extrn _inmain:near		;AC000;
 	   extrn _Reset_appendx:near	;AN000;
 	   extrn _old_int24_off:dword	;AN000;
+IFDEF __JWASM__ ; the ends of the initialised and of all data, defined by wlink
+	   extrn _edata:byte
+	   extrn _end:byte
+ENDIF
 
 
 psp	   segment at 0 		;<--emk
@@ -95,7 +99,11 @@ const	   segment word public 'CONST'
 const	   ends
 _bss	   segment word public 'BSS'
 _bss	   ends
+IFDEF __JWASM__ ; wlink: the Watcom C code's offsets are from _TEXT, not the group
+pgroup	   group _text
+ELSE
 pgroup	   group base,_text
+ENDIF
 dgroup	   group null, _data, const, _bss, stack
 
 	   page
@@ -122,6 +130,20 @@ XCMAIN	   proc  far
 	   mov	 ax,dgroup
 	   mov	 ds,ax			;initialize ds and ss
 	   assume ds:dgroup
+IFDEF __JWASM__ ; Watcom C leaves its uninitialised data out of the program
+	   push  ax
+	   push  es
+	   push  ds
+	   pop	 es
+	   mov	 di,offset dgroup:_edata
+	   mov	 cx,offset dgroup:_end
+	   sub	 cx,di
+	   xor	 al,al
+	   cld
+	   rep	 stosb
+	   pop	 es
+	   pop	 ax
+ENDIF
 
 	   mov	 bx,psp_memsz		;total memory size (paragraphs)
 	   sub	 bx,ax
@@ -370,6 +392,9 @@ MOFFSET    EQU	 PARM_1 		;AN000;
 _GETPSPBYTE PROC NEAR			;AN000;
 
 	   CENTER			;AN000;
+IFDEF __JWASM__ ; Watcom C keeps variables in SI and DI across calls
+	   PUSH  SI
+ENDIF
 
 	   PUSH  DS			;AN000;
 
@@ -380,6 +405,9 @@ _GETPSPBYTE PROC NEAR			;AN000;
 
 	   POP	 DS			;AN000;
 
+IFDEF __JWASM__
+	   POP	 SI
+ENDIF
 	   CEXIT			;AN000;
 
 _GETPSPBYTE ENDP
@@ -418,6 +446,9 @@ MOFFSET    EQU	 PARM_1 		;AN000;
 _PUTPSPBYTE PROC NEAR			;AN000;
 
 	   CENTER			;AN000;
+IFDEF __JWASM__ ; Watcom C keeps variables in SI and DI across calls
+	   PUSH  DI
+ENDIF
 
 	   PUSH  ES			;AN000;
 
@@ -428,6 +459,9 @@ _PUTPSPBYTE PROC NEAR			;AN000;
 
 	   POP	 ES			;AN000;
 
+IFDEF __JWASM__
+	   POP	 DI
+ENDIF
 	   CEXIT			;AN000;
 
 _PUTPSPBYTE ENDP

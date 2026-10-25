@@ -282,7 +282,7 @@ Display_msg(msgnum,msghan,msgparms,msgsub,msginput)                    /*;AN000;
    int   msgnum;                                                       /*;AN000;*/
    int   msghan;                                                       /*;AN000;*/
    int   msgparms;                                                     /*;AN000;*/
-   int   *msgsub;                                                      /*;AN000;*/
+   void  *msgsub;  /* void: Watcom checks calls against K&R definitions */                                                      /*;AN000;*/
    char  msginput;                                                     /*;AN000;*/
 {
    inregs.x.ax = msgnum;                                               /*;AN000;*/
@@ -363,7 +363,7 @@ Ext_translation()                                                      /*;AN000;
 
 Get_far_str(target,source,length)                                      /*;AN000;*/
    char *target;                                                       /*;AN000;*/
-   DWORD *source;               /* segment = cs register */            /*;AN000;*/
+   void  *source;  /* void: Watcom checks calls against K&R definitions */               /* segment = cs register */            /*;AN000;*/
    WORD  length;                                                       /*;AN000;*/
 {                                                                      /*;AN000;*/
    char far *fptr;                                                     /*;AN000;*/
@@ -420,7 +420,11 @@ Dexit(s)                                                               /*;AN000;
 /* intdos(&inregs,&outregs);        /*terminate*/                      /*;AN003; ;AN000;*/
 
    /* if it didn't work - kill it */
+#ifdef __WATCOMC__
+   exit(s);  /* MS C's was given no exit code */
+#else
    exit();                                                             /*;AN000;*/
+#endif
 }                                                                      /*;AN000;*/
 
 
@@ -1238,7 +1242,7 @@ WORD Ext_open(fspec,handle)                                            /*;AN000;
 WORD Get_ext_attrib(handle,list_ptr,qlist_ptr)                         /*;AN000;*/
    WORD handle;                                                        /*;AN000;*/
    WORD far **list_ptr;   /* ptr to far ptr to list returned */        /*;AN000;*/
-   WORD *qlist_ptr;       /* query list */                             /*;AN000;*/
+   void *qlist_ptr;  /* void: Watcom checks calls against K&R definitions */       /* query list */                             /*;AN000;*/
 {                                                                      /*;AN000;*/
    WORD status;                                                        /*;AN000;*/
    WORD attr_size;                                                     /*;AN000;*/
@@ -1857,7 +1861,11 @@ WORD Regular_attrib(fspec)                                             /*;AN000;
 {                                                                      /*;AN000;*/
    WORD status;                                                        /*;AN000;*/
    WORD i;                                                             /*;AN000;*/
+#ifdef __WATCOMC__
+   char string[17];  /* MS C's string[16] was overrun by its terminator */
+#else
    char string[16];                                                    /*;AN000;*/
+#endif
 
    /* get attributes */
    if ((status = Get_reg_attrib(fspec,&attr)) != NOERROR) {            /*;AN000;*/
@@ -2031,13 +2039,13 @@ WORD Extended_attrib(handle,fspec)                                     /*;AN000;
       set_ext_attr = FALSE;                                            /*;AN000;*/
       nptr = name_ptr;                                                 /*;AN000;*/
       type = EANAMES;                                                  /*;AN000;*/
-      status = Print_ext_attrib(fspec,type,name_ptr,num,list_ptr);     /*;AN004;*/
+      status = Print_ext_attrib(fspec,type,(struct name_list far *)name_ptr,num,(struct attr_list far *)list_ptr);     /*;AN004;*/
       did_attrib_ok = TRUE;                                            /*;AN004;*/
       return(status);                                                  /*;AN004;*/
       }                                                                /*;AN000;*/
 
    /* find if extended attribute name is in list */
-   else if (!Find_ext_attrib(name_ptr,ext_attr,num,&nptr)) {           /*;AN000;*/
+   else if (!Find_ext_attrib(name_ptr,ext_attr,num,(struct name_list far **)&nptr)) {           /*;AN000;*/
       return(EARCNOTFOUND+200);                                        /*;AN000;*/
       }                                                                /*;AN000;*/
    else                                                                /*;AN000;*/
@@ -2063,7 +2071,7 @@ WORD Extended_attrib(handle,fspec)                                     /*;AN000;
 
    /* Check if doing a display or set, and go do it */
    if (do_ext_attr) {                                                  /*;AN000;*/
-      status = Print_ext_attrib(fspec,type,name_ptr,num,list_ptr);     /*;AN000;*/
+      status = Print_ext_attrib(fspec,type,(struct name_list far *)name_ptr,num,(struct attr_list far *)list_ptr);     /*;AN000;*/
       }                                                                /*;AN000;*/
    else {                                                              /*;AN000;*/
 
