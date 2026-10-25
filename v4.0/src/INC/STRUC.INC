@@ -1,5 +1,8 @@
 ;;STRUC--Stucture Macro Library
 ;;Optimizing Version 2.30  03/31/87
+IFDEF __JWASM__
+	option	nokeyword:<.if .elseif .else .endif .while .repeat .until> ; macros here
+ENDIF
 
 if1
 $NoConj 	equ	0
@@ -73,7 +76,11 @@ $GetConj macro	p1,p2
 	    ifnb    <&parm>
 		irp	x,<and,AND,or,OR>
 		    ifidn   <parm>,<x>
+IFDEF __JWASM__
+			 $AndOr = $&x		; JWasm takes & off only next to a parameter
+ELSE
 			 $AndOr = $&&&x
+ENDIF
 			 exitm
 		    endif
 		endm
@@ -86,7 +93,11 @@ $GetDist macro	p1,p2
 	    ifnb    <parm>
 		irp	x,<short,SHORT,near,NEAR>
 		    ifidn   <parm>,<x>
+IFDEF __JWASM__
+			$Dist	= $&x		; JWasm takes & off only next to a parameter
+ELSE
 			$Dist	= $&&&x
+ENDIF
 			 exitm
 		     endif
 		endm
@@ -119,6 +130,11 @@ $Pop	macro	x
 endm
 
 $EquateLabel macro last,this
+IFDEF __JWASM__
+	if	last eq -1		; no label yet: $LastLabelOrg is no address
+	    exitm
+	endif
+ENDIF
 	if	$LastLabelOrg eq $
 	    $ll&last = this
 	    .xcref  $ll&last
@@ -697,6 +713,10 @@ $OrFound = 0
 $LoopEnd = 0
 $LeaveFound = 0
 $LastLabel = -1
+IFDEF __JWASM__
+$LastLabelOrg = 0			; JWasm rejects $ outside a segment
+ELSE
 $LastLabelOrg = $
+ENDIF
 $DefDist= $Short
 $Push	%$NoType

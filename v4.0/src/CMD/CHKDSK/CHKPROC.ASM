@@ -29,7 +29,7 @@ DATA	SEGMENT PUBLIC PARA 'DATA'
 	EXTRN	HIDCNT:dword,HIDSIZ:word,FILCNT:dword,FILSIZ:word	   ;an049;bgb
 	EXTRN	DIRCNT:dword							;an049;bgb
 	EXTRN	DIRSIZ:word							;an049;bgb
-	EXTRN	DIRTYFAT:byte,
+	EXTRN	DIRTYFAT:byte
 	EXTRN	HECODE:byte
 	EXTRN	ALLDRV:byte,FIXMFLG:byte,DIRCHAR:byte
 	EXTRN	BIGFAT:byte,EOFVAL:word,BADVAL:word

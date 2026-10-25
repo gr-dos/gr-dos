@@ -384,7 +384,9 @@ com_ports_attached	DB    0 	  ;number of com ports in the machine
 current_packet_cp_number   DW	 -2	  ;adjustment for accessing current 'des_strt_pkcp?' in 'des_start_packet'         ;AN000;
 delay_holder		DB    1 	  ;holder for binary form of delay requested					   ;AN000;
 device_request		DB    ? 	  ;holds device request value							   ;AN000;
+IFNDEF __JWASM__		; unused; JWasm rejects EQU of an external difference
 max_pknum		EQU	 ($ - OFFSET des_start_packet.des_strt_pkcp1)/2        ;most cp numbers can send at once   ;AN000;
+ENDIF
 ;IOCTL0C_functions_requested   DB 0	   ;for displaying messages, flag byte indicating IOCTL functions requested	    ;AN000;
 need_typamat_call	DB	 false	  ;boolean for saving up delay and rate settings				   ;AN000;
 need_IOCTL0C		DB	 false	  ;boolean for saving up parts of an IOCTL 0CH call				   ;AN000;

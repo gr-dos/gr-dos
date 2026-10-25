@@ -1,4 +1,11 @@
         page    80,132
+
+; BREAK is used before DOSSYM.INC (DOSMAC.INC) defines it, so define it here
+; too. MASM 5 only reported the pass 1 forward reference.
+BREAK	MACRO	subtitle
+	SUBTTL	subtitle
+	PAGE
+ENDM
 ;******************* START OF SPECIFICATIONS ***********************************
 ;
 ; MODULE NAME:          SYS1.SAL + SYS2.SAL + SYSSR.SAL

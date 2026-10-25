@@ -3883,7 +3883,11 @@ PUBLIC	 dummy5
 		  MOV	device_name,OFFSET LPT1_str			  ;AN000;assume LPT1
 		  MOV	device,"1"                              ;AC664;set up message
 		  MOV	LPTNO,"1"                  ;see modeprin
+IFDEF __JWASM__ ; MASM 5.1 leaves out the [BX] of parm_list here
+		  MOV	[current_parm_DI+TYPE parm_list_entry].item_tag,onethirtytwo_item_tag
+ELSE
 		  MOV	parm_list[current_parm_DI+TYPE parm_list_entry].item_tag,onethirtytwo_item_tag   ;AN000;save chars/line
+ENDIF
 		  .IF <parm_list[current_parm_DI].item_tag EQ LPT1132_item_tag> OR ;AN000;
 		  MOV	device_name,OFFSET LPT2_str			  ;AN000;assume LPT2
 		  MOV	LPTNO,"2"                  ;see modeprin
@@ -3896,7 +3900,11 @@ PUBLIC	 dummy5
 		  MOV	device_name,OFFSET LPT1_str			  ;AN000;assume LPT1
 		  MOV	device,"1"                              ;AC664;set up message
 		  MOV	LPTNO,"1"                  ;see modeprin
+IFDEF __JWASM__ ; MASM 5.1 leaves out the [BX] of parm_list here
+		  MOV	[current_parm_DI+TYPE parm_list_entry].item_tag,eighty_item_tag
+ELSE
 		  MOV	parm_list[current_parm_DI+TYPE parm_list_entry].item_tag,eighty_item_tag	  ;AN000;save chars/line
+ENDIF
 		  .IF <parm_list[current_parm_DI].item_tag EQ LPT180_item_tag > OR ;AN000;
 		  MOV	device_name,OFFSET LPT2_str			  ;AN000;assume LPT2
 		  MOV	LPTNO,"2"                  ;see modeprin

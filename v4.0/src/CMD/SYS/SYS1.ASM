@@ -273,7 +273,7 @@ DATA			ENDS
 CODE			SEGMENT PARA PUBLIC
 
 			EXTRN SYSLOADMSG:near, SYSDISPMSG:near, SYSPARSE:near
-			EXTRN Data_Space:WORD, Find_DPB:near,
+			EXTRN Data_Space:WORD, Find_DPB:near
 			EXTRN Move_DIR_Entry:near, Free_Cluster:near, Direct_Access:near
 
 			BREAK <SYS - Main>

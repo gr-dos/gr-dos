@@ -1,3 +1,6 @@
+IFDEF __JWASM__
+	option	nokeyword:<C>	; a name here, a keyword since MASM 6
+ENDIF
 	PAGE	,132			;
 	TITLE	MODEVID.SAL
 
