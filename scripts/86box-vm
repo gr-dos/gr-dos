@@ -7,9 +7,10 @@
 #
 # usage: scripts/86box-vm [--cpu necv20|8088] VMDIR [IMAGE]
 #
-# The machine is the Xi 8088 (an 8088 board with an AT-style 1.44 MB floppy
-# controller; XT controllers cannot read 1.44 MB disks). The CPU defaults
-# to the NEC V20, at 4.77 MHz. Run it with:
+# The machine is the Xi 8088 (an 8088 board with an AT-style floppy
+# controller; XT controllers cannot read high-density disks). The drive is a
+# 3.5" 1.44 MB or a 5.25" 1.2 MB one, by the size of IMAGE (default: the
+# 1.44 MB image). The CPU defaults to the NEC V20, at 4.77 MHz. Run it with:
 #
 #   86Box -R ROMDIR -P VMDIR
 
@@ -26,7 +27,12 @@ case $cpu in
   *) echo "$0: --cpu must be necv20 or 8088" >&2; exit 2 ;;
 esac
 [ $# -ge 1 ] && [ $# -le 2 ] || { echo "usage: $0 [--cpu necv20|8088] VMDIR [IMAGE]" >&2; exit 2; }
-image=${2:-$root/build/linux/gr-dos.img}
+image=${2:-$root/build/linux/gr-dos-1440k.img}
+case $(wc -c < "$image") in
+  1474560) fdd=35_2hd ;;
+  1228800) fdd=525_2hd ;;
+  *) echo "$0: $image is not a 1.44 MB or 1.2 MB image" >&2; exit 2 ;;
+esac
 
 mkdir -p "$1"
 vm=$(cd "$1" && pwd)
@@ -51,7 +57,7 @@ keyboard_type = keyboard_at
 mouse_type = none
 
 [Floppy and CD-ROM drives]
-fdd_01_type = 35_2hd
+fdd_01_type = $fdd
 fdd_01_fn = $vm/gr-dos.img
 fdd_02_type = none
 EOF

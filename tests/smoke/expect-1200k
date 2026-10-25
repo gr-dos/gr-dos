@@ -1,0 +1,5 @@
+# The 1.2 MB smoke test image (scripts/smoke-test --expect): DIR reports
+# 1,000,000 to 1,199,999 bytes free (1,103,872 at v0.01), less than a
+# 1.44 MB disk would have.
+
+^ +3 File\(s\) +1[01]\d{5} bytes free$
