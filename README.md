@@ -10,8 +10,8 @@ and MODE), and bootable 1.44 MB, 1.2 MB, 720 KB and 360 KB floppy images,
 which all hold the same files, with the tico16 editor. Apart from the GR-DOS
 branding of the banner and `VER` (`patches/branding`), the binaries of the
 assembly sources are byte-identical to the original MASM/LINK build; ATTRIB
-and MEM, which are C, are built with Open Watcom C
-([`docs/m4-utilities.md`](docs/m4-utilities.md)). See
+and MEM, which are C, are built with Open Watcom C and GR-DOS's own C
+runtime ([`docs/m4-utilities.md`](docs/m4-utilities.md)). See
 [`docs/00-mvp.md`](docs/00-mvp.md) for the plan and its status.
 
 ## Building
@@ -155,9 +155,10 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
 GR-DOS's own scripts, patches and documentation are MIT, see
 [`LICENSE`](LICENSE). The MS-DOS 4.00 source in `v4.0` keeps its own MIT
 license, [`v4.0/LICENSE`](v4.0/LICENSE). TICO.EXE is
-[tico16](https://github.com/tico-edit/tico16)'s, under its MIT license;
-ATTRIB.EXE and MEM.EXE contain parts of the Open Watcom C runtime, under the
-Sybase Open Watcom Public License 1.0. The release README includes these
-notices. MS-DOS is a trademark of
+[tico16](https://github.com/tico-edit/tico16)'s, under its MIT license.
+ATTRIB.EXE and MEM.EXE are compiled with Open Watcom C but linked with
+GR-DOS's own MIT C runtime, `compat/crt`, and contain no Open Watcom code
+([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes
+these notices. MS-DOS is a trademark of
 Microsoft. GR-DOS is an independent project, not endorsed by Microsoft or
 IBM.

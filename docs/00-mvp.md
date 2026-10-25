@@ -57,7 +57,7 @@ Open questions to resolve experimentally:
 
 - **C portability.** DOS 4 C utilities assume Microsoft C 5.x pragmas, calling conventions and runtime. Treat them as "missing until ported" rather than assumed buildable.
 - **Version pinning.** OW 2.0 is a rolling beta. CI must fetch a specific dated snapshot from the open-watcom-v2 GitHub releases and verify its hash; record the snapshot used locally.
-- **License.** Open Watcom Public License is acceptable for a build tool. If Watcom runtime code is linked into image components, document it.
+- **License.** Open Watcom Public License is acceptable for a build tool. If Watcom runtime code is linked into image components, document it. *Resolved:* none is (decision 20).
 
 ### M2 assembler findings (2026-10-23)
 
@@ -89,6 +89,7 @@ Result: with the source edits on `graham/impl` all 102 files assemble, and with 
 17. **Versioning and releases.** The version lives in a top-level `VERSION` file, starting at `0.01`. When a merge to `main` changes `VERSION`, CI tags that merge commit `v<VERSION>` (first: `v0.01`), creates a GitHub Release and attaches exactly four assets: the 1.44 MB and 1.2 MB images, a reproducible ZIP of the binaries, README, `BUILDINFO`, checksums and logs (`scripts/mkzip`), and `SHA256SUMS` of those three. Other builds publish Actions artifacts only.
 18. **Workflow.** All changes reach `main` through pull requests. `main` is protected: pull requests required, CI status check `ci` must pass, and administrators are not exempt. The CI workflow's job must therefore be named `ci`.
 19. **Assembler.** JWasm v2.20 (commit `ac54827ff40b77ecd6e77ed0866a43fc60cd5fe1`, Sybase Open Watcom Public License), built from source by `scripts/fetch-jwasm` with the patches in `patches/jwasm` applied, and run with `-Zj -Zm -Zg -Cx`. Linking uses `wlink` with the segment layout of Microsoft LINK computed by `scripts/mslink-layout`. Compatibility edits to `v4.0` are committed as small patches, and each must leave the original MASM build (M1) byte-identical to `docs/m1/reference-build.sha256`. M2 targets JWasm + `wlink` output byte-identical to M1 for the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM.
+20. **C runtime.** ATTRIB and MEM, compiled with Open Watcom C, link with GR-DOS's own minimal C runtime, `compat/crt` (MIT), not Open Watcom's: it is written from the documented DOS and Microsoft C 5.1 interfaces, not from Open Watcom's runtime source or object code, and each link is checked to take no module from any other library (`scripts/check-runtime`). Open Watcom stays a build tool only. See `docs/m4-utilities.md`.
 
 ## Proposed milestones
 

@@ -14,11 +14,11 @@ source, the tico16 editor and an AUTOEXEC.BAT. Every image, from 1.44 MB to
 | `SYS.COM` | `CMD/SYS` | EXE2BIN | yes |
 | `CHKDSK.COM` | `CMD/CHKDSK` | `.EXE` as LINK writes it, then CONVERT | yes (and `CHKDSK.EXE`) |
 | `DISKCOPY.COM` | `CMD/DISKCOPY` | EXE2BIN | yes |
-| `ATTRIB.EXE` | `CMD/ATTRIB` (C) | Open Watcom C and `wlink` | no |
+| `ATTRIB.EXE` | `CMD/ATTRIB` (C) | Open Watcom C, `wlink` and `compat/crt` | no |
 | `MORE.COM` | `CMD/MORE` | EXE2BIN | yes |
 | `FIND.EXE` | `CMD/FIND` | `.EXE` as LINK writes it, not EXEPACKed | the EXEPACKed one is |
 | `DEBUG.COM` | `CMD/DEBUG` | `.EXE` as LINK writes it, then CONVERT | yes |
-| `MEM.EXE` | `CMD/MEM` (C) | Open Watcom C and `wlink` | no |
+| `MEM.EXE` | `CMD/MEM` (C) | Open Watcom C, `wlink` and `compat/crt` | no |
 | `MODE.COM` | `CMD/MODE` | EXE2BIN | yes |
 | `TICO.EXE` | tico16 release v0.02, not built | | |
 | `AUTOEXEC.BAT` | `image/autoexec.bat` | | |
@@ -70,27 +70,29 @@ and MEM linked with its runtime library (`MEM.LIB`). GR-DOS compiles them
 with Open Watcom C, so they work but are not byte-identical:
 
 ```text
-wcc -q -w0 -zld -ms -os -zp1 -s -ecc -j -ei -bt=dos -fi=compat/msc.h ...
+wcc -q -w0 -zld -zl -x -ms -os -zp1 -s -ecc -j -ei -bt=dos -fi=compat/msc.h -I... -Icompat/include ...
 ```
 
 Small model, packed structures (`-zp1`) and the C calling convention
 (`-ecc`) for the assembly modules, which are those of the DOS build:
 ATTRIBA (ATTRIB's startup code) and the C interfaces to the parser and the
 message retriever (`_PARSE.ASM`, `_MSGRET.ASM`). They link with `wlink`
-and Open Watcom's `clibs`. ATTRIB has its own startup code (`XCMAIN`); MEM
-has Watcom's.
+and GR-DOS's own C runtime, `compat/crt` (below), not Open Watcom's or
+Microsoft's. ATTRIB has its own startup code (`XCMAIN`); MEM has
+`compat/crt`'s.
 
 `compat/msc.h` is included before each source. It includes the headers
-Microsoft C programs used without saying so, and gives Watcom
-`FP_SEG`/`FP_OFF` that can be assigned to, and a `segread` that sets `ES`
-to `DS` (below).
+Microsoft C programs used without saying so, and gives a `segread` that
+sets `ES` to `DS` (below). The headers are `compat/include`'s, which
+declare the runtime's functions with the C calling convention and give
+`FP_SEG`/`FP_OFF` that can be assigned to, as Microsoft C's do.
 
 The source edits, under `#ifdef __WATCOMC__` in C and `IFDEF __JWASM__` in
 assembly, keep the Microsoft C build identical (`scripts/check-reference`):
 
 - **K&R definitions.** Watcom checks calls against old-style definitions:
   three parameters ATTRIB passes different pointer types to are `void *`.
-- **Startup.** Watcom's compiled `main` pulls in Watcom's startup code,
+- **Startup.** Watcom's compiled `main` pulls in startup code (`_cstart_`),
   which ATTRIB has its own of, so ATTRIB's `main` is renamed. ATTRIB's
   `exit` is DOS function 4Ch, with the exit code, which Microsoft's call
   left out.
@@ -100,8 +102,8 @@ assembly, keep the Microsoft C build identical (`scripts/check-reference`):
   and `segread` reports `DS` for it.
 - **`SI` and `DI`.** ATTRIBA's `getpspbyte` and `putpspbyte` change `SI`
   and `DI`, which Watcom keeps variables in across calls; they save them.
-- **Uninitialised data.** Watcom leaves `_BSS` out of the program and its
-  startup code clears it. ATTRIB's startup code does not, so it now clears
+- **Uninitialised data.** Watcom leaves `_BSS` out of the program and the
+  startup code must clear it. ATTRIB's startup code does not, so it now clears
   `_edata` to `_end` (`wlink` defines both).
 - **Group.** ATTRIBA's `pgroup` holds only `_TEXT`, as Watcom's code
   addresses are offsets from `_TEXT`.
@@ -112,6 +114,76 @@ assembly, keep the Microsoft C build identical (`scripts/check-reference`):
   ATTRIB's `struct m_sublist` gains a filler byte.
 - **MEM.** MEM read `DOS_TopOfMemory` from Microsoft's runtime; it now reads
   the top of memory from the PSP.
+- **`sprintf`.** MEM's five `sprintf` calls make a drive name (`"%c:"`,
+  `"%c: - %c:"`) or copy a string with no conversions. They are written as
+  the assignments and `strcpy` calls they amount to, so the runtime has no
+  `sprintf`.
+
+### The C runtime (`compat/crt`)
+
+`compat/crt` is a minimal C runtime written for GR-DOS, MIT licensed like
+the rest of GR-DOS's own work. It holds just what ATTRIB and MEM use: 14
+functions (`bdos`, `close`, `exit`, `filelength`, `int86`, `int86x`,
+`intdos`, `intdosx`, `kbhit`, `segread`, `strcat`, `strcmp`, `strcpy` and
+`strlen`; `intr.asm` has the four interrupt calls) and MEM's startup code,
+`c0.asm`. JWasm assembles them, `wlib` makes `GRCRT.LIB` of all but the
+startup code, and `wlink` takes from it only the modules a program uses.
+
+- **Interface.** Microsoft C 5.1's, the one the programs were written for:
+  the C calling convention (arguments on the stack, `AX` or `DX:AX`
+  returned; `SI`, `DI`, `BP` and `DS` kept, as Open Watcom C expects of a
+  `__cdecl` function, and `BX`, `CX` and `ES` too), small model, and
+  `union REGS` and `struct SREGS` laid out as `compat/include/dos.h` gives
+  them. `intdosx` and `int86x` store `DS` and `ES` back to the `SREGS`, and
+  set `cflag` to 1 when the carry flag is set. `int86` and `int86x` call the
+  interrupt through its vector, with the flags pushed and interrupts off, as
+  INT does, so they need no code that changes itself.
+- **Not provided.** No `errno` or `_doserrno` (neither program reads them),
+  no heap, stdio, `printf` family, `atexit`, floating point or command line
+  parsing: MEM's `main(argc, argv)` is called with `argc` 0.
+- **MEM's startup code.** DOS starts the program with `DS` and `ES` at its
+  PSP and all of memory; `c0.asm` sets `DS`, `SS` and `ES` to DGROUP and the
+  stack (2 KB, as before), clears `_BSS`, sets `_psp`, and shrinks the
+  program's memory to the top of its stack (INT 21h function 4Ah) before
+  calling `main_` (Open Watcom C always compiles `main` with its register
+  convention). When `main` returns, the program ends with function 4Ch.
+  `c0.asm` is linked first, so its segment definitions order the program:
+  code, then DGROUP's initialised data, `_BSS` and the stack, which take no
+  room in the file.
+- **Compiler and runtime kept apart.** `wcc` runs with `-x` (no `INCLUDE`)
+  and the headers in `compat/include`, and with `-zl`, so the objects name
+  no default library. `wlink` runs with `format dos` and `option
+  nodefaultlibs` and is given only the objects and `GRCRT.LIB`: an Open
+  Watcom runtime symbol could not be resolved, and the link would fail. It
+  writes a map (`X.MAP`, next to `X.EXE`), and `scripts/check-runtime`
+  fails the build unless every module in it is one of the program's objects
+  or from `GRCRT.LIB`, and `GRCRT.LIB` the only library.
+
+**Provenance.** The functions are written from their documented
+interfaces: the MS-DOS INT 21h functions and Microsoft C 5.1's library
+reference, with the calling convention found by compiling test code with
+`wcc`. No Open Watcom runtime source or object code was used. The Open
+Watcom runtime once linked into these programs was disassembled, to list
+what they used from it and how ([PR #6](https://github.com/plicease/dos-gr-dos/pull/6#issuecomment-6404653096));
+`compat/crt` is not translated or adapted from that disassembly, and uses a
+different calling convention from Open Watcom's register-based one.
+Open Watcom C, `wlink` and `wlib` are build tools only, under the Sybase
+Open Watcom Public License 1.0; no Open Watcom code is in ATTRIB.EXE or
+MEM.EXE.
+
+**Size.** Against the same programs linked with Open Watcom's `clibs`:
+
+| | Open Watcom runtime | `compat/crt` | 360 KB disk clusters |
+|---|---:|---:|---|
+| `ATTRIB.EXE` | 20,504 bytes | 19,446 bytes | 21 → 19 |
+| `MEM.EXE` | 19,974 bytes | 11,986 bytes | 20 → 12 |
+
+The 360 KB image has 10 KB more free (62,464 bytes). MEM's own memory, as
+`MEM /PROGRAM` lists it, falls from 7A70h bytes to 3A40h, its 100h-byte PSP
+and 3940h-byte image, and the free memory after it grows by as much.
+Otherwise ATTRIB's and MEM's output is the same with either runtime, as
+checked by running both versions of each through the same commands in
+QEMU.
 
 ### Assembler edits
 
