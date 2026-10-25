@@ -40,8 +40,11 @@ JWFLAGS := -q -Zj -Zm -Zg -Cx -I. -I$(CURDIR)/$(SRC)/INC -I$(CURDIR)/$(SRC)/DOS
 
 # ATTRIB and MEM are C, compiled with Open Watcom C for Microsoft C 5.1's
 # small model, packed structures and C calling convention (compat/msc.h).
-WCFLAGS := -q -w0 -zld -ms -os -zp1 -s -ecc -j -ei -bt=dos -fi=$(CURDIR)/compat/msc.h \
-	-I. -I$(CURDIR)/$(SRC)/H
+# They use GR-DOS's C runtime, compat/crt, and its headers, compat/include,
+# not Open Watcom's: -x ignores INCLUDE, and -zl leaves out the references
+# to Open Watcom's libraries.
+WCFLAGS := -q -w0 -zld -zl -x -ms -os -zp1 -s -ecc -j -ei -bt=dos -fi=$(CURDIR)/compat/msc.h \
+	-I. -I$(CURDIR)/$(SRC)/H -I$(CURDIR)/compat/include
 
 BOOT_OBJS    := $(SRC)/BOOT/MSBOOT.OBJ
 MSLOAD_OBJS  := $(SRC)/BIOS/MSLOAD.OBJ
@@ -236,8 +239,8 @@ $(SRC)/CMD/FORMAT/MSFOR.OBJ $(SRC)/CMD/SYS/SYS1.OBJ: $(SRC)/INC/BOOT.INC
 
 C_OBJS := $(SRC)/CMD/ATTRIB/ATTRIB.OBJ $(SRC)/CMD/MEM/MEM.OBJ
 
-$(C_OBJS): %.OBJ: $(BUILD)/messages.stamp $(TOOLS) compat/msc.h
-	. ./$(TOOLS) && cd $(@D) && PATH=$$WATCOM/binl64:$$PATH INCLUDE=$$WATCOM/h \
+$(C_OBJS): %.OBJ: $(BUILD)/messages.stamp $(TOOLS) compat/msc.h $(wildcard compat/include/*.h)
+	. ./$(TOOLS) && cd $(@D) && PATH=$$WATCOM/binl64:$$PATH \
 	  wcc $(WCFLAGS) -fo=$(@F) $(notdir $*).C
 
 $(SRC)/BOOT/MSBOOT.EXE:         $(BOOT_OBJS)
@@ -260,14 +263,31 @@ $(SRC)/CMD/FIND/FIND.EXE: MSLINK := --exepack
 $(EXES): %.EXE: $(TOOLS) scripts/mslink scripts/mslink-layout scripts/msexe
 	. ./$(TOOLS) && scripts/mslink $(MSLINK) $@ $(filter %.OBJ,$^)
 
-# ATTRIB and MEM, with the Open Watcom C runtime instead of Microsoft C's.
-$(SRC)/CMD/ATTRIB/ATTRIB.EXE: $(ATTRIB_OBJS)
-$(SRC)/CMD/MEM/MEM.EXE:       $(MEM_OBJS)
+# GR-DOS's C runtime for ATTRIB and MEM (compat/crt), instead of Microsoft
+# C's: a library of the functions they call, and MEM's startup code, c0.OBJ.
+CRT      := $(BUILD)/crt
+CRT_LIB  := $(CRT)/GRCRT.LIB
+CRT_OBJS := $(patsubst compat/crt/%.asm,$(CRT)/%.OBJ,$(filter-out %/c0.asm,$(wildcard compat/crt/*.asm)))
 
-$(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE: $(TOOLS)
-	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet system dos \
-	  option nocaseexact name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) \
-	  libpath $$WATCOM/lib286/dos libpath $$WATCOM/lib286 library clibs
+$(CRT)/%.OBJ: compat/crt/%.asm $(TOOLS)
+	mkdir -p $(@D)
+	. ./$(TOOLS) && "$$JWASM" -q -Cp -Fo$@ $<
+
+$(CRT_LIB): $(CRT_OBJS)
+	rm -f $@
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlib -q -n -b $@ $(addprefix +,$^)
+
+# ATTRIB has its own startup code, ATTRIBA; MEM's comes first.
+$(SRC)/CMD/ATTRIB/ATTRIB.EXE: $(ATTRIB_OBJS)
+$(SRC)/CMD/MEM/MEM.EXE:       $(CRT)/c0.OBJ $(MEM_OBJS)
+
+# No default libraries: the map, X.MAP, must show only the objects and
+# GRCRT.LIB (scripts/check-runtime).
+$(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE: $(TOOLS) $(CRT_LIB) scripts/check-runtime
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos \
+	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
+	  name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) library $(CRT_LIB)
+	scripts/check-runtime $(@:.EXE=.MAP) $(CRT_LIB) $(filter %.OBJ,$^)
 
 # EXE2BIN; the image is padded to the size Microsoft LINK gives it.
 size = $$(scripts/mslink-layout --size $(filter %.OBJ,$^))

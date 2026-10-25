@@ -624,11 +624,21 @@ int      DeviceDriverType;                                                      
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
          else {                                                                                                                  /* ;an000; */
+#ifdef __WATCOMC__  /* no sprintf: GR-DOS's C runtime has none */
+                LocalDeviceName[0] = (char) ('A'+BlockDeviceNumber);          /* "A:" */
+                LocalDeviceName[1] = ':';
+                LocalDeviceName[2] = NUL;
+                if ((int) ThisDeviceDriver -> Name[0] != 1)                          /* "A: - C:" */
+                      { strcpy(&LocalDeviceName[2]," - A:");
+                        LocalDeviceName[5] = (char) ('A'+BlockDeviceNumber + ((int) ThisDeviceDriver -> Name[0]) - 1);
+                        }
+#else
                 if ((int) ThisDeviceDriver -> Name[0] == 1)                                                                      /* ;an000; */
                         sprintf(&LocalDeviceName[0],SingleDrive,'A'+BlockDeviceNumber);                                          /* ;an000; */
                    else sprintf(&LocalDeviceName[0],MultipleDrives,                                                              /* ;an000; */
                                 'A'+BlockDeviceNumber,                                                                           /* ;an000; */
                                 'A'+BlockDeviceNumber + ((int) ThisDeviceDriver -> Name[0]) - 1);                                /* ;an000; */
+#endif
                                                                                                                                  /* ;an000; */
                 Sub2_Message(DeviceLineMsg,                                                                                      /* ;an000; */
                              STDOUT,                                                                                             /* ;an000; */
@@ -898,13 +908,22 @@ struct ARENA far *ArenaPtr;                                                     
                                                                                                                                  /* ;an000; */
         o = &OwnerName[0];                                                                                                       /* ;an000; */
         *o = NUL;                                                                                                                /* ;an000; */
+#ifdef __WATCOMC__
+        strcpy(o,UnOwned);
+#else
         sprintf(o,UnOwned);                                                                                                      /* ;an000; */
+#endif
                                                                                                                                  /* ;an000; */
         PspSegment = ArenaPtr -> Owner;                                                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
+#ifdef __WATCOMC__
+        if (PspSegment == 0) strcpy(o,Ibmdos);
+         else if (PspSegment == 8) strcpy(o,Ibmbio);
+#else
         if (PspSegment == 0) sprintf(o,Ibmdos);                                                                                  /* ;an000; */
          else if (PspSegment == 8) sprintf(o,Ibmbio);                                                                            /* ;an000; */
+#endif
           else {                                                                                                                 /* ;an000; */
                 FP_SEG(ArenaPtr) = PspSegment-1;        /* -1 'cause Arena is 16 bytes before PSP */                             /* ;an000; */
                 StringPtr = (char far *) &(ArenaPtr -> OwnerName[0]);                                                            /* ;an000; */
@@ -936,7 +955,11 @@ unsigned far *EnvironmentSegmentPtr;                                            
               {                                                                                                                  /* ;an000; */
                 if (PspSegment < FP_SEG(ArenaHeadPtr))                                                                           /* ;an000; */
                       {                                                                                                          /* ;an000; */
+#ifdef __WATCOMC__
+                        if (*OutputPtr == NUL) strcpy(OutputPtr,Ibmdos);
+#else
                         if (*OutputPtr == NUL) sprintf(OutputPtr,Ibmdos);                                                        /* ;an000; */
+#endif
                         }                                                                                                        /* ;an000; */
                  else {                                                                                                          /* ;an000; */
                         FP_SEG(EnvironmentSegmentPtr) = PspSegment;                                                              /* ;an000; */
