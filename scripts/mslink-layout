@@ -7,7 +7,7 @@ use warnings;
 
 =head1 SYNOPSIS
 
- scripts/mslink-layout [--size] OBJ...
+ scripts/mslink-layout [--size|--stack|--segments] OBJ...
 
 =head1 DESCRIPTION
 
@@ -26,7 +26,9 @@ and within a class in order of first appearance;
 
 public segments with the same name and class are combined, each
 contribution aligned according to its own segment definition, including
-contributions of length zero;
+contributions of length zero, except to a stack segment (DEBUG's
+CSTACK is 16Ah bytes, though the later modules declare it paragraph-aligned
+and empty);
 
 =item *
 
@@ -40,8 +42,16 @@ nothing to it (the DOS sources declare every segment of their group in every
 module).  This prints a wlink C<ORDER> directive that places every segment
 where Microsoft LINK would have: at the paragraph containing its start
 (C<SEGADDR>, which is also the frame of segment relocations) and the offset
-within that paragraph.  The linked image is then byte-identical.  Absolute
+within that paragraph. If there is a stack segment, it also prints its size
+as C<option stack>, since C<wlink> otherwise makes the stack at least 4 KB.  The linked image is then byte-identical.  Absolute
 (C<AT>) segments are not part of the image and are left out.
+
+With C<--segments>, prints the layout instead, one segment per line: its
+start and length in hex, C<stack> for the stack segment (C<-> otherwise)
+and its name.  F<scripts/msexe> reads this.
+
+With C<--stack>, prints the paragraph (C<SEGADDR>) of the segment with
+combine type C<STACK> instead, the initial C<SS> Microsoft LINK writes.
 
 With C<--size>, prints the image size in bytes instead: the end of the last
 segment that is not empty, after the alignment of its last contribution.  Microsoft
@@ -133,6 +143,7 @@ sub layout (@objs) {
       my $start = align_up($addr, $align_bytes{$seg->{parts}[0]{align}} // 1);
       my $cur = $start;
       for my $part ($seg->{parts}->@*) {
+        next if $part->{combine} == 5 && !$part->{size};
         $cur = align_up($cur, $align_bytes{$part->{align}} // 1);
         $cur += $part->{size};
       }
@@ -145,10 +156,21 @@ sub layout (@objs) {
 }
 
 sub main (@args) {
-  my $size = @args && $args[0] eq '--size' ? shift @args : 0;
-  die "usage: $0 [--size] OBJ...\n" unless @args;
+  my $mode = @args && $args[0] =~ /^--(size|stack|segments)$/ ? (shift @args) =~ s/^--//r : '';
+  die "usage: $0 [--size|--stack|--segments] OBJ...\n" unless @args;
   my @image = layout(@args);
-  if($size) {
+  if($mode eq 'segments') {
+    printf "%05X %05X %s %s\n", $_->{start}, $_->{length},
+      $_->{parts}[0]{combine} == 5 ? 'stack' : '-', $_->{name} for @image;
+    return 0;
+  }
+  if($mode eq 'stack') {
+    my($stack) = grep { $_->{parts}[0]{combine} == 5 } @image;
+    die "no STACK segment\n" unless $stack;
+    printf "0x%04X\n", $stack->{start} >> 4;
+    return 0;
+  }
+  if($mode eq 'size') {
     my $end = 0;
     for my $seg (@image) {
       $end = $seg->{start} + $seg->{length} if $seg->{length};
@@ -156,6 +178,10 @@ sub main (@args) {
     say $end;
     return 0;
   }
+  # wlink makes the stack at least 4 KB unless told its size, before the
+  # order directive (after it, a stack segment with no class keeps 4 KB).
+  my($stack) = grep { $_->{parts}[0]{combine} == 5 } @image;
+  printf "option stack=0x%X\n", $stack->{length} if $stack && $stack->{length};
   my @order;
   my $class;
   for my $seg (@image) {

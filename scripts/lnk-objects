@@ -17,7 +17,8 @@ C<ROOT> and prints the object files it links, one per line and in link
 order, as paths relative to C<ROOT>.
 
 The object list is the first field of the response file: it ends at the
-first comma, or at the first line that does not end with C<+>.  Objects are
+first comma or semicolon (which takes the defaults for the other fields),
+or at the first line that does not end with C<+>.  Objects are
 separated by C<+> or white space; options (C</MAP>) are ignored.  Object
 names are relative to F<DIR>, use C<\> as the directory separator and may
 omit the C<.OBJ> extension.  Directories are matched against C<ROOT>
@@ -44,7 +45,7 @@ sub objects ($root, $lnk) {
 
   my $list = '';
   for my $line (split /\r?\n/, $text) {
-    if($line =~ /^([^,]*),/) {
+    if($line =~ /^([^,;]*)[,;]/) {
       $list .= " $1";
       last;
     }
