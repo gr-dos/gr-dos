@@ -6,14 +6,23 @@
 # OUT.LNK is often the Microsoft LINK response file) and the map (OUT.MAP).
 # Objects are given in link order.
 #
-# usage: scripts/mslink OUT.EXE OBJ...
+# usage: scripts/mslink [--exe|--exepack] OUT.EXE OBJ...
+#
+# OUT.EXE is wlink's executable, whose load image is LINK's (EXE2BIN only
+# needs that). With --exe it is rewritten as LINK writes it, header and all,
+# and with --exepack as LINK /EXEPACK writes it (scripts/msexe, with the
+# layout in OUT.SEG).
 #
 # WATCOM names the Open Watcom tree; the pinned snapshot is fetched if unset.
 
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-[ $# -ge 2 ] || { echo "usage: $0 OUT.EXE OBJ..." >&2; exit 2; }
+mode=
+case ${1:-} in
+  --exe|--exepack) mode=$1; shift ;;
+esac
+[ $# -ge 2 ] || { echo "usage: $0 [--exe|--exepack] OUT.EXE OBJ..." >&2; exit 2; }
 out=$1
 shift
 base=${out%.*}
@@ -27,6 +36,13 @@ export WATCOM PATH
   echo "system dos"
   echo "option quiet"
   echo "option nocaseexact"
+  # Microsoft LINK packs segments only with /PACKCODE or /PACKDATA; wlink
+  # would otherwise put ungrouped segments in one frame (SYS's CODE and DATA).
+  echo "option packcode=0"
+  echo "option packdata=0"
+  # and does not turn a far JMP or CALL within a segment into a near one
+  # (CHKDSK's JMPs to FAR labels).
+  echo "option nofarcalls"
   echo "option map=$base.MAP"
   echo "name $out"
   for obj in "$@"; do
@@ -37,3 +53,9 @@ export WATCOM PATH
 
 rm -f "$out"
 wlink @"$base.WLK"
+
+if [ -n "$mode" ]; then
+  "$root/scripts/mslink-layout" --segments "$@" > "$base.SEG"
+  "$root/scripts/msexe" $([ "$mode" = --exepack ] && echo --exepack) --layout "$base.SEG" "$out" "$out.tmp"
+  mv "$out.tmp" "$out"
+fi

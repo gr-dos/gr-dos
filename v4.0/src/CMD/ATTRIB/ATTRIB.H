@@ -12,6 +12,13 @@
 #define WORD       unsigned short       /*;AN000;*/
 #define DWORD      unsigned long        /*;AN000;*/
 #endif
+#ifdef __WATCOMC__
+#define main       attrib_main  /* called by inmain(): no Watcom startup */
+#define exit(c)    bdos(0x4c,0,(c))  /* exit() needs the Watcom startup */
+#define PAD_BLANK  ' '    /* MS C used the low byte of the string's offset */
+#else
+#define PAD_BLANK  (BYTE)" "
+#endif
 
 #define CARRY      0x0001               /*;AN000;   carry flag */
 
@@ -349,7 +356,7 @@ struct m_sublist msg_str2 =            /*;AN000; describes substitutions   */
        sf_left | sf_char | sf_asciiz,  /*;AN000;  string                   */
        0,                              /*;AN000;  null string              */
        0,                              /*;AN000;                           */
-       (BYTE)" " };                    /*;AN000;                           */
+       PAD_BLANK };                    /*;AN000;                           */
 struct m_sublist msg_dword =           /*;AN000; describes substitutions   */
      { 48,                             /*;AN000;   for parm one of message */
        0,                              /*;AN000;                           */
@@ -389,7 +396,7 @@ struct m_sublist msg_str =             /*;AN000; describes substitutions   */
        sf_left | sf_char | sf_asciiz,  /*;AN000;  string                   */
        9,                              /*;AN000;  null string              */
        9,                              /*;AN000;                           */
-       (BYTE)" " };                    /*;AN000;                           */
+       PAD_BLANK };                    /*;AN000;                           */
 struct m_sublist msg_str1 =            /*;AN000; describes substitutions   */
      { 12,                             /*;AN000;   for parm two of message */
        0,                              /*;AN000;                           */
@@ -399,7 +406,7 @@ struct m_sublist msg_str1 =            /*;AN000; describes substitutions   */
        sf_left | sf_char | sf_asciiz,  /*;AN000;  string                   */
        0,                              /*;AN000;  null string              */
        0,                              /*;AN000;                           */
-       (BYTE)" " };                    /*;AN000;                           */
+       PAD_BLANK };                    /*;AN000;                           */
 struct m_sublist msg_error =           /*;AN000; describes substitutions   */
      { 12,                             /*;AN000;   for extended error messages*/
        0,                              /*;AN000;                           */
@@ -409,7 +416,7 @@ struct m_sublist msg_error =           /*;AN000; describes substitutions   */
        sf_left | sf_char | sf_asciiz,  /*;AN000;  string                   */
        0,                              /*;AN000;  null string              */
        0,                              /*;AN000;                           */
-       (BYTE)" " };                    /*;AN000;                           */
+       PAD_BLANK };                    /*;AN000;                           */
 
 /* misc. variables */
 union REGS       inregs,               /*;AN000;  Registers */

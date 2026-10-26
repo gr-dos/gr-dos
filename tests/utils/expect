@@ -1,0 +1,58 @@
+# Lines the utility tests' AUTOEXEC.BAT (utils.bat) must write to COM1, in
+# order: one Perl regular expression per line (scripts/smoke-test).
+
+^GRDOS-TEST-BEGIN$
+# MORE: the file, which fits on the screen
+^alpha$
+^xyz$
+# FIND: lines with "beta", the count of lines with "a", the numbered lines
+# without "a", and FIND in a pipe
+^---------- LINES\.TXT$
+^beta$
+^---------- LINES\.TXT: 4$
+^\[5\]epsilon$
+^\[6\]xyz$
+^delta$
+# ATTRIB: read-only, so DEL is refused; then not read-only; then not
+# archive; a file and a switch that are not there
+^  A    R     A:\\LINES\.TXT$
+^Access denied
+^GRDOS-READ-ONLY-KEPT$
+^  A          A:\\LINES\.TXT$
+^             A:\\LINES\.TXT$
+^File not found - NOFILE\.TXT$
+^Invalid switch - /X$
+# DEBUG: assemble and write HI.COM, which runs; unassemble and dump it
+^Writing 001D bytes$
+^GRDOS-DEBUG-OK$
+^[0-9A-F]{4}:0100 B409 +MOV +AH,09
+^[0-9A-F]{4}:010A CD21 +INT +21
+^[0-9A-F]{4}:0110  53 2D 44 45 42 55 47 2D-4F 4B 0D 0A 24 +S-DEBUG-OK\.\.\$$
+# MEM, MEM /PROGRAM listing itself, and MEM /DEBUG naming IO.SYS's drives
+^ +655360 bytes total memory$
+^ +[0-9A-F]{6} +MEM +[0-9A-F]{6} +Program
+^ +A: - B: +System Device Driver $
+# MODE
+^COM1: 9600,n,8,1,-$
+^LPT1: set for 132$
+# CHKDSK of the system disk
+^ +1457664 bytes total disk space$
+^ +2847 total allocation units on disk$
+# DISKCOPY A: to the blank disk in B:, then the copied file
+^Copying 80 tracks$
+^18 Sectors/Track, 2 Side\(s\)$
+^Formatting while copying$
+^Copy another diskette \(Y/N\)\? N$
+^GRDOS-DISKCOPY-OK$
+^LINES +TXT +41 
+^alpha$
+^xyz$
+# FORMAT /S of B:, then CHKDSK B: (IO.SYS, MSDOS.SYS and the label hidden)
+^System transferred$
+^ +1457664 bytes total disk space$
+^ +109056 bytes used by system$
+GRDOS-FORMAT-OK$
+^ +1 File\(s\) copied$
+^Volume GRTEST +created
+^ +71168 bytes in 3 hidden files$
+^GRDOS-TEST-END$

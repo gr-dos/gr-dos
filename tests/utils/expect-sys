@@ -1,0 +1,14 @@
+# Lines sys.bat must write to COM1, for every format; expect-sys-*k has the
+# sizes of each.
+
+^GRDOS-TEST-BEGIN$
+GRDOS-FORMAT-OK$
+^System transferred$
+^ +1 File\(s\) copied$
+^ +1 File\(s\) copied$
+^ Volume in drive B is GRSYS +$
+^COMMAND +COM +\d+ 
+^AUTOEXEC +BAT +\d+ 
+^ +2 File\(s\) +\d+ bytes free$
+^Volume GRSYS +created
+^GRDOS-TEST-END$

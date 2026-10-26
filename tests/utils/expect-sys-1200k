@@ -1,0 +1,7 @@
+# CHKDSK B: of the disk in sys.bat's drive B: (IO.SYS, MSDOS.SYS and the
+# label are hidden).
+
+^ +1213952 bytes total disk space$
+^ +71168 bytes in 3 hidden files$
+^ +512 bytes in each allocation unit$
+^ +2371 total allocation units on disk$

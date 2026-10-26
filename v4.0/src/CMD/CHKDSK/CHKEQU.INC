@@ -138,7 +138,7 @@ Sublist_Min	db	?			;				;AN000;
 Sublist_Char	db	?			;				;AN000;
 Sublist_Struc ends
 
-A_DeviceParameters	struc
+ChkDeviceParameters	struc
 
 SpecialFunctions	db	?    ;1  0
 DeviceType		db	?    ;1  1
@@ -159,7 +159,7 @@ HiddenSectors		dd	?
 Ext_Total_Sectors	dd	?
 ReservedArea		db	6 dup(?)
 
-A_DeviceParameters	ends
+ChkDeviceParameters	ends
 
 
 

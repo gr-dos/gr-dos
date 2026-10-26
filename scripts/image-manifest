@@ -1,0 +1,85 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use Digest::SHA qw( sha256_hex );
+
+# ABSTRACT: List the files of a FAT12 floppy image with their checksums
+
+=head1 SYNOPSIS
+
+ scripts/image-manifest IMAGE
+
+=head1 DESCRIPTION
+
+Prints one line for each file in the root directory of the FAT12 image
+F<IMAGE>, in directory order:
+
+ SHA-256  SIZE  ATTRIBUTES  DATE TIME  NAME
+
+The SHA-256 is of the file's contents, read through the FAT; the attributes
+are C<R>, C<H>, C<S> and C<A>, or C<-> for each that is not set; the date and
+time are the directory entry's.  Nothing on the line depends on the disk
+format, so images with the same files have the same manifest (issue #4).
+Deleted entries are left out, and the volume label and subdirectories are
+listed with C<-> for the checksum.
+
+=cut
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+# Cluster $n of a FAT12 table.
+sub fat12 ($fat, $n) {
+  my $word = unpack 'v', substr($fat, int($n * 3 / 2), 2);
+  return $n & 1 ? $word >> 4 : $word & 0xfff;
+}
+
+sub main (@args) {
+  die "usage: $0 IMAGE\n" unless @args == 1;
+  my($path) = @args;
+  my $img = slurp($path);
+
+  my($bps, $spc, $reserved, $nfats, $nroot, undef, undef, $spf)
+    = unpack 'v C v C v v C v', substr($img, 11, 13);
+  die "$path: not a FAT12 floppy image\n" unless $bps && $spc && $nfats && $nroot && $spf;
+  my $fat = substr $img, $reserved * $bps, $spf * $bps;
+  my $root_at = ($reserved + $nfats * $spf) * $bps;
+  my $data_at = $root_at + $nroot * 32;
+  my $cluster_bytes = $spc * $bps;
+  my $max_cluster = int((length($img) - $data_at) / $cluster_bytes) + 1;
+
+  for my $i (0 .. $nroot - 1) {
+    my $entry = substr $img, $root_at + 32 * $i, 32;
+    my $first = ord $entry;
+    last if $first == 0;
+    next if $first == 0xe5;
+    my($base, $ext, $attr, $time, $date, $start, $size) = unpack 'A8 A3 C x10 v v v V', $entry;
+    my $name = length $ext ? "$base.$ext" : $base;
+    my $flags = join '', map { $attr & $_->[0] ? $_->[1] : '-' }
+      [ 0x01, 'R' ], [ 0x02, 'H' ], [ 0x04, 'S' ], [ 0x20, 'A' ];
+    my $stamp = sprintf '%04d-%02d-%02d %02d:%02d:%02d', 1980 + ($date >> 9), ($date >> 5) & 15,
+      $date & 31, $time >> 11, ($time >> 5) & 63, ($time & 31) * 2;
+
+    my $sum = '-';
+    unless($attr & 0x18) {   # neither a volume label nor a directory
+      my $data = '';
+      my $c = $start;
+      while($size && length $data < $size) {
+        die "$path: $name: bad cluster $c\n" if $c < 2 || $c > $max_cluster;
+        $data .= substr $img, $data_at + ($c - 2) * $cluster_bytes, $cluster_bytes;
+        $c = fat12($fat, $c);
+        last if $c >= 0xff8;
+      }
+      die "$path: $name: cluster chain shorter than $size bytes\n" if length $data < $size;
+      $sum = sha256_hex(substr $data, 0, $size);
+    }
+    printf "%s  %d  %s  %s  %s\n", $sum, $size, $flags, $stamp, $name;
+  }
+  return 0;
+}
+
+exit main(@ARGV);

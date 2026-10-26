@@ -1,0 +1,65 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Check that a wlink map holds only the given objects and library
+
+=head1 SYNOPSIS
+
+ scripts/check-runtime MAP LIBRARY OBJECT...
+
+=head1 DESCRIPTION
+
+Reads the map F<MAP> that C<wlink option map> wrote for ATTRIB.EXE or
+MEM.EXE, and fails unless every module in the program is one of the
+F<OBJECT>s or a module of F<LIBRARY>, GR-DOS's C runtime (F<compat/crt>),
+and F<LIBRARY> is the only library used.  So no module of any other library,
+Open Watcom's C runtime among them, is linked into the program.
+
+Prints the modules taken from F<LIBRARY>.
+
+=cut
+
+sub main (@args) {
+  die "usage: $0 MAP LIBRARY OBJECT...\n" unless @args >= 3;
+  my($map, $library, @objects) = @args;
+  my %object = map { $_ => 1 } @objects;
+
+  open my $fh, '<', $map or die "unable to read $map: $!";
+  my(@modules, @libraries, $section);
+  while(my $line = <$fh>) {
+    chomp $line;
+    if($line =~ /^\s+\|\s+(.*?)\s+\|$/) {
+      $section = $1;
+    } elsif($line =~ /^Module: (.*)\((.*)\)$/) {
+      push @modules, [ $1, $2 ];
+    } elsif(($section // '') eq 'Libraries Used' && $line =~ /^[^\s+]/) {
+      push @libraries, $line;
+    }
+  }
+  close $fh;
+  die "$map: no modules\n" unless @modules;
+
+  my(@errors, @used);
+  for my $module (@modules) {
+    my($file, $name) = $module->@*;
+    if($file eq $name && $object{$file}) {
+      next;
+    } elsif($file eq $library) {
+      push @used, $name;
+    } else {
+      push @errors, "module $name from $file";
+    }
+  }
+  push @errors, "library $_" for grep { $_ ne $library } @libraries;
+
+  if(@errors) {
+    say STDERR "$map: $_" for @errors;
+    return 1;
+  }
+  say "$map: runtime modules: @used";
+  return 0;
+}
+
+exit main(@ARGV);

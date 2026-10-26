@@ -76,6 +76,10 @@ _parse	proc	near							 ;AN000;
 	push	bp			; save base pointer		 ;AN000;
 ;									 ;AN000;
 ;-------------------------------------------------------------------	 ;AN000;
+IFDEF __JWASM__ ; Watcom C does not keep ES equal to DS, as MS C did
+	push	ds
+	pop	es
+ENDIF
 	call	sysparse		; call the parser		 ;AN000;
 ;-------------------------------------------------------------------	 ;AN000;
 ;									 ;AN000;

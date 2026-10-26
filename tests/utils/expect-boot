@@ -1,0 +1,9 @@
+# Lines the disks made by FORMAT and SYS in the utility tests must write to
+# COM1 when booted (bootb.bat).
+
+^GRDOS-TEST-BEGIN$
+^GRDOS-BOOTED-B$
+^GR-DOS Version 4\.00$
+^COMMAND +COM +\d+ 
+^AUTOEXEC +BAT +\d+ 
+^GRDOS-TEST-END$

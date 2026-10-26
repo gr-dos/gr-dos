@@ -1,0 +1,286 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Write a DOS executable the way Microsoft LINK 3.65 does
+
+=head1 SYNOPSIS
+
+ scripts/msexe [--exepack] --layout SEGMENTS IN.EXE OUT.EXE
+
+=head1 DESCRIPTION
+
+Rewrites F<IN.EXE>, an executable linked by C<wlink> in Microsoft LINK's
+segment layout (F<scripts/mslink>), the way Microsoft LINK 3.65 writes it,
+so that the file is byte-identical to LINK's (decision 19).  F<SEGMENTS> is
+that layout, as C<scripts/mslink-layout --segments> prints it.
+
+=over 4
+
+=item *
+
+the header is 512 bytes, or a multiple of 512 if the relocation table needs
+more, with the relocation table at C<1Eh> and the word C<0001h> at C<1Ch>;
+
+=item *
+
+the initial C<SS> is the paragraph of the stack segment, where C<wlink>
+writes 0 and adds the difference to C<SP>;
+
+=item *
+
+each relocation is given relative to the paragraph of the segment it is
+in, where C<wlink> uses the paragraph of the segment's group;
+
+=item *
+
+the load image ends where the last segment that is not empty ends,
+including the uninitialised data C<wlink> leaves out;
+
+=item *
+
+the minimum allocation is the memory the segments need beyond the load
+image, in paragraphs;
+
+=item *
+
+the checksum at C<12h> is the one's complement of the sum of the file's
+words.
+
+=back
+
+With C<--exepack>, the program is packed the way LINK's C</EXEPACK> option
+packs it instead.  The load image, up to the stack segment, is compressed
+from the end: each run of 8 or more equal bytes becomes a fill command, the
+bytes between runs a copy command, and the bytes before the first run are
+left in place.  The paragraph padding at the end is a fill of the image's
+last byte.  The unpacker stub, with LINK's message and the relocations in
+its table format, follows, and the header has no relocations and no
+checksum.
+
+=cut
+
+# The unpacker stub LINK 3.65 appends, after its 16-byte header and before
+# the relocation table: 255 bytes of code and LINK's message. Taken from the
+# EXEPACKed programs of the M1 reference build (FIND.EXE, EXE2BIN.EXE,
+# IFSFUNC.EXE, FDISK.EXE and SELECT.EXE, which all have these bytes).
+my $stub = pack 'H*', join '', qw(
+  8cc00510000e1fa3040003060c008ec08b0e06008bf94f8bf7fdf3a450b83200
+  50cb8cc38cd8488ed88ec0bf0f00b91000b0fff3ae478bf78bc3488ec0bf0f00
+  b1048bc6f7d0d3e874098cda2bd08eda83cef08bc7f7d0d3e874098cc22bd08e
+  c283cff0ac8ad04ead8bc8468ac224fe3cb07506acf3aaeb07903cb2756bf3a4
+  8ac2a80174babe25010e1f8b1e0400fc33d2ad8bc8e3138bc203c38ec0ad8bf8
+  83ffff741126011de2f381fa00f0741681c20010ebdc8cc0408ec083ef102601
+  1d488ec0ebe28bc38b3e08008b360a0003f0010602002d10008ed88ec0bb0000
+  fa8ed68be7fb2eff2fb440bb0200b916008cca8edaba0f01cd21b8ff4ccd2150
+  61636b65642066696c6520697320636f7272757074
+);
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub paragraphs ($bytes) {
+  return int(($bytes + 15) / 16);
+}
+
+# The parts of an MZ executable.
+sub read_exe ($path) {
+  my $exe = slurp($path);
+  die "$path: not an MZ executable\n" unless substr($exe, 0, 2) eq 'MZ';
+  my($last, $pages, $nrel, $hdr, $min, $max, $ss, $sp, undef, $ip, $cs, $relat)
+    = unpack 'x2 v12', $exe;
+  my $size = ($pages - 1) * 512 + ($last || 512);
+  my @relocs = map { [ unpack 'v2', substr($exe, $relat + 4 * $_, 4) ] } 0 .. $nrel - 1;
+  return {
+    image  => substr($exe, $hdr * 16, $size - $hdr * 16),
+    min    => $min,
+    max    => $max,
+    ss     => $ss,
+    sp     => $sp,
+    ip     => $ip,
+    cs     => $cs,
+    relocs => \@relocs,     # [offset, segment] pairs
+  };
+}
+
+# A header of the given fields, padded to $hdr_bytes, with the relocation
+# table at 1Eh.
+sub header ($image_bytes, $hdr_bytes, %f) {
+  my $file = $hdr_bytes + $image_bytes;
+  my $relocs = join '', map { pack 'v2', @$_ } $f{relocs}->@*;
+  my $hdr = pack 'a2 v14', 'MZ', $file % 512, int(($file + 511) / 512),
+    scalar $f{relocs}->@*, $hdr_bytes / 16, $f{min}, $f{max}, $f{ss}, $f{sp}, 0, $f{ip},
+    $f{cs}, 0x1e, 0, 1;
+  $hdr .= $relocs;
+  return $hdr . "\0" x ($hdr_bytes - length $hdr);
+}
+
+sub checksum ($file) {
+  $file .= "\0" if length($file) & 1;
+  my $sum = 0;
+  $sum += $_ for unpack 'v*', $file;
+  return ~$sum & 0xffff;
+}
+
+# The segments of a layout file: [start, length], and the stack segment's.
+sub read_layout ($path) {
+  my(@segs, $stack);
+  for my $line (split /\n/, slurp($path)) {
+    my($start, $length, $kind) = split ' ', $line;
+    push @segs, [ hex $start, hex $length ];
+    $stack = $segs[-1] if $kind eq 'stack';
+  }
+  return \@segs, $stack;
+}
+
+# A relocation as [offset, segment], relative to the segment containing it.
+sub relocation ($segs, $linear) {
+  my($seg) = grep { $_->[0] <= $linear && $linear < $_->[0] + $_->[1] } @$segs;
+  die sprintf "relocation at %05Xh is in no segment\n", $linear unless $seg;
+  my $para = $seg->[0] >> 4;
+  return [ $linear - $para * 16, $para ];
+}
+
+sub plain ($exe, $segs, $stack) {
+  my $linear = $exe->{ss} * 16 + $exe->{sp};
+  my $relocs = [ map { relocation($segs, $_->[1] * 16 + $_->[0]) } $exe->{relocs}->@* ];
+  my $hdr_bytes = 512 * int((0x1e + 4 * @$relocs + 511) / 512);
+  my($image_end, $end) = (0, 0);
+  for my $seg (@$segs) {
+    my $seg_end = $seg->[0] + $seg->[1];
+    $image_end = $seg_end if $seg->[1];
+    $end = $seg_end if $seg_end > $end;
+  }
+  my $image = substr $exe->{image}, 0, $image_end;
+  $image .= "\0" x ($image_end - length $image);
+  my %f = (
+    $exe->%*,
+    relocs => $relocs,
+    min => paragraphs($end) - paragraphs($image_end),
+    ss => $stack,
+    sp => $linear - $stack * 16,
+  );
+  my $file = header(length $image, $hdr_bytes, %f) . $image;
+  substr($file, 0x12, 2) = pack 'v', checksum($file);
+  return $file;
+}
+
+# Compress $image (a multiple of 16 bytes, whose last $pad bytes are
+# padding) into EXEPACK's command stream, which the stub reads backwards.
+sub compress ($image, $pad) {
+  my @cmds;   # [start, length, fill value or undef for a copy]
+  my $end = length($image) - $pad;
+  push @cmds, [ $end, $pad, ord substr($image, -1) ] if $pad;
+
+  # Runs of 8 or more equal bytes, from the end.
+  my $pos = $end;
+  my $copy_end = $end;
+  while($pos > 0) {
+    my $byte = substr $image, $pos - 1, 1;
+    my $start = $pos - 1;
+    $start-- while $start > 0 && substr($image, $start - 1, 1) eq $byte;
+    if($pos - $start >= 8) {
+      push @cmds, [ $pos, $copy_end - $pos ] if $copy_end > $pos;
+      push @cmds, [ $start, $pos - $start, ord $byte ];
+      $copy_end = $start;
+    }
+    $pos = $start;
+  }
+  # The bytes before the first run stay where they are.
+  my $prefix = $copy_end;
+  die "nothing to compress\n" unless @cmds;
+
+  # In the file, each command's data comes first, then its count and
+  # opcode, so the stub reads the opcode first going backwards. The command
+  # for the lowest address is marked last.
+  my $packed = substr $image, 0, $prefix;
+  for my $i (reverse 0 .. $#cmds) {
+    my($start, $length, $fill) = $cmds[$i]->@*;
+    my $last = $i == $#cmds ? 1 : 0;
+    if(defined $fill) {
+      $packed .= pack 'C v C', $fill, $length, 0xb0 | $last;
+    } else {
+      $packed .= substr($image, $start, $length) . pack 'v C', $length, 0xb2 | $last;
+    }
+  }
+  return $packed;
+}
+
+# EXEPACK's relocation table: for each of the 16 64 KB frames, a count and
+# the offsets within the frame of the relocated words.
+sub reloc_table (@relocs) {
+  my @frames = map { [] } 0 .. 15;
+  for my $r (@relocs) {
+    my $linear = $r->[1] * 16 + $r->[0];
+    push $frames[$linear >> 16]->@*, $linear & 0xffff;
+  }
+  return join '', map { pack 'v v*', scalar @$_, @$_ } @frames;
+}
+
+sub exepack ($exe, $stack) {
+  my $linear = $exe->{ss} * 16 + $exe->{sp};
+  my $real_sp = $linear - $stack * 16;
+  my $dest_len = $stack;
+  my $image = substr $exe->{image}, 0, $dest_len * 16;
+  my $pad = $dest_len * 16 - length $image;
+  $image .= substr($image, -1) x $pad;
+
+  my $packed = compress($image, $pad);
+  $packed .= "\xff" x (-length($packed) & 15);
+  my $cs = length($packed) / 16;
+
+  my $table = reloc_table($exe->{relocs}->@*);
+  my $exepack_size = 16 + length($stub) + length $table;
+  my $exepack = pack('v7 a2', $exe->{ip}, $exe->{cs}, 0, $exepack_size, $real_sp, $stack,
+    $dest_len, 'RB') . $stub . $table;
+
+  # The stub moves itself above the unpacked program and keeps a 128-byte
+  # stack there.
+  my $stub_ss = $dest_len + paragraphs($exepack_size);
+  my $load = paragraphs(length($packed) + $exepack_size);
+  my $needs = paragraphs(length $exe->{image}) + $exe->{min};
+  $needs = $stub_ss + 8 if $stub_ss + 8 > $needs;
+
+  my $body = $packed . $exepack;
+  return header(length $body, 512,
+    relocs => [],
+    min    => $needs - $load,
+    max    => $exe->{max},
+    ss     => $stub_ss,
+    sp     => 0x80,
+    ip     => 0x10,
+    cs     => $cs,
+  ) . $body;
+}
+
+sub main (@args) {
+  my $pack = 0;
+  my $layout;
+  while(@args && $args[0] =~ /^--/) {
+    my $opt = shift @args;
+    if($opt eq '--exepack') {
+      $pack = 1;
+    } elsif($opt eq '--layout') {
+      $layout = shift @args;
+    } else {
+      die "$0: unknown option $opt\n";
+    }
+  }
+  die "usage: $0 [--exepack] --layout SEGMENTS IN.EXE OUT.EXE\n" unless @args == 2 && defined $layout;
+  my($in, $out) = @args;
+  my $exe = read_exe($in);
+  my($segs, $stack_seg) = read_layout($layout);
+  die "$layout: no stack segment\n" unless $stack_seg;
+  my $stack = $stack_seg->[0] >> 4;
+  my $file = $pack ? exepack($exe, $stack) : plain($exe, $segs, $stack);
+  open my $fh, '>:raw', $out or die "unable to write $out: $!";
+  print $fh $file;
+  close $fh or die "unable to write $out: $!";
+  return 0;
+}
+
+exit main(@ARGV);

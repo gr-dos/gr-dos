@@ -1,0 +1,72 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Replace the DOS 4.00 build tool CONVERT (EXE to self-loading COM)
+
+=head1 SYNOPSIS
+
+ scripts/convert IN.EXE OUT.COM
+
+=head1 DESCRIPTION
+
+Writes F<OUT.COM>, a C<.COM> program that loads the executable F<IN.EXE>
+it contains, the way the binary-only build tool F<TOOLS/CONVERT.EXE> does
+for FORMAT, CHKDSK and DEBUG (decision 11):
+
+=over 4
+
+=item *
+
+a 16-byte header: a C<JMP> to the loader, C<Converted> and four zero bytes;
+
+=item *
+
+F<IN.EXE>, unchanged, header and all;
+
+=item *
+
+CONVERT's 123-byte loader, which relocates the program in place and starts
+it with the C<SS:SP> and C<CS:IP> of the C<.EXE> header.  The C<JMP> goes to
+its code, after 8 bytes of working storage.
+
+=back
+
+The result is byte-identical to CONVERT's for the three programs of the M1
+reference build.
+
+=cut
+
+# CONVERT's loader, as it appears in FORMAT.COM, CHKDSK.COM and DEBUG.COM of
+# the M1 reference build.
+my $loader = pack 'H*', join '', qw(
+  0000000000000000e800005b508cc00510008b0e1e0103c8894ffb8b0e260103
+  c8894ff78b0e2001894ff98b0e2401894ff58b3e28018b161801b104d3e28b0e
+  1601e31a26c5b5100183c7048cdd26032e180183c50103e88edd0104e2e60e1f
+  bf00018bf281c610018bcb2bcef3a458fa8e57fb8b67f9fbff6ff5
+);
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub main (@args) {
+  die "usage: $0 IN.EXE OUT.COM\n" unless @args == 2;
+  my($in, $out) = @args;
+  my $exe = slurp($in);
+  die "$in: not an MZ executable\n" unless substr($exe, 0, 2) eq 'MZ';
+
+  my $header = pack('C v', 0xe9, 16 + length($exe) + 8 - 3) . 'Converted' . "\0" x 4;
+  my $com = $header . $exe . $loader;
+  die "$in: too large for a .COM program\n" if length $com > 0xff00;
+
+  open my $fh, '>:raw', $out or die "unable to write $out: $!";
+  print $fh $com;
+  close $fh or die "unable to write $out: $!";
+  return 0;
+}
+
+exit main(@ARGV);

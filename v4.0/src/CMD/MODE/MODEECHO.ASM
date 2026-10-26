@@ -1,3 +1,6 @@
+IFDEF __JWASM__
+	option	nokeyword:<ECHO>	; a name here, a directive since MASM 6
+ENDIF
 PAGE ,132 ;
 TITLE MODEECHO - REDIRECT PRINTER OUTPUT FROM PARALLEL TO SERIAL
 

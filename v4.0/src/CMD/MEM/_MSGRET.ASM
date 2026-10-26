@@ -74,6 +74,10 @@ data_sysloadmsg proc far
 
 ;-------------------------------------------------------------------
 
+IFDEF __JWASM__ ; Watcom C does not keep ES equal to DS, as MS C did
+	push	ds
+	pop	es
+ENDIF
 	call	sysloadmsg		; call the message retriever
 
 ;-------------------------------------------------------------------
@@ -133,6 +137,10 @@ data_sysdispmsg proc far
 
 ;-------------------------------------------------------------------
 
+IFDEF __JWASM__ ; Watcom C does not keep ES equal to DS, as MS C did
+	push	ds
+	pop	es
+ENDIF
 	call	sysdispmsg
 
 ;-------------------------------------------------------------------
@@ -192,6 +200,10 @@ data_sysgetmsg	proc far
 
 ;-------------------------------------------------------------------
 
+IFDEF __JWASM__ ; Watcom C does not keep ES equal to DS, as MS C did
+	push	ds
+	pop	es
+ENDIF
 	call	sysgetmsg		; call the message retriever
 
 ;-------------------------------------------------------------------

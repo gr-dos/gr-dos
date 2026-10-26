@@ -1,3 +1,6 @@
+IFDEF __JWASM__
+	option	nokeyword:<REPEAT>	; a name here, a directive since MASM 6
+ENDIF
 ;m
 PRINTF_CODE SEGMENT PUBLIC
 

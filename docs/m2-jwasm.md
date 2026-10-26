@@ -63,7 +63,8 @@ It then builds in place the way the DOS makefiles do:
 `make check` builds a second tree without the branding patches, in
 `build/linux/reference`, and compares 24 files: the four binaries,
 MSLOAD.COM and the 19 message files. The branding changes only COMMAND.COM
-and two of its message files (`COMMAND.CLB`, `COMMAND.CLF`).
+and two of its message files (`COMMAND.CLB`, `COMMAND.CLF`). With the
+utilities ([M4](m4-utilities.md)) it compares 88.
 
 ## Source edits
 
@@ -114,6 +115,36 @@ shrinks one. `-Zj` reproduces the code that results:
 Some differences remain in the objects and are harmless. JWasm leaves
 uninitialised data (`?`) as a gap where MASM writes zeros. JWasm also
 resolves intra-segment displacements that MASM leaves to the linker.
+
+The utilities ([M4](m4-utilities.md)) need nine more. Each patch's header
+says which source needs it.
+
+- **`0003-omf-fixup-variable-segment.patch`**: an OMF fixup of an `=`
+  variable holding a label keeps the label's segment, though the variable
+  is later set to a constant (CHKDSK's and FORMAT's message sublists).
+- **`0004-Zj-jmp-far-label.patch`**: a `JMP` back to a `FAR` label in the
+  current segment is short or far (`EAh`), never near (CHKDSK).
+- **`0005-Zj-pubdef-16-bit-constants.patch`**: a public constant that fits
+  in 16 bits, such as `-1`, is written in a 16-bit `PUBDEF` (DISKCOPY).
+- **`0006-Zj-macro-blank-separated-arguments.patch`**: blanks separate
+  macro arguments, as commas do (STRUC.INC's `.IF <x EQ y>`).
+- **`0007-Zj-masm5-passes.patch`**: MASM 5's passes. The source is read
+  again in each pass rather than replayed; `IF1` and `IF2` depend on the
+  pass; `IFDEF` of a symbol defined in pass one is true later; `OPTION
+  NOKEYWORD` acts in every pass; and an `EXTRN` first seen after pass one
+  gets an `EXTDEF`. STRUC.INC's macros and COMMAND's `IF2` need these.
+- **`0008-Zj-masm5-sizes-by-position.patch`**: the pass-one instruction
+  sizes of 0002 are found by source position rather than by count, since
+  STRUC.INC's code differs between passes.
+- **`0009-Zj-forward-reference-operand-size.patch`**: a forward-referenced
+  constant operand is sized as a 16-bit immediate, as is one from an `EQU`
+  with a forward reference (MODE).
+- **`0010-Zj-masm5-operand-encodings.patch`**: `ES:abs` is a memory
+  operand, `[BP][DI].field` has the field's type, and `OFFSET` of a
+  constant is a 16-bit immediate (MODE).
+- **`0011-Zj-no-far-call-optimisation.patch`**: a `CALL` to a `FAR`
+  procedure in the current segment is a far `CALL`, not `PUSH CS` and a
+  near one (the message retriever of ATTRIB and MEM).
 
 ## Linking
 

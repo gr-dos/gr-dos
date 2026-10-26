@@ -1,0 +1,38 @@
+JWasm: -Zj makes no "far call optimisation"
+
+For a CALL to a FAR procedure in the current segment (or another segment
+of its group), JWasm emits PUSH CS and a near CALL, as MASM 6 does.
+MASM 5 emits the far CALL (9A), one byte longer. Under -Zj, a CALL to a
+FAR label in the current segment is far, and one to a FAR label elsewhere
+is left far.
+
+Needed for the message retriever (MSGSERV.ASM) in ATTRIB and MEM, whose
+_MSGRET.ASM calls SYSLOADMSG, SYSGETMSG and SYSDISPMSG, FAR procedures
+defined earlier in the same segment.
+
+diff --git a/src/branch.c b/src/branch.c
+index 79b71ad..6f6e6ca 100644
+--- a/src/branch.c
++++ b/src/branch.c
+@@ -272,6 +272,12 @@ ret_code process_branch( struct code_info *CodeInfo, unsigned CurrOpnd, const st
+             sym->offset < GetCurrOffset() &&
+             (int_32)sym->offset - (int_32)( GetCurrOffset() + 2 ) < SCHAR_MIN )
+             CodeInfo->mem_type = MT_FAR;
++        /* -Zj: nor a "far call optimisation" (PUSH CS, CALL near): a CALL to
++         * a FAR label in the current segment is far (ATTRIB's _MSGRET.ASM:
++         * call sysloadmsg) */
++        if ( Options.masm5_compat && CodeInfo->token == T_CALL &&
++            CodeInfo->mem_type == MT_EMPTY && sym->mem_type == MT_FAR )
++            CodeInfo->mem_type = MT_FAR;
+         /* v1.94: if a segment override is active,
+          check if it's matching the assumed value of CS.
+          If no, assume a FAR call.
+@@ -413,7 +419,7 @@ ret_code process_branch( struct code_info *CodeInfo, unsigned CurrOpnd, const st
+      * Masm does NOT optimize if destination is external!
+      */
+     if( CodeInfo->token == T_CALL &&
+-       CodeInfo->mem_type == MT_EMPTY &&
++       CodeInfo->mem_type == MT_EMPTY && Options.masm5_compat == FALSE &&
+        ( sym->mem_type == MT_FAR || SegOverride ) ) {
+         symseg = GetSegm( sym );
+         if ( symseg == CurrSeg ||

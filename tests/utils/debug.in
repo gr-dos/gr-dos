@@ -1,0 +1,13 @@
+n HI.COM
+a 100
+mov ah,9
+mov dx,10c
+int 21
+mov ax,4c00
+int 21
+db "GRDOS-DEBUG-OK",d,a,"$"
+
+rcx
+1d
+w
+q

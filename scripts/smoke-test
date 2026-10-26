@@ -8,12 +8,15 @@ use Time::HiRes qw( sleep time );
 
 =head1 SYNOPSIS
 
- scripts/smoke-test [--timeout SECONDS] [--expect FILE]... IMAGE EXPECT OUTDIR
+ scripts/smoke-test [--timeout SECONDS] [--expect FILE]... [--drive-b IMAGE] IMAGE EXPECT OUTDIR
 
 =head1 DESCRIPTION
 
 Boots the floppy image C<IMAGE> in headless C<qemu-system-i386> with COM1
-written to F<OUTDIR/serial.log> (decision 13).  The image's F<AUTOEXEC.BAT>
+written to F<OUTDIR/serial.log> (decision 13).  C<IMAGE> is not changed:
+QEMU writes to a snapshot.  With C<--drive-b>, the image given is the second
+floppy drive, B:, and is written to: it is for the tests of FORMAT, SYS and
+DISKCOPY, and must be a disposable copy.  The image's F<AUTOEXEC.BAT>
 reports to C<AUX>, and ends with the line C<GRDOS-TEST-END>.  QEMU is
 stopped when that line arrives, or after C<--timeout> seconds (default 60),
 since DOS keeps running at the prompt.
@@ -37,7 +40,7 @@ sub slurp ($path) {
   return scalar <$fh>;
 }
 
-sub boot ($image, $outdir, $timeout) {
+sub boot ($image, $drive_b, $outdir, $timeout) {
   my $serial = "$outdir/serial.log";
   unlink $serial;
   my @cmd = (
@@ -45,7 +48,8 @@ sub boot ($image, $outdir, $timeout) {
     -display => 'none',
     -m       => 4,
     '-no-reboot',
-    -drive   => "file=$image,if=floppy,format=raw,snapshot=on",
+    -drive   => "file=$image,if=floppy,index=0,format=raw,snapshot=on",
+    (defined $drive_b ? (-drive => "file=$drive_b,if=floppy,index=1,format=raw") : ()),
     -boot    => 'a',
     -serial  => "file:$serial",
     -monitor => 'none',
@@ -100,19 +104,23 @@ sub check ($lines, $expect) {
 
 sub main (@args) {
   my $timeout = 60;
-  my @also;
-  while(@args && $args[0] =~ /^--(timeout|expect)$/) {
+  my(@also, $drive_b);
+  while(@args && $args[0] =~ /^--(timeout|expect|drive-b)$/) {
     shift @args;
     die "$0: --$1 needs a value\n" unless @args;
     if($1 eq 'timeout') {
       $timeout = shift @args;
+    } elsif($1 eq 'drive-b') {
+      $drive_b = shift @args;
     } else {
       push @also, shift @args;
     }
   }
-  die "usage: $0 [--timeout SECONDS] [--expect FILE]... IMAGE EXPECT OUTDIR\n" unless @args == 3;
+  die "usage: $0 [--timeout SECONDS] [--expect FILE]... [--drive-b IMAGE] IMAGE EXPECT OUTDIR\n"
+    unless @args == 3;
   my($image, $expect, $outdir) = @args;
   -r $_ or die "unable to read $_\n" for $expect, @also;
+  die "unable to write $drive_b\n" if defined $drive_b && !-w $drive_b;
   mkdir $outdir unless -d $outdir;
 
   my $version = `qemu-system-i386 --version`;
@@ -123,7 +131,7 @@ sub main (@args) {
   print $version =~ /^(.*)$/m;
   print "\n";
 
-  my $output = boot($image, $outdir, $timeout);
+  my $output = boot($image, $drive_b, $outdir, $timeout);
   open $fh, '>', "$outdir/serial.txt" or die "unable to write $outdir/serial.txt: $!";
   print $fh $output;
   close $fh;

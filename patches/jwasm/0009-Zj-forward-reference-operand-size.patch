@@ -1,0 +1,132 @@
+JWasm: -Zj gives a forward-referenced constant operand a memory size
+
+In pass one, MASM 5 doesn't know what a forward reference is, and sizes
+a second operand that has one, after a general register, as memory: a
+16-bit immediate. When the value turns out to be a small constant, the
+instruction is still that long in pass two (a NOP pads it). JWasm sized
+it as a constant, sign-extended to 8 bits.
+
+The same holds for an EQU whose expression has a forward reference in
+pass one: MASM 5 leaves it undefined until pass two, so an instruction
+that uses it has a forward reference. JWasm makes such an EQU a text
+macro; it is now marked, and an operand that expands it counts as a
+forward reference.
+
+Needed for MODE's RESCODE.ASM, SUB AX,adjustment_in_paragraphs
+(2D 0A 00 90 in MASM 5's object).
+
+diff --git a/src/H/parser.h b/src/H/parser.h
+index c71e1f1..9e31cec 100644
+--- a/src/H/parser.h
++++ b/src/H/parser.h
+@@ -321,6 +321,7 @@ extern void       ProcessFile( struct asm_tok[] );
+ extern void       Masm5PassInit( void );
+ extern void       Masm5Begin( const char * );
+ extern bool       Masm5FwdRef;
++extern bool       Masm5TMacroFwd;
+ extern void       Masm5Pad( enum instr_token, uint_32 );
+ 
+ extern void       WritePreprocessedLine( const char * );
+diff --git a/src/H/symbols.h b/src/H/symbols.h
+index d48c245..2d65483 100644
+--- a/src/H/symbols.h
++++ b/src/H/symbols.h
+@@ -159,6 +159,7 @@ struct asym {
+                     fwdref:1,     /* symbol was forward referenced */
+                     isexport:1,   /* v2.19: symbol exported ( SYM_INTERNAL ) */
+                     included:1;   /* COFF: static symbol added to public queue. ELF:symbol added to symbol table (SYM_INTERNAL) */
++    unsigned char   masm5fwd:1;   /* -Zj: text macro of an EQU with a forward reference in pass one */
+     union {
+         /* for SYM_INTERNAL (data labels, memtype != NEAR|FAR), SYM_STRUCT_FIELD */
+         uint_32         first_size;   /* size of 1st initializer's dimension in bytes */
+diff --git a/src/equate.c b/src/equate.c
+index 7925ccb..73c58c8 100644
+--- a/src/equate.c
++++ b/src/equate.c
+@@ -503,7 +503,12 @@ struct asym *CreateConstant( struct asm_tok tokenarray[] )
+         return( sym );
+     }
+     DebugMsg1(("CreateConstant(%s): calling SetTextMacro() [MI.Ofssize=%u]\n", name, ModuleInfo.Ofssize ));
+-    return ( SetTextMacro( tokenarray, sym, name, argbuffer ) );
++    sym = SetTextMacro( tokenarray, sym, name, argbuffer );
++    /* -Zj: in pass one, Masm 5 leaves an EQU with a forward reference
++     * undefined, so an instruction that uses it has a forward reference */
++    if ( sym && Options.masm5_compat && Parse_Pass == PASS_1 && ( rc == ERROR || Masm5TMacroFwd ) )
++        sym->masm5fwd = TRUE;
++    return( sym );
+ }
+ 
+ /* EQU directive.
+diff --git a/src/expans.c b/src/expans.c
+index 54b4adc..efff5f9 100644
+--- a/src/expans.c
++++ b/src/expans.c
+@@ -40,6 +40,7 @@
+ extern char *GetMacroLine( struct macro_instance *, char * );
+ 
+ int           MacroLocals;     /* counter for LOCAL names */
++bool          Masm5TMacroFwd;  /* -Zj: the line expanded a text macro with masm5fwd */
+ //uint_8        MacroLevel;      /* current macro nesting level */
+ 
+ static const char __digits[16] = {"0123456789ABCDEF"};
+@@ -1053,6 +1054,8 @@ static ret_code ExpandTMacro( char * const outbuf, struct asm_tok tokenarray[],
+                     break;
+                 } else if ( sym && sym->state == SYM_TMACRO && sym->isdefined == TRUE ) {
+                     char *p;
++                    if ( sym->masm5fwd )
++                        Masm5TMacroFwd = TRUE;
+                     len = tokenarray[i].tokpos - outbuf;
+                     /* v2.15: don't copy the chars BEFORE the symbol that is to be expanded */
+                     //memcpy( buffer, outbuf, len );
+@@ -1291,6 +1294,8 @@ static ret_code ExpandToken( char *line, int *pi, struct asm_tok tokenarray[], i
+                     }
+                 } else if( sym->state == SYM_TMACRO ) {
+ 
++                    if ( sym->masm5fwd )
++                        Masm5TMacroFwd = TRUE;
+                     //GetLiteralValue( buffer, sym->string_ptr );
+                     strcpy( buffer, sym->string_ptr );
+                     if ( ERROR == ExpandTMacro( buffer, tokenarray, equmode, 0 ) )
+diff --git a/src/parser.c b/src/parser.c
+index 86d8615..ce804a3 100644
+--- a/src/parser.c
++++ b/src/parser.c
+@@ -3341,7 +3341,8 @@ ret_code ParseLine( struct asm_tok tokenarray[] )
+             DebugMsg(("ParseLine(%s): EvalOperand() failed\n", instr ));
+             return( ERROR );
+         }
+-        if ( Masm5FwdRef )
++        /* -Zj: or an EQU that had one (MODE's adjustment_in_paragraphs) */
++        if ( Masm5FwdRef || Masm5TMacroFwd )
+             Masm5OpndFwd |= 1 << j;
+         switch ( opndx[j].kind ) {
+         case EXPR_FLOAT:
+@@ -3463,6 +3464,16 @@ ret_code ParseLine( struct asm_tok tokenarray[] )
+             break;
+         case EXPR_CONST:
+             DebugMsg1(("ParseLine(%s,%u): type CONST, opndx.memtype=%Xh\n", instr, CurrOpnd, opndx[CurrOpnd].mem_type));
++            /* -Zj: in pass one, Masm 5 takes a second operand with a forward
++             * reference as memory if the first is a register, also if it
++             * is an expression (MODE's SUB AX,adjustment_in_paragraphs) */
++            if ( Options.masm5_compat && Parse_Pass == PASS_1 && CurrOpnd == OPND2 &&
++                ( Masm5OpndFwd & ( 1 << OPND2 ) ) && opndx[CurrOpnd].quoted_string == NULL &&
++                ( CodeInfo.opnd[OPND1].type & OP_R ) && ( CodeInfo.opnd[OPND1].type & OP_SR ) == 0 ) {
++                if ( memory_operand( &CodeInfo, CurrOpnd, &opndx[CurrOpnd], FALSE ) == ERROR )
++                    return( ERROR );
++                break;
++            }
+             if ( process_const( &CodeInfo, CurrOpnd, &opndx[CurrOpnd] ) == ERROR )
+                 return( ERROR );
+             break;
+diff --git a/src/preproc.c b/src/preproc.c
+index 1de6651..41199bd 100644
+--- a/src/preproc.c
++++ b/src/preproc.c
+@@ -121,6 +121,7 @@ int PreprocessLine( char *line, struct asm_tok tokenarray[] )
+      * if a conditional assembly directive has been detected by Tokenize().
+      * However, it's important NOT to expand then */
+     if ( CurrIfState == BLOCK_ACTIVE ) {
++        Masm5TMacroFwd = FALSE;
+         if ( ( tokenarray[Token_Count].bytval & TF3_EXPANSION ? ExpandText( line, tokenarray, TRUE ) : ExpandLine( line, tokenarray ) ) < NOT_ERROR )
+             return( 0 );
+     }

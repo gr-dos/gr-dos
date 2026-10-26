@@ -76,8 +76,8 @@ code	segment public para 'CODE'
 	public	BiosFile
 	public	DosFile
 
+	extrn	AddToSystemSize:near		; in code (JWasm takes an EXTRN's segment from where it is)
 data	segment public	para	'DATA'
-	extrn	AddToSystemSize:near
 	extrn	currentCylinder:word
 	extrn	currentHead:word
 	extrn	deviceParameters:byte
@@ -537,7 +537,8 @@ Not8SectorsPerTrack:
 	mov	cx, size a_BPB
 	push	ds
 	pop	es
-	repnz	movsb
+	db	0F2h				; REPNZ (JWasm rejects it before MOVSB)
+	movsb
 
 ;*****************************************************************
 ;*  /N/T DCR stuff.  Possible flaw exists if we are dealing with a
@@ -1092,7 +1093,8 @@ Procedure WriteBootSector			;				;AN000;
 	mov	cx, size EXT_BPB_INFO		;  "  " 	"  "		;AC000:
 	push	ds				;Set ES=DS (data segment)	;     ;
 	pop	es				;  "  " 	"  "		;     ;
-	repnz	movsb				;Do the copy			;     ;
+	db	0F2h				; REPNZ (JWasm rejects it before MOVSB)
+	movsb				;Do the copy			;     ;
 						;Write out the boot record	;     ;
 	mov	al, drive			;Get drive letter		;     ;
 	mov	cx, 1				;Specify 1 sector		;     ;
@@ -1123,7 +1125,8 @@ $$IF64:
 						;Copy file system string	;     ;
 	   mov	   cx,8 			; to buffer			;AN000;
 	   lea	   di,Media_ID_Buffer.Media_ID_File_System ;	 "  "		;AN000;
-	   repnz   movsb			;    "   "	  "  "		;AN000;
+	   db	0F2h				; REPNZ (JWasm rejects it before MOVSB)
+	   movsb			;    "   "	  "  "		;AN000;
 	   mov	   al,Generic_IOCtl		;Generic IOCtl call		;AN000;
 	   mov	   bl,Drive			;Get drive			;AN000;
 	   inc	   bl				;Make it 1 based		;AN000;

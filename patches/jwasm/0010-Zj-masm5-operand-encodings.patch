@@ -1,0 +1,90 @@
+JWasm: -Zj operand encodings of MASM 5 (ES:abs, [r][r].field, OFFSET n)
+
+Three cases where MASM 5 encodes an operand differently, all in MODE:
+
+- an external absolute with a segment register override (ES:abs) is a
+  direct memory operand, as ES:number is; JWasm took it as an immediate
+  (MODECOM.ASM, res_com_retry_type);
+- the sum of two indexed terms, [BP][DI].field, has the type of the
+  field; JWasm left it untyped and asked for a size (MODEPRIN.ASM,
+  parm_list[DI].item_tag with parm_list EQU [BP]);
+- OFFSET of a constant, such as a structure field, is a 16-bit immediate
+  even if it would fit in 8 bits sign-extended (MODEPARS.ASM,
+  ADD DI,OFFSET seperators: 81 C7 04 00).
+
+diff --git a/src/H/expreval.h b/src/H/expreval.h
+index bb72f16..09aad5b 100644
+--- a/src/H/expreval.h
++++ b/src/H/expreval.h
+@@ -106,7 +106,7 @@ struct expr {
+     int_8           scale;          /* EXPR_ADDR: scaling factor 1, 2, 4, or 8 - 386 code only */
+     uint_8          Ofssize;        /* 16,32,64 bit if MT_NEAR, MT_FAR */
+     union {
+-        uint_8      flags1;
++        uint_16     flags1;
+         struct {
+             unsigned indirect : 1;  /* indirect addressing used */
+             unsigned explicit : 1;  /* Whether expression type explicitly given (to be removed!) */
+@@ -117,6 +117,7 @@ struct expr {
+             //unsigned ftype    : 1;  /* for EXPR_FLOAT only (float type) */
+             unsigned assumecheck: 1;/* v2.07: for ASSUMEd std registers */
+             unsigned is_dot: 1;     /* v2.10: see regression test dotop5.asm */
++            unsigned masm5ofs: 1;   /* -Zj: OFFSET of a constant */
+         };
+     };
+     struct asym     *sym;   /* label used */
+diff --git a/src/expreval.c b/src/expreval.c
+index 54e35a8..b94b0f1 100644
+--- a/src/expreval.c
++++ b/src/expreval.c
+@@ -1484,6 +1484,9 @@ static ret_code offset_op( int oper, struct expr *opnd1, struct expr *opnd2, str
+         /* if operand is a constant value, skip OFFSET operator */
+         if ( opnd2->kind == EXPR_CONST ) {
+             TokenAssign( opnd1, opnd2 );
++            /* -Zj: MASM 5 gives it a 16-bit immediate, see idata_nofixup() */
++            if ( Options.masm5_compat )
++                opnd1->masm5ofs = TRUE;
+             return( NOT_ERROR );
+         }
+     }
+@@ -1814,6 +1817,11 @@ static ret_code plus_op( struct expr *opnd1, struct expr *opnd2 )
+                 opnd1->instr = opnd2->instr;
+         }
+         opnd1->llvalue += opnd2->llvalue;
++        /* -Zj: [BP][DI].field has the field's type (MODE's parm_list[DI].item_tag) */
++        if ( Options.masm5_compat && opnd1->mem_type == MT_EMPTY && opnd2->mbr != NULL ) {
++            opnd1->mem_type = opnd2->mem_type;
++            opnd1->mbr = opnd2->mbr;
++        }
+         /* v2.08: added, test case [ecx+ebx.<struc>].<mbr> */
+         if ( opnd2->type )
+             opnd1->type = opnd2->type;
+diff --git a/src/parser.c b/src/parser.c
+index ce804a3..b9aab25 100644
+--- a/src/parser.c
++++ b/src/parser.c
+@@ -960,6 +960,12 @@ static ret_code idata_nofixup( struct code_info *CodeInfo, unsigned CurrOpnd, co
+         else {
+             op_type = OP_I32;
+         }
++        /* -Zj: MASM 5 doesn't sign-extend OFFSET <constant> to a word */
++        if ( opndx->masm5ofs && op_type == OP_I8 && CurrOpnd == OPND2 &&
++            ( CodeInfo->opnd[OPND1].type & ( OP_R16 | OP_M16 ) ) ) {
++            op_type = OP_I16;
++            CodeInfo->const_size_fixed = TRUE;
++        }
+     }
+ 
+     switch ( CodeInfo->token ) {
+@@ -2079,7 +2085,10 @@ static ret_code process_address( struct code_info *CodeInfo, unsigned CurrOpnd,
+         DebugMsg1(("process_address direct, sym=%s sym.memtype=%X opndx.memtype=%X\n", opndx->sym->name, opndx->sym->mem_type, opndx->mem_type ));
+ 
+         /* symbol external, but absolute? */
+-        if( opndx->is_abs ) {
++        /* -Zj: with a segment register override (ES:abs), Masm 5 makes it
++         * a direct memory operand, as it does ES:number (MODE's MODECOM.ASM) */
++        if( opndx->is_abs && !( Options.masm5_compat && opndx->override != NULL &&
++                               opndx->override->token == T_REG ) ) {
+             return( idata_fixup( CodeInfo, CurrOpnd, opndx ) );
+         }
+ 

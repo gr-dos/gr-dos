@@ -1,3 +1,6 @@
+IFDEF __JWASM__
+	option	nokeyword:<FOR>	; a name here, a directive since MASM 6
+ENDIF
 PAGE ,132 ;
 TITLE MODEPRIN.SAL - PRINTER SUPPORT FOR THE MODE COMMAND
 .XLIST

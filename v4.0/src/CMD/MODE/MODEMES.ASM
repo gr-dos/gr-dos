@@ -36,7 +36,7 @@ PUBLIC	 number_of_sublists
  PUBLIC    MOVED_MSG, ERR1, ERR2, PT80, PT80N, PT132, PT132N
  PUBLIC    PTLINES, RATEMSG, INITMSG, REDIRMSG, SHIFT_MSG, sublist_shift_msg
  PUBLIC    NOTREMSG, RETPARTO, sublist_retparto, CANT_SHIFT, sublist_cant_shift
- PUBLIC    NUMBERS, ;AC001;INF_OR_NO_ptr
+ PUBLIC    NUMBERS ;AC001; (no trailing comma: JWasm joins the next line);INF_OR_NO_ptr
  PUBLIC    Invalid_number_of_parameters, COM1_or_COM2, net_error
  PUBLIC    Invalid_parameter, not_supported, offending_parameter
  PUBLIC  offending_parameter_ptr

@@ -74,7 +74,11 @@
     unsigned char max_width;                                                    /* max width of replaceable field       */       /* ;an000; */
     unsigned char min_width;                                                    /* min width of replaceable field       */       /* ;an000; */
     unsigned char pad_char;                                                     /* pad character for replaceable field  */       /* ;an000; */
+#ifdef __WATCOMC__
+  } sublist[5];  /* sublist[1] to sublist[4] are used: MS C overran [4] */
+#else
   } sublist[4];                                                                                                                  /* ;an000; */
+#endif
                                                                                                                                  /* ;an000; */
 /*----------------------------------------------------------------------+
 |       define structure used by parser                                 |
@@ -177,6 +181,9 @@ struct p_value_blk p_noval;                                                     
 #define BLANK   ' '                                                                                                              /* ;an000; */
                                                                                                                                  /* ;an000; */
 extern  unsigned DOS_TopOfMemory;         /* PSP Top of memory from 'C' init code  */                                            /* ;an005; */
+#ifdef __WATCOMC__
+unsigned DOS_TopOfMemory;                 /* MEM.LIB's start-up code set it, main() does here */
+#endif
 
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -269,6 +276,9 @@ void     main(argc,argv)                                                        
 int      argc;                                                                                                                   /* ;an000; */
 char     *argv[];                                                                                                                /* ;an000; */
 {                                                                                                                                /* ;an000; */
+#ifdef __WATCOMC__
+        DOS_TopOfMemory = *(unsigned far *)MK_FP(_psp, 2);
+#endif
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -614,11 +624,21 @@ int      DeviceDriverType;                                                      
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
          else {                                                                                                                  /* ;an000; */
+#ifdef __WATCOMC__  /* no sprintf: GR-DOS's C runtime has none */
+                LocalDeviceName[0] = (char) ('A'+BlockDeviceNumber);          /* "A:" */
+                LocalDeviceName[1] = ':';
+                LocalDeviceName[2] = NUL;
+                if ((int) ThisDeviceDriver -> Name[0] != 1)                          /* "A: - C:" */
+                      { strcpy(&LocalDeviceName[2]," - A:");
+                        LocalDeviceName[5] = (char) ('A'+BlockDeviceNumber + ((int) ThisDeviceDriver -> Name[0]) - 1);
+                        }
+#else
                 if ((int) ThisDeviceDriver -> Name[0] == 1)                                                                      /* ;an000; */
                         sprintf(&LocalDeviceName[0],SingleDrive,'A'+BlockDeviceNumber);                                          /* ;an000; */
                    else sprintf(&LocalDeviceName[0],MultipleDrives,                                                              /* ;an000; */
                                 'A'+BlockDeviceNumber,                                                                           /* ;an000; */
                                 'A'+BlockDeviceNumber + ((int) ThisDeviceDriver -> Name[0]) - 1);                                /* ;an000; */
+#endif
                                                                                                                                  /* ;an000; */
                 Sub2_Message(DeviceLineMsg,                                                                                      /* ;an000; */
                              STDOUT,                                                                                             /* ;an000; */
@@ -888,13 +908,22 @@ struct ARENA far *ArenaPtr;                                                     
                                                                                                                                  /* ;an000; */
         o = &OwnerName[0];                                                                                                       /* ;an000; */
         *o = NUL;                                                                                                                /* ;an000; */
+#ifdef __WATCOMC__
+        strcpy(o,UnOwned);
+#else
         sprintf(o,UnOwned);                                                                                                      /* ;an000; */
+#endif
                                                                                                                                  /* ;an000; */
         PspSegment = ArenaPtr -> Owner;                                                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
+#ifdef __WATCOMC__
+        if (PspSegment == 0) strcpy(o,Ibmdos);
+         else if (PspSegment == 8) strcpy(o,Ibmbio);
+#else
         if (PspSegment == 0) sprintf(o,Ibmdos);                                                                                  /* ;an000; */
          else if (PspSegment == 8) sprintf(o,Ibmbio);                                                                            /* ;an000; */
+#endif
           else {                                                                                                                 /* ;an000; */
                 FP_SEG(ArenaPtr) = PspSegment-1;        /* -1 'cause Arena is 16 bytes before PSP */                             /* ;an000; */
                 StringPtr = (char far *) &(ArenaPtr -> OwnerName[0]);                                                            /* ;an000; */
@@ -926,7 +955,11 @@ unsigned far *EnvironmentSegmentPtr;                                            
               {                                                                                                                  /* ;an000; */
                 if (PspSegment < FP_SEG(ArenaHeadPtr))                                                                           /* ;an000; */
                       {                                                                                                          /* ;an000; */
+#ifdef __WATCOMC__
+                        if (*OutputPtr == NUL) strcpy(OutputPtr,Ibmdos);
+#else
                         if (*OutputPtr == NUL) sprintf(OutputPtr,Ibmdos);                                                        /* ;an000; */
+#endif
                         }                                                                                                        /* ;an000; */
                  else {                                                                                                          /* ;an000; */
                         FP_SEG(EnvironmentSegmentPtr) = PspSegment;                                                              /* ;an000; */

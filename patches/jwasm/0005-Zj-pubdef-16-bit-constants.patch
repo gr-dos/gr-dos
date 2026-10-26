@@ -1,0 +1,27 @@
+JWasm: -Zj writes an absolute public in a 16-bit PUBDEF if it fits
+
+MASM 5 writes a public constant in a 16-bit PUBDEF record if its value
+fits in 16 bits, signed (-32768 to 32767) or unsigned (up to 65535), as
+the comment in omf_write_pubdef describes. JWasm wrote negative values
+in a 32-bit PUBDEF (91h), which wlink then takes as FFFFFFFFh.
+
+Needed for DISKCOPY, whose FINE EQU -1 is PUBLIC (DISKCOPY.EQU) and
+used by DCOPYPAR.ASM as EXTRN FINE:ABS.
+
+diff --git a/src/omf.c b/src/omf.c
+index da7bf0d..6389afc 100644
+--- a/src/omf.c
++++ b/src/omf.c
+@@ -1432,7 +1432,11 @@ static ret_code omf_write_pubdef( void )
+              * JWasm behaves differently, resulting in negative values to be stored as 32-bit.
+              */
+ #if 1
+-            is32 = ( sym->offset > 0xffffUL ? 1 : 0 );
++            /* -Zj: like Masm 5, which writes FINE EQU -1 (DISKCOPY) as FFFFh */
++            if ( Options.masm5_compat )
++                is32 = ( (int_32)sym->offset > 0xffff || (int_32)sym->offset < -32768 ? 1 : 0 );
++            else
++                is32 = ( sym->offset > 0xffffUL ? 1 : 0 );
+ #else
+             is32 = ( sym->offset > 0xffff || sym->offset < -32768 ? 1 : 0 ); /* this is what Masm does */
+ #endif
