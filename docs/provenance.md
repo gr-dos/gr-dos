@@ -10,7 +10,7 @@
 Upstream history is a single squashed commit, so there is no earlier published state of `v4.0` to compare against.
 
 - **License:** `v4.0/LICENSE` is MIT, "Copyright (c) IBM and Microsoft Corporation". Upstream's repository root `LICENSE` names Microsoft alone; `v4.0` carries its own.
-- **GR-DOS license:** the root `LICENSE` (MIT, Graham Ollis) covers GR-DOS's own scripts, patches and documentation (decision 8). It does not relicense `v4.0`. The JWasm patches in `patches/jwasm` modify JWasm, which is under the Sybase Open Watcom Public License. The C runtime in `compat/crt` and its headers in `compat/include`, linked into ATTRIB.EXE and MEM.EXE, are GR-DOS's own work, MIT, written from the documented DOS and Microsoft C 5.1 interfaces (decision 20).
+- **GR-DOS license:** the root `LICENSE` (MIT, Graham Ollis) covers GR-DOS's own scripts, patches and documentation (decision 8). It does not relicense `v4.0`. The JWasm patches in `patches/jwasm` modify JWasm, which is under the Sybase Open Watcom Public License. ATTRIB.EXE and MEM.EXE link libc16, an MIT C runtime with its own provenance record (decision 20); it is fetched as a release, not vendored.
 - **Branding:** `patches/branding` (decision 7) changes two COMMAND messages in `MESSAGES/USA-MS.MSG` to say GR-DOS. It is applied to a copy of `v4.0/src` at build time, so every edit committed to `v4.0` still leaves the M1 build identical.
 - **Not vendored:** `v1.25`, `v2.0` (unrelated versions) and `v4.0-ozzie` (Multitasking DOS 4 beta binaries and PDFs, not the source used here).
 
