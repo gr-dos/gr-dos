@@ -20,7 +20,10 @@
 #
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
 # git, curl and xz; mtools for the image and qemu-system-i386 for the test.
-# JWasm, Open Watcom and TICO.EXE (tico16) are fetched into build/tools.
+# JWasm, Open Watcom and TICO.EXE (tico16) are fetched into build/tools,
+# and the C runtime for ATTRIB and MEM, the pinned libc16 release, into
+# build/libc16 (scripts/fetch-libc16). make LIBC16_ROOT=../libc16 builds
+# against a libc16 checkout built with its own make instead.
 #
 # The source tree is v4.0/src with the patches in PATCHES applied (the
 # GR-DOS branding, decision 7). It is prepared in build/linux/SRC (CRLF
@@ -39,12 +42,18 @@ PATCHES := $(sort $(wildcard patches/branding/*.patch))
 JWFLAGS := -q -Zj -Zm -Zg -Cx -I. -I$(CURDIR)/$(SRC)/INC -I$(CURDIR)/$(SRC)/DOS
 
 # ATTRIB and MEM are C, compiled with Open Watcom C for Microsoft C 5.1's
-# small model, packed structures and C calling convention (compat/msc.h).
-# They use GR-DOS's C runtime, compat/crt, and its headers, compat/include,
-# not Open Watcom's: -x ignores INCLUDE, and -zl leaves out the references
-# to Open Watcom's libraries.
-WCFLAGS := -q -w0 -zld -zl -x -ms -os -zp1 -s -ecc -j -ei -bt=dos -fi=$(CURDIR)/compat/msc.h \
-	-I. -I$(CURDIR)/$(SRC)/H -I$(CURDIR)/compat/include
+# small model and packed structures, with libc16 as their C runtime (its
+# docs/ABI.md): its headers only, as -x ignores INCLUDE, -zl leaves out the
+# references to Open Watcom's libraries, and the default register
+# convention, with the assembly modules' interfaces declared __cdecl in the
+# sources.
+LIBC16_ROOT ?= build/libc16
+# A release tree, or a checkout, whose make stages the same layout in
+# build/stage.
+LIBC16_DIR  := $(if $(wildcard $(LIBC16_ROOT)/build/stage/VERSION),$(LIBC16_ROOT)/build/stage,$(LIBC16_ROOT))
+LIBC16      := $(LIBC16_DIR)/lib/LIBC16.LIB
+WCFLAGS := -q -w0 -zld -zl -x -ms -0 -os -zp1 -s -j -ei -bt=dos \
+	-I. -I$(CURDIR)/$(SRC)/H -I$(abspath $(LIBC16_DIR))/include
 
 BOOT_OBJS    := $(SRC)/BOOT/MSBOOT.OBJ
 MSLOAD_OBJS  := $(SRC)/BIOS/MSLOAD.OBJ
@@ -167,7 +176,7 @@ RELEASE := $(BUILD)/release
 DIST_LOGS ?= $(wildcard build/make.log build/test.log)
 DIST_INFO ?=
 
-dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip
+dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.stamp
 	rm -rf $(DIST) $(RELEASE)
 	mkdir -p $(DIST)/$(NAME)/BIN $(RELEASE)
 	cp $(CORE) $(FILES) $(DIST)/$(NAME)/BIN/
@@ -176,6 +185,8 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
 	  printf '\ntico16 (TICO.EXE)\n-----------------\n\n'; cat $(dir $(TICO))LICENSE; \
+	  printf '\n\nlibc16 (in ATTRIB.EXE and MEM.EXE)\n----------------------------------\n\n'; \
+	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	. ./$(TOOLS) && { \
 	  echo "GR-DOS $(VERSION)"; \
@@ -183,6 +194,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip
 	  perl -e 'print "perl $$^V\n"'; \
 	  echo "jwasm $$(basename $$(dirname $$(dirname $$(dirname $$JWASM))))"; \
 	  echo "watcom $$(basename $$WATCOM)"; \
+	  cat $(BUILD)/libc16.stamp; \
 	  mformat --version | head -1; \
 	  perl -MCompress::Raw::Zlib -e 'print "zlib ", Compress::Raw::Zlib::zlib_version(), "\n"'; \
 	  $(if $(DIST_INFO),cat $(DIST_INFO);) \
@@ -239,7 +251,7 @@ $(SRC)/CMD/FORMAT/MSFOR.OBJ $(SRC)/CMD/SYS/SYS1.OBJ: $(SRC)/INC/BOOT.INC
 
 C_OBJS := $(SRC)/CMD/ATTRIB/ATTRIB.OBJ $(SRC)/CMD/MEM/MEM.OBJ
 
-$(C_OBJS): %.OBJ: $(BUILD)/messages.stamp $(TOOLS) compat/msc.h $(wildcard compat/include/*.h)
+$(C_OBJS): %.OBJ: $(BUILD)/messages.stamp $(TOOLS) $(BUILD)/libc16.stamp
 	. ./$(TOOLS) && cd $(@D) && PATH=$$WATCOM/binl64:$$PATH \
 	  wcc $(WCFLAGS) -fo=$(@F) $(notdir $*).C
 
@@ -263,31 +275,34 @@ $(SRC)/CMD/FIND/FIND.EXE: MSLINK := --exepack
 $(EXES): %.EXE: $(TOOLS) scripts/mslink scripts/mslink-layout scripts/msexe
 	. ./$(TOOLS) && scripts/mslink $(MSLINK) $@ $(filter %.OBJ,$^)
 
-# GR-DOS's C runtime for ATTRIB and MEM (compat/crt), instead of Microsoft
-# C's: a library of the functions they call, and MEM's startup code, c0.OBJ.
-CRT      := $(BUILD)/crt
-CRT_LIB  := $(CRT)/GRCRT.LIB
-CRT_OBJS := $(patsubst compat/crt/%.asm,$(CRT)/%.OBJ,$(filter-out %/c0.asm,$(wildcard compat/crt/*.asm)))
+# The pinned libc16 release (scripts/fetch-libc16). A LIBC16_ROOT given on
+# the command line must already be built.
+ifeq ($(LIBC16_ROOT),build/libc16)
+$(LIBC16): scripts/fetch-libc16
+	scripts/fetch-libc16 $(LIBC16_ROOT)
+endif
 
-$(CRT)/%.OBJ: compat/crt/%.asm $(TOOLS)
+# libc16 is built with the Open Watcom GR-DOS pins (its decision 1); the
+# pins must agree.
+$(BUILD)/libc16.stamp: $(LIBC16) scripts/fetch-watcom
 	mkdir -p $(@D)
-	. ./$(TOOLS) && "$$JWASM" -q -Cp -Fo$@ $<
+	test "$$(sed -n 's/^sha256=//p' scripts/fetch-watcom)" \
+	  = "$$(sed -n 's/^sha256=//p' $(LIBC16_DIR)/tools/fetch-watcom)"
+	echo "libc16 $$(cat $(LIBC16_DIR)/VERSION)" > $@
 
-$(CRT_LIB): $(CRT_OBJS)
-	rm -f $@
-	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlib -q -n -b $@ $(addprefix +,$^)
-
-# ATTRIB has its own startup code, ATTRIBA; MEM's comes first.
+# ATTRIB has its own startup code, ATTRIBA, so it links no libc16 startup
+# (libc16's docs/spec/startup.md, "Programs without the startup"); MEM's
+# is libc16's.
 $(SRC)/CMD/ATTRIB/ATTRIB.EXE: $(ATTRIB_OBJS)
-$(SRC)/CMD/MEM/MEM.EXE:       $(CRT)/c0.OBJ $(MEM_OBJS)
+$(SRC)/CMD/MEM/MEM.EXE:       $(MEM_OBJS)
 
 # No default libraries: the map, X.MAP, must show only the objects and
-# GRCRT.LIB (scripts/check-runtime).
-$(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE: $(TOOLS) $(CRT_LIB) scripts/check-runtime
+# LIBC16.LIB (scripts/check-runtime).
+$(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE: $(TOOLS) $(BUILD)/libc16.stamp scripts/check-runtime
 	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos \
 	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
-	  name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) library $(CRT_LIB)
-	scripts/check-runtime $(@:.EXE=.MAP) $(CRT_LIB) $(filter %.OBJ,$^)
+	  name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) library $(LIBC16)
+	scripts/check-runtime $(@:.EXE=.MAP) $(LIBC16) $(filter %.OBJ,$^)
 
 # EXE2BIN; the image is padded to the size Microsoft LINK gives it.
 size = $$(scripts/mslink-layout --size $(filter %.OBJ,$^))
