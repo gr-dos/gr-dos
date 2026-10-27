@@ -46,6 +46,7 @@ jobs:
           scripts/fetch-jwasm
           scripts/fetch-watcom
           scripts/fetch-tico
+          scripts/fetch-libc16
 
       - name: Build, and compare an unbranded build with the M1 reference
         run: |

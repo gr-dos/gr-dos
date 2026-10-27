@@ -13,8 +13,21 @@
 #define DWORD      unsigned long        /*;AN000;*/
 #endif
 #ifdef __WATCOMC__
-#define main       attrib_main  /* called by inmain(): no Watcom startup */
-#define exit(c)    bdos(0x4c,0,(c))  /* exit() needs the Watcom startup */
+#define main       attrib_main  /* called by inmain(): no libc16 startup */
+#define exit(c)    bdos(0x4c,0,(c))  /* MS C's exit() was given no exit code */
+/* Microsoft C kept ES equal to DS, and ATTRIB passes segread()'s ES on */
+#define segread(s) (segread(s), (s)->es = (s)->ds)
+/* The C calling convention for ATTRIBA, _PARSE and _MSGRET, which call or
+   are called by these; the rest of ATTRIB has Watcom's register one */
+#pragma aux (__cdecl) inmain
+#pragma aux (__cdecl) Reset_appendx
+#pragma aux (__cdecl) getpspbyte
+#pragma aux (__cdecl) putpspbyte
+#pragma aux (__cdecl) crit_err_handler
+#pragma aux (__cdecl) parse
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysgetmsg
+#pragma aux (__cdecl) sysdispmsg
 #define PAD_BLANK  ' '    /* MS C used the low byte of the string's offset */
 #else
 #define PAD_BLANK  (BYTE)" "

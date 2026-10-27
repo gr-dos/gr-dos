@@ -44,7 +44,9 @@
 
 /*ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ*/
 
+#ifndef __WATCOMC__  /* MEM uses nothing from it, and libc16 has none */
 #include "ctype.h"                                                                                           /* ;an000; */
+#endif
 #include "conio.h"                      /* need for kbhit prototype */                                       /* ;an000; */
 #include "stdio.h"                                                                                           /* ;an000; */
 #include "dos.h"                                                                                             /* ;an000; */
@@ -210,14 +212,22 @@ unsigned DOS_TopOfMemory;                 /* MEM.LIB's start-up code set it, mai
                                                                                                                                  /* ;an000; */
 /*ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
+#ifdef __WATCOMC__
+void     main(void);
+#else
 void     main(int, char *[]);                                                                                                    /* ;an000; */
+#endif
                                                                                                                                  /* ;an000; */
 int      printf();
 int      sprintf();
+#ifndef __WATCOMC__  /* libc16's headers declare them, __cdecl */
 int      strcmp(const char *, const char *);
+#endif
 int      sscanf();                                                                                                               /* ;an000; */
+#ifndef __WATCOMC__
 void     exit(int);                                                                                                              /* ;an000; */
 int      kbhit();                                                                                                                /* ;an000; */
+#endif
 char     *OwnerOf(struct ARENA far *);                                                                                           /* ;an000; */
 char     *TypeOf(struct ARENA far *);                                                                                            /* ;an000; */
 unsigned long AddressOf(char far *);                                                                                             /* ;an000; */
@@ -268,16 +278,33 @@ extern void sysloadmsg(union REGS *, union REGS *);                             
 extern void sysdispmsg(union REGS *, union REGS *);                                                                              /* ;an000; */
 extern void sysgetmsg(union REGS *, struct SREGS *, union REGS *);                                                               /* ;an000; */
 extern void parse(union REGS *, union REGS *);                                                                                   /* ;an000; */
+#ifdef __WATCOMC__  /* the C calling convention of _MSGRET and _PARSE */
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysdispmsg
+#pragma aux (__cdecl) sysgetmsg
+#pragma aux (__cdecl) parse
+/* Microsoft C kept ES equal to DS */
+#define segread(s) (segread(s), (s)->es = (s)->ds)
+#endif
                                                                                                                                  /* ;an000; */
                                                                                                                                 /* ;an000; */
 /*ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
+#ifdef __WATCOMC__  /* argv is unused: parse reads the command line from the PSP */
+void     main(void)
+#else
 void     main(argc,argv)                                                                                                         /* ;an000; */
 int      argc;                                                                                                                   /* ;an000; */
 char     *argv[];                                                                                                                /* ;an000; */
+#endif
 {                                                                                                                                /* ;an000; */
 #ifdef __WATCOMC__
-        DOS_TopOfMemory = *(unsigned far *)MK_FP(_psp, 2);
+        {
+        unsigned far *TopPtr;
+        FP_SEG(TopPtr) = _psp;
+        FP_OFF(TopPtr) = 2;
+        DOS_TopOfMemory = *TopPtr;
+        }
 #endif
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */

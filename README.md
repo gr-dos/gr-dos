@@ -157,8 +157,8 @@ GR-DOS's own scripts, patches and documentation are MIT, see
 license, [`v4.0/LICENSE`](v4.0/LICENSE). TICO.EXE is
 [tico16](https://github.com/tico-edit/tico16)'s, under its MIT license.
 ATTRIB.EXE and MEM.EXE are compiled with Open Watcom C but linked with
-GR-DOS's own MIT C runtime, `compat/crt`, and contain no Open Watcom code
-([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes
+[libc16](https://github.com/gr-dos/libc16), an MIT C runtime, and contain
+no Open Watcom code ([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes
 these notices. MS-DOS is a trademark of
 Microsoft. GR-DOS is an independent project, not endorsed by Microsoft or
 IBM.

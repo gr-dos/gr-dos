@@ -13,7 +13,7 @@ use warnings;
 
 Reads the map F<MAP> that C<wlink option map> wrote for ATTRIB.EXE or
 MEM.EXE, and fails unless every module in the program is one of the
-F<OBJECT>s or a module of F<LIBRARY>, GR-DOS's C runtime (F<compat/crt>),
+F<OBJECT>s or a module of F<LIBRARY>, the C runtime (libc16's F<LIBC16.LIB>),
 and F<LIBRARY> is the only library used.  So no module of any other library,
 Open Watcom's C runtime among them, is linked into the program.
 

@@ -45,7 +45,7 @@ Contents
 
 The utilities are built from the MS-DOS 4.00 source. ATTRIB.EXE and MEM.EXE
 are compiled with Open Watcom C, where Microsoft's were compiled with
-Microsoft C 5.1, and linked with GR-DOS's own C runtime. FIND.EXE is not EXEPACKed, as Microsoft's was: the EXEPACK
+Microsoft C 5.1, and linked with libc16, a C runtime for DOS programs. FIND.EXE is not EXEPACKed, as Microsoft's was: the EXEPACK
 loader fails with "Packed file is corrupt" when it is loaded in the first
 64 KB of memory, as it is on GR-DOS. TICO.EXE is tico16's release v0.02,
 unchanged (https://github.com/tico-edit/tico16).
@@ -117,5 +117,6 @@ GR-DOS's own work is MIT licensed. The MS-DOS 4.00 source it is built from
 keeps its own MIT license. MS-DOS is a trademark of Microsoft. GR-DOS is an
 independent project, not endorsed by Microsoft or IBM. TICO.EXE is tico16's,
 under its MIT license. ATTRIB.EXE and MEM.EXE are compiled with Open Watcom
-C, but contain no Open Watcom code: their C runtime is GR-DOS's own, under
-GR-DOS's MIT license. The three MIT licenses follow.
+C, but contain no Open Watcom code: their C runtime is libc16
+(https://github.com/gr-dos/libc16), under its MIT license. The four MIT
+licenses follow.
