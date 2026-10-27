@@ -177,8 +177,8 @@ with GR-DOS's earlier runtime:
 
 | | Open Watcom runtime | `compat/crt` | libc16 0.02 | 360 KB disk clusters |
 |---|---:|---:|---:|---|
-| `ATTRIB.EXE` | 20,504 bytes | 19,446 bytes | 19,367 bytes | 21 → 19 |
-| `MEM.EXE` | 19,974 bytes | 11,986 bytes | 12,034 bytes | 20 → 12 |
+| `ATTRIB.EXE` | 20,504 bytes | 19,446 bytes | 19,369 bytes | 21 → 19 |
+| `MEM.EXE` | 19,974 bytes | 11,986 bytes | 12,036 bytes | 20 → 12 |
 
 MEM's own memory, as `MEM /PROGRAM` lists it, is 3A70h bytes with libc16,
 3A40h with `compat/crt` and 7A70h with Open Watcom's runtime. Otherwise
