@@ -190,11 +190,12 @@ $(TEST_SYS): test-sys-%: $(TESTS)/sys-%k.img
 	scripts/smoke-test $(TESTS)/sys-$*k-b.img tests/utils/expect-boot $(TESTS)/sys-$*k-boot
 
 # The FC tests (tests/fc): FC's output and errorlevels for each command of
-# fc.bat, which must be exactly, CRs too, Microsoft's (expect.log), written
-# by make fc-expect with the M1 reference build's FC.EXE (FC_REFERENCE) in
-# place of the image's.
+# fc.bat up to GRDOS-AB-END, which must be exactly, CRs too, Microsoft's
+# (expect.log), written by make fc-expect with the M1 reference build's
+# FC.EXE (FC_REFERENCE) in place of the image's; then what Microsoft's
+# could not do (tests/fc/expect).
 FC_REFERENCE ?= build/m1/SRC/CMD/FC/FC.EXE
-fc_output = sed -n '/^GRDOS-TEST-BEGIN\r$$/,/^GRDOS-TEST-END\r$$/p' $(1)/serial.log
+fc_output = sed -n '/^GRDOS-TEST-BEGIN\r$$/,/^GRDOS-AB-END\r$$/p' $(1)/serial.log
 
 test-fc: $(TESTS)/fc.img
 	scripts/smoke-test $< tests/fc/expect $(TESTS)/fc
@@ -202,7 +203,7 @@ test-fc: $(TESTS)/fc.img
 	  || { $(call fc_output,$(TESTS)/fc) | diff -u tests/fc/expect.log - | tr -d '\r'; exit 1; }
 
 fc-expect: $(TESTS)/fc-reference.img
-	scripts/smoke-test $< tests/fc/expect $(TESTS)/fc-reference
+	scripts/smoke-test $< tests/fc/expect-reference $(TESTS)/fc-reference
 	$(call fc_output,$(TESTS)/fc-reference) > tests/fc/expect.log
 
 # The FDISK tests (tests/fdisk, issue #10). Each scenario boots the 1.44 MB
@@ -514,7 +515,7 @@ $(TESTS)/utils.img: $(CORE) $(PROGRAMS) $(TESTS)/autoexec-utils/AUTOEXEC.BAT $(U
 
 # The FC tests' disks: GR-DOS's FC.EXE, or Microsoft's.
 FC_FILES := $(addprefix $(TESTS)/fc-files/,a.txt b.txt case.txt space.txt long.txt many.txt tabs.txt \
-	spaces.txt intl.txt intlup.txt wide.txt wide2.txt el.bat)
+	spaces.txt intl.txt intlup.txt wide.txt wide2.txt big.txt big2.txt rep.txt rep2.txt el.bat)
 
 $(TESTS)/fc-files/%: tests/fc/%
 	mkdir -p $(@D)

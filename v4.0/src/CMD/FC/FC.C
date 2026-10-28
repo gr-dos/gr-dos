@@ -219,32 +219,52 @@ WARNING:
  * Like printf, each line goes to DOS in one write (fc_flush), as DOS
  * stops writing a line to a device at a ^Z in it. */
 
-static char fc_out[2*MAXARG+16];
+/* the size of line */
+#define LINELEN (2*MAXARG)
 
-/* adds s to the output of the printf being written */
-static void fc_puts (s)
-char *s;
-{
-    strcat (fc_out, s);
-}
+static char fc_out[LINELEN+16];
+static int fc_len;
 
+/* writes the output of the printf being written */
 static void fc_flush ()
 {
     fputs (fc_out, stdout);
     fc_out[0] = 0;
+    fc_len = 0;
 }
 
-/* sprintf (dst, fmt, a, b) for a fmt whose only conversions are two %s */
+/* adds s to the output of the printf being written; what does not fit is
+ * written in more than one call (no output of FC's is that long) */
+static void fc_puts (s)
+char *s;
+{
+    int l = strlen (s);
+
+    if (fc_len + l >= sizeof fc_out)
+    {
+        fc_flush ();
+        if (l >= sizeof fc_out)
+        {
+            fputs (s, stdout);
+            return;
+        }
+    }
+    strcpy (fc_out + fc_len, s);
+    fc_len += l;
+}
+
+/* sprintf (dst, fmt, a, b) for a fmt whose only conversions are two %s,
+ * cut to LINELEN */
 static void fc_format (dst, fmt, a, b)
 char *dst, *fmt, *a, *b;
 {
-    char *arg = a;
+    char *arg = a, *end = dst + LINELEN - 1, *p;
 
-    while (*fmt)
+    while (*fmt && dst < end)
         if (fmt[0] == '%' && fmt[1] == 's')
         {
-            strcpy (dst, arg);
-            dst += strlen (dst);
+            for (p = arg; *p && dst < end; )
+                *dst++ = *p++;
             arg = b;
             fmt += 2;
         }
@@ -342,7 +362,13 @@ flagType fDebug = FALSE;
 struct lineType *buffer1,
                 *buffer2;
 
+#ifdef __WATCOMC__
+/* A message with two names of the command line, which is at most 127
+ * characters, overran Microsoft's 128 bytes. */
+byte line[LINELEN];            /* single line buffer                */
+#else
 byte line[MAXARG];             /* single line buffer                */
+#endif
 
 byte *extBin[] = { ".EXE", ".OBJ", ".LIB",
                             ".COM", ".BIN", ".SYS", NULL };
@@ -358,7 +384,13 @@ byte *v[];
         int     fileargs;
         char    *strpbrk(),
                 *slash;
+#ifdef __WATCOMC__
+        /* Microsoft's 80 bytes were overrun by a longer argument; any of
+         * the command line fits. */
+        char    n[2][MAXARG];
+#else
         char    n[2][80];
+#endif
         char    temp;
 
 
@@ -404,6 +436,13 @@ byte *v[];
                 {
                         slash= strpbrk( v[i],"/" );
 
+#ifdef __WATCOMC__
+                        /* A third name, which Microsoft's FC copied past
+                         * n, is counted for the usage message. */
+                        if ( fileargs >= 2 )
+                                fileargs++;
+                        else
+#endif
                         if ( slash )
                         {
                                 temp = *slash;

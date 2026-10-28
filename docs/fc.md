@@ -14,12 +14,12 @@ strings in `MESSAGES.ASM`. It is compiled with the same `wcc` flags as
 ATTRIB, MEM and FDISK, linked with `wlink` and libc16, and
 `scripts/check-runtime` checks its map: it takes `cstart`, `exit`, `bdos`,
 `intdos`, `fopen`, `fgetc`, `fgets`, `fputs`, `fwrite`, `malloc`,
-`strerror`, `strcpy`, `strcat`, `strlen`, `strcmp`, `tolower`, `isxdigit`,
+`strerror`, `strcpy`, `strlen`, `strcmp`, `tolower`, `isxdigit`,
 `ltoa` and `ultoa` from libc16 0.04.
 
 | | Microsoft (M1) | GR-DOS |
 |---|---:|---:|
-| `FC.EXE` | 15,807 bytes | 8,342 bytes |
+| `FC.EXE` | 15,807 bytes | 8,392 bytes |
 
 `FC.EXE` is not compared by `make check`, as it is built with a different
 compiler. The six assembly modules assemble to the same code as MASM's.
@@ -58,6 +58,16 @@ assembly, so the Microsoft build is unchanged (`scripts/check-reference`):
 - **Version check.** `_osmajor` and `_osminor` come from `bdos(0x30)`.
 - **`ISSPACE`.** Microsoft C's `_ctype_` table becomes the test it made:
   blank and 09h to 0Dh.
+- **Buffer overruns.** Microsoft's FC copies each file name into an 80-byte
+  array on the stack, and a third name past the two; an argument of 80
+  characters or more overwrites the stack (Microsoft C's `R6001` "null
+  pointer assignment", and garbled output, in the test). Its 128-byte
+  `line`, which holds "cannot open" and "longer than" messages, is overrun
+  by long names. GR-DOS's FC has room for any argument of the command line
+  (127 characters), only counts a third name for its usage message, and
+  `line` holds two such names; `fc_format` stops at its end in any case.
+  `fc_puts` writes a line too long for `fc_out` in more than one call
+  rather than overrun it, though no output of FC's is that long.
 - **Out of memory.** `usage(NoMem)` gave no exit code, so Microsoft's FC
   exits with whatever was on the stack (52 in the test); GR-DOS's exits
   with 1.
@@ -89,7 +99,14 @@ files of `tests/fc`. It runs FC with each switch (`/A`, `/B`, `/C`, `/L`,
 files of different lengths, a file ending in `^Z`, lines longer than FC's
 buffer, code page 437 letters with `/C`, `.EXE` files, and each error
 (usage, bad and incompatible switches, a missing file or directory, a
-directory, a wildcard), and after each `EL.BAT` reports the errorlevel. The
-output goes to COM1 (`CTTY AUX`). `tests/fc/expect.log` is what Microsoft's
+directory, a wildcard). It also compares files of 400 lines, with `/LB50`
+too, so that FC refills and resynchronises its buffers; files of the same
+line repeated, which resynchronise on the wrong lines; and the longest
+paths DOS allows. After each command, `EL.BAT` reports the errorlevel. The
+output goes to COM1 (`CTTY AUX`).
+
+Up to the line `GRDOS-AB-END`, `tests/fc/expect.log` is what Microsoft's
 FC.EXE, from the M1 reference build, writes in the same image
 (`make fc-expect`); GR-DOS's must be the same, byte for byte, CRs included.
+After it come the arguments that overran Microsoft's buffers (a 116- and
+an 84-character name), checked against `tests/fc/expect`.
