@@ -28,11 +28,15 @@ int getl (char *, int);
 /*global*/  int fputl(char  *,int ,FILE  *);
 /*global*/  int ffirst(char  *,int ,struct findType  *);
 /*global*/  int fnext(struct findType  *);
+#ifndef __WATCOMC__  /* not valid C, and not used by FC */
 /*global*/  char forsemi(char  *,char ( *)(), );
+#endif
 /*global*/  long freespac(int );
 /*global*/  long sizeround(long ,int );
+#ifndef __WATCOMC__  /* not valid C, and not used by FC */
 /*global*/  int rspawnl(char  *,char  *,char  *, );
 /*global*/  int rspawnv(char  *,char  *,char  *,char  *[0]);
+#endif
 /*global*/  char  *MakeStr(char  *);
 /*global*/  int mapenv(char  *,char  *);
 /*global*/  char  *ismark(char  *);
@@ -46,7 +50,9 @@ int getl (char *, int);
 /*global*/  char fPFind(char  *,unsigned int * *);
 /*global*/  char findpath(char  *,char  *,char );
 /*global*/  FILE  *pathopen(char  *,char  *,char  *);
+#ifndef __WATCOMC__  /* not valid C, and not used by FC */
 /*global*/  int forfile(char  *,int ,void ( *)(), );
+#endif
 /*global*/  int rootpath(char  *,char  *);
 /*global*/  int sti(char  *,int );
 /*global*/  int ntoi(char  *,int );

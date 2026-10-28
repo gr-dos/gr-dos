@@ -2,6 +2,184 @@ comment $
 cmacros - assembly macros for interfacing to HHLs
 (C)Copyright 1984, 1988 Microsoft Corporation
 $
+IFDEF __JWASM__
+; GR-DOS: the part of these macros that FC's assembly modules use, for
+; JWasm, with the same code and names: small model, C calling convention.
+; The macros below the ELSE define macros with MASM 5's &macro and &endm,
+; and rely on how MASM 5 removes & in nested IRP loops, which JWasm does
+; not do.
+
+for x,<memM,memL,memC,memH,?PLM,?WIN,?DF>
+    ifdef x
+        if x
+            .err <cmacros for JWasm: only the small model and C>
+        endif
+    endif
+endm
+
+_TEXT segment byte public 'CODE'
+_TEXT ends
+_DATA segment word public 'DATA'
+_DATA ends
+IGROUP group _TEXT
+DGROUP group _DATA
+codeOFFSET equ <OFFSET IGROUP:>
+dataOFFSET equ <OFFSET DGROUP:>
+
+; the registers cProc can save, in the order cBegin pushes them
+?jAX = 1
+?jBX = 2
+?jCX = 4
+?jDX = 8
+?jSI = 16
+?jDI = 32
+?jES = 64
+?jDS = 128
+
+sBegin macro ln
+    ifidni <ln>,<code>
+_TEXT       segment
+    elseifidni <ln>,<data>
+_DATA       segment
+    else
+        .err <sBegin ln: not in cmacros for JWasm>
+    endif
+endm
+
+sEnd macro
+@CurSeg ends
+endm
+
+assumes macro s,g
+    ifidni <g>,<code>
+        assume s:IGROUP
+    elseifidni <g>,<data>
+        assume s:DGROUP
+    else
+        assume s:g
+    endif
+endm
+
+; cProc name,<PUBLIC>,<registers>: name is _name, and name a label for it
+cProc macro n,cl,s
+    ?PO = 0
+    ?PU = 0
+    ?PAS = 0
+    for x,<cl>
+        ifidni <x>,<PUBLIC>
+            ?PU = 1
+        else
+            .err <cProc x: not in cmacros for JWasm>
+        endif
+    endm
+    for x,<s>
+        ?PAS = ?PAS or ?j&x
+    endm
+?CPN textequ <_&n>
+n   label near
+    if ?PU
+        public _&n
+    endif
+_&n proc near
+endm
+
+; a parameter at [bp+4] and on, as cProc's; each takes a whole word
+?pj macro n,t,l
+n   textequ @CatStr(<t ptr [bp+>, %(4 + ?PO), <]>)
+    ?PO = ?PO + l
+endm
+
+parmB macro nl
+    for x,<nl>
+        ?pj x,<byte>,2
+    endm
+endm
+
+parmW macro nl
+    for x,<nl>
+        ?pj x,<word>,2
+    endm
+endm
+
+parmD macro nl
+    for x,<nl>
+        ?pj x,<dword>,0
+        ?pj Off_&x,<word>,2
+        ?pj Seg_&x,<word>,2
+    endm
+endm
+
+cBegin macro
+    push bp
+    mov  bp,sp
+    for x,<AX,BX,CX,DX,SI,DI,ES,DS>
+        if ?PAS and ?j&x
+            push x
+        endif
+    endm
+endm
+
+cEnd macro
+    for x,<DS,ES,DI,SI,DX,CX,BX,AX>
+        if ?PAS and ?j&x
+            pop x
+        endif
+    endm
+    mov  sp,bp
+    pop  bp
+    ret
+?CPN endp
+endm
+
+; cCall name,<argument>: one word argument
+cCall macro n,a
+    ?ARGL = 0
+    for x,<a>
+        push x
+        ?ARGL = ?ARGL + 2
+    endm
+    if ?ARGL gt 2
+        .err <cCall n: one argument only in cmacros for JWasm>
+    endif
+    call _&n
+    if ?ARGL
+        add sp,?ARGL
+    endif
+endm
+
+?ej macro nl,d
+    for x,<nl>
+        extrn _&x:d
+x       equ <_&x>
+    endm
+endm
+
+externB macro nl
+    ?ej <nl>,byte
+endm
+
+externP macro nl
+    ?ej <nl>,near
+endm
+
+; staticW and globalB: a label name and the data _name, public for global
+?dj macro n,p,t,d,i
+n   label t
+    if p
+        public _&n
+    endif
+_&n d i
+endm
+
+staticW macro n,i
+    ?dj n,0,word,dw,i
+endm
+
+globalB macro n,i
+    ?dj n,1,byte,db,i
+endm
+
+ELSE
 if1
 outif MACRO name,defval,onmsg,offmsg
     ifndef name
@@ -930,3 +1108,4 @@ endm
 errn$ macro l,x
     errnz <OFFSET $ - OFFSET l x>
 endm
+ENDIF

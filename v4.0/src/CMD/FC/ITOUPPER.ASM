@@ -3,6 +3,10 @@ include version.inc
 include cmacros.inc
 .list
 
+IFDEF __JWASM__
+	OPTION NOKEYWORD:<C>	; a parameter's name
+ENDIF
+
 sBegin  code
 assumes cs,code
 

@@ -210,15 +210,110 @@ WARNING:
 #include "tools.h"
 #include "fc.h"
 
+#ifdef __WATCOMC__
+#include <dos.h>
+#include <libc16.h>
+
+/* In place of printf and sprintf, which libc16 does not have: the
+ * conversions FC uses, each written as Microsoft C's printf writes it.
+ * Like printf, each line goes to DOS in one write (fc_flush), as DOS
+ * stops writing a line to a device at a ^Z in it. */
+
+static char fc_out[2*MAXARG+16];
+
+/* adds s to the output of the printf being written */
+static void fc_puts (s)
+char *s;
+{
+    strcat (fc_out, s);
+}
+
+static void fc_flush ()
+{
+    fputs (fc_out, stdout);
+    fc_out[0] = 0;
+}
+
+/* sprintf (dst, fmt, a, b) for a fmt whose only conversions are two %s */
+static void fc_format (dst, fmt, a, b)
+char *dst, *fmt, *a, *b;
+{
+    char *arg = a;
+
+    while (*fmt)
+        if (fmt[0] == '%' && fmt[1] == 's')
+        {
+            strcpy (dst, arg);
+            dst += strlen (dst);
+            arg = b;
+            fmt += 2;
+        }
+        else
+            *dst++ = *fmt++;
+    *dst = 0;
+}
+
+/* printf ("%0WlX", v): upper-case hexadecimal, zero-padded to W digits */
+static void fc_hex (v, width)
+long v;
+int width;
+{
+    char digits[12], *p;
+    int n;
+
+    libc16_ultoa ((unsigned long)v, digits, 16);
+    for (n = strlen (digits); n < width; n++)
+        fc_puts ("0");
+    for (p = digits; *p; p++)
+        if (*p >= 'a')
+            *p -= 'a' - 'A';
+    fc_puts (digits);
+}
+
+/* printf ("%Wd", v): decimal, right-justified in W columns */
+static void fc_dec (v, width)
+int v, width;
+{
+    char digits[8];
+    int n;
+
+    libc16_ltoa ((long)v, digits, 10);
+    for (n = strlen (digits); n < width; n++)
+        fc_puts (" ");
+    fc_puts (digits);
+}
+
+/* printf ("***** %s\n", f) */
+static void fc_title (f)
+char *f;
+{
+    fc_puts ("***** ");
+    fc_puts (f);
+    fc_puts ("\n");
+    fc_flush ();
+}
+#endif
+
 /* #define  DEBUG  FALSE */
 
+#ifdef __WATCOMC__
+extern int  fgetl();
+#else
 extern int  fgetl(),
             strcmp ();
+#endif
 
 extern byte toupper ();
 
+#ifdef __WATCOMC__
+/* __cdecl, as are fgets and strcmp, which they may point to */
+int (__cdecl *funcRead) (),             /* function to use to read lines     */
+    (__cdecl *fCmp) ();                 /* function to use to compare lines  */
+#define READFN  int (__cdecl *) ()
+#else
 int (*funcRead) (),                     /* function to use to read lines     */
     (*fCmp) ();                         /* function to use to compare lines  */
+#endif
 
 extern byte BadSw[],
             Bad_ver[],
@@ -268,20 +363,33 @@ byte *v[];
 
 
 
+#ifdef __WATCOMC__
+        unsigned dosver;                /* DOS function 30h: AL major, AH minor */
+#else
         extern byte _osmajor, _osminor;
+#endif
         word version;                   /* _osmajor._osminor, used for        */
                                         /* version binding checks.            */
 
 
 
       /* Issue error message if DOS version is not within valid range. */
+#ifdef __WATCOMC__
+        dosver = bdos (0x30, 0, 0);
+        version = ((word)LOW(dosver) << 8) + (word)HIGH(dosver);
+#else
         version = ((word)_osmajor << 8) + (word)_osminor;
+#endif
         if (( LOWVERSION >  version) || (version >  HIGHVERSION))
         {
             usage (Bad_ver, 1);
         }
 
+#ifdef __WATCOMC__
+        funcRead = (READFN)FNADDR(fgetl);
+#else
         funcRead = (int (*) ())FNADDR(fgetl);
+#endif
 
         fileargs=0;
 
@@ -343,7 +451,11 @@ byte *v[];
                                              fNumb = TRUE;
                                          break;
                                      case 'T' :
+#ifdef __WATCOMC__
+                                             funcRead =(READFN)FNADDR(fgets);
+#else
                                              funcRead =(int (*) ())FNADDR(fgets);
+#endif
                                          break;
                                      default:
                                              if (*strbskip((v[i]+j+1),"0123456789") == 0)
@@ -412,10 +524,22 @@ byte *v[];
 usage (p, erc)
 unsigned char *p;
 {
+#ifdef __WATCOMC__
+    if (p)
+    {
+        fc_puts ("fc: ");
+        fc_puts (p);
+        fc_puts ("\n");
+        fc_flush ();
+    }
+    else
+        fputs (UseMes, stdout);
+#else
     if (p)
         printf ("fc: %s\n", p);
     else
         printf (UseMes);
+#endif
 
     exit (erc);
 }
@@ -432,13 +556,21 @@ unsigned char *f1, *f2;
 
     if ((fh1 = fopen (f1, "rb")) == NULL)
     {
+#ifdef __WATCOMC__
+        fc_format (line, BadOpn, f1, error ());
+#else
         sprintf (line, BadOpn, f1, error ());
+#endif
         usage (line, 1);
     }
 
     if ((fh2 = fopen (f2, "rb")) == NULL)
     {
+#ifdef __WATCOMC__
+        fc_format (line, BadOpn, f2, error ());
+#else
         sprintf (line, BadOpn, f2, error ());
+#endif
         usage (line, 1);
     }
     pos = 0L;
@@ -454,12 +586,26 @@ unsigned char *f1, *f2;
                 else
                 {
                     fSame = FALSE;
+#ifdef __WATCOMC__
+                    fc_hex (pos, 8);
+                    fc_puts (": ");
+                    fc_hex ((long)c1, 2);
+                    fc_puts (" ");
+                    fc_hex ((long)c2, 2);
+                    fc_puts ("\n");
+                    fc_flush ();
+#else
                     printf ("%08lX: %02X %02X\n", pos, c1, c2);
+#endif
                 }
             }
             else
             {
+#ifdef __WATCOMC__
+                fc_format (line, LngFil, f1, f2);
+#else
                 sprintf (line, LngFil, f1, f2);
+#endif
                 usage (line, 1);
             }
         }
@@ -474,7 +620,11 @@ unsigned char *f1, *f2;
             }
             else
             {
+#ifdef __WATCOMC__
+                fc_format (line, LngFil, f2, f1);
+#else
                 sprintf (line, LngFil, f2, f1);
+#endif
                 usage (line, 1);
             }
         }
@@ -535,19 +685,31 @@ unsigned char *f1, *f2;
 
     if ((fh1 = fopen (f1, "rb")) == NULL)
     {
+#ifdef __WATCOMC__
+        fc_format (line, BadOpn, f1, error ());
+#else
         sprintf (line, BadOpn, f1, error ());
+#endif
         usage (line, 1);
     }
 
     if ((fh2 = fopen (f2, "rb")) == NULL)
     {
+#ifdef __WATCOMC__
+        fc_format (line, BadOpn, f2, error ());
+#else
         sprintf (line, BadOpn, f2, error ());
+#endif
         usage (line, 1);
     }
 
     if ((buffer1 = (struct lineType *)malloc (cLine * (sizeof *buffer1))) == NULL ||
         (buffer2 = (struct lineType *)malloc (cLine * (sizeof *buffer1))) == NULL)
+#ifdef __WATCOMC__
+        usage (NoMem, 1);
+#else
         usage (NoMem);
+#endif
 
     l1 = l2 = 0;
     line1 = line2 = 0;
@@ -610,11 +772,19 @@ l6:
     if (compare (l1, xc, l2, yp, i))
     {
         fSame = FALSE;
+#ifdef __WATCOMC__
+        fc_title (f1);
+        dump (buffer1, 0, xc);
+        fc_title (f2);
+        dump (buffer2, 0, yp);
+        fputs ("*****\n\n", stdout);
+#else
         printf ("***** %s\n", f1);
         dump (buffer1, 0, xc);
         printf ("***** %s\n", f2);
         dump (buffer2, 0, yp);
         printf ("*****\n\n");
+#endif
 
         l1 = adjust (buffer1, l1, xc);
         l2 = adjust (buffer2, l2, yp);
@@ -628,11 +798,19 @@ l6:
     if (compare (l1, xp, l2, yc, i))
     {
         fSame = FALSE;
+#ifdef __WATCOMC__
+        fc_title (f1);
+        dump (buffer1, 0, xp);
+        fc_title (f2);
+        dump (buffer2, 0, yc);
+        fputs ("*****\n\n", stdout);
+#else
         printf ("***** %s\n", f1);
         dump (buffer1, 0, xp);
         printf ("***** %s\n", f2);
         dump (buffer2, 0, yc);
         printf ("*****\n\n");
+#endif
 
         l1 = adjust (buffer1, l1, xp);
         l2 = adjust (buffer2, l2, yc);
@@ -666,6 +844,15 @@ l6:
     fSame = FALSE;
 
     if (l1 >= cLine || l2 >= cLine)
+#ifdef __WATCOMC__
+        fputs (ReSyncMes, stdout);
+
+    fc_title (f1);
+    dump (buffer1, 0, l1-1);
+    fc_title (f2);
+    dump (buffer2, 0, l2-1);
+    fputs ("*****\n\n", stdout);
+#else
         printf ("%s", ReSyncMes);
 
     printf ("***** %s\n", f1);
@@ -673,6 +860,7 @@ l6:
     printf ("***** %s\n", f2);
     dump (buffer2, 0, l2-1);
     printf ("*****\n\n");
+#endif
     exit (1);
 }
 
@@ -695,7 +883,11 @@ int *plnum;
     i = 0;
     while (ct-- && (*funcRead) (pl->text, MAXARG, fh) != NULL)
     {
+#ifdef __WATCOMC__
+        if (funcRead == (READFN)FNADDR(fgets))
+#else
         if (funcRead == (int (*) ())FNADDR(fgets))
+#endif
             pl->text[strlen(pl->text)-1] = 0;
         if (fIgnore && !strcmps (pl->text, ""))
             pl->text[0] = 0;
@@ -762,7 +954,11 @@ int start, end;
     if (fAbbrev && end-start > 2)
     {
         pline (pl+start);
+#ifdef __WATCOMC__
+        fputs ("...\n", stdout);
+#else
         printf ("...\n");
+#endif
         pline (pl+end);
     }
     else
@@ -785,10 +981,22 @@ int start, end;
 pline (pl)
 struct lineType *pl;
 {
+#ifdef __WATCOMC__
+    if (fNumb)
+    {
+        fc_dec (pl->line, 5);
+        fc_puts (":  ");
+    }
+
+    fc_puts (pl->text);
+    fc_puts ("\n");
+    fc_flush ();
+#else
     if (fNumb)
         printf ("%5d:  ", pl->line);
 
     printf ("%s\n", pl->text);
+#endif
 }
 
 /*

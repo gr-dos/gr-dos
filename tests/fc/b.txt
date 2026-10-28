@@ -1,0 +1,10 @@
+alpha
+beta
+GAMMA
+delta
+zeta
+eta
+theta
+new line
+iota
+kappa

@@ -1,5 +1,5 @@
 # The 720 KB smoke test image (scripts/smoke-test --expect): DIR reports
-# 300,000 to 399,999 bytes free (391,168 with the utilities of issue #4
-# and FDISK).
+# 300,000 to 399,999 bytes free (381,952 with the utilities of issue #4,
+# FDISK and FC).
 
-^ +15 File\(s\) +3\d{5} bytes free$
+^ +16 File\(s\) +3\d{5} bytes free$

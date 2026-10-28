@@ -16,13 +16,14 @@
 ^ATTRIB   EXE +\d+ 
 ^MORE     COM +\d+ 
 ^FIND     EXE +\d+ 
+^FC       EXE +\d+ 
 ^DEBUG    COM +\d+ 
 ^MEM      EXE +\d+ 
 ^MODE     COM +\d+ 
 ^TICO     EXE +29702 
 ^AUTOEXEC BAT +\d+ 
 ^HELLO    COM +\d+ 
-^ +15 File\(s\) +\d+ bytes free$
+^ +16 File\(s\) +\d+ bytes free$
 # COPY and TYPE
 ^ +1 File\(s\) copied$
 ^hello$

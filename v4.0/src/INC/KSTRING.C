@@ -1,5 +1,16 @@
 #include "internat.h"
 #include <dos.h>
+#ifdef __WATCOMC__
+/* ITOUPPER.ASM's, in the C calling convention (CMACROS.INC) */
+#pragma aux (__cdecl) IToupper
+#pragma aux (__cdecl) get_lbtbl
+#pragma aux (__cdecl) test_ecs
+/* These take the place of the C library's toupper and strpbrk, which
+   are __cdecl in libc16's headers */
+#pragma aux (__cdecl) toupper
+#pragma aux (__cdecl) strpbrk
+#pragma aux (__cdecl) strupr
+#endif
 #define   NULL    0
 #define   TRUE    0xffff
 #define   FALSE   0
