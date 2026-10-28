@@ -169,10 +169,7 @@ char     get_yes_no_values(void);                                       /* AN012
 /*************************************************************/
 
 #ifdef __WATCOMC__  /* libc16's headers declare them, __cdecl */
-/* Microsoft C 5.1's getch and putch: DOS functions 08h, console input
-   without echo, and 06h, direct console output */
-#define  getch()  (bdos(8, 0, 0) & 0xFF)
-#define  putch(c) bdos(6, (unsigned char)(c), 0)
+#include <conio.h>
 #else
 int      getch(void);
 void     putch(int);

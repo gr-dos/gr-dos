@@ -15,14 +15,14 @@ with assembly modules: `BOOTREC` (the master boot record), `REBOOT`, and the
 C interfaces to the parser and message retriever (`_PARSE`, `_MSGRET`). It
 is compiled with the same `wcc` flags, linked with `wlink` and libc16, and
 `scripts/check-runtime` checks its map: it takes `cstart`, `exit`,
-`setvect`, `bdos`, `int86`, `int86x`, `intdos`, `intdosx`, `segread`,
+`setvect`, `int86`, `int86x`, `intdos`, `intdosx`, `segread`,
 `strcpy`, `strncpy`, `strcat`, `strcmp`, `strchr`, `strlen`, `memset`,
-`isalpha`, `isdigit`, `ltoa` and the long arithmetic helpers from libc16
-0.03.
+`isalpha`, `isdigit`, `ltoa`, `getch`, `putch` and the long arithmetic
+helpers from libc16 0.04.
 
 | | Microsoft (M1) | GR-DOS |
 |---|---:|---:|
-| `FDISK.EXE` | 60,935 bytes, EXEPACKed | 37,694 bytes |
+| `FDISK.EXE` | 60,935 bytes, EXEPACKed | 37,594 bytes |
 
 Other parts of the build:
 
@@ -65,8 +65,8 @@ build is unchanged (`scripts/check-reference`):
   returns, installed with `_dos_setvect`, which is how Microsoft C 5.1's
   `signal` ignored Ctrl-C; libc16 has no `signal`. DOS restores INT 23h
   when FDISK exits.
-- **`getch` and `putch`.** Macros for DOS functions 08h and 06h, which
-  Microsoft C 5.1's `getch` and `putch` call; libc16 has neither.
+- **`getch` and `putch`.** Declared by libc16's `<conio.h>` (from 0.04),
+  rather than `SUBTYPE.H`, so that they are `__cdecl`.
 - **Floating point.** Two divisions by `double`, in `cylinders_to_percent`
   and in the FAT12 sectors-per-FAT estimate (a division by
   `2 + 512*8/1.5`, that is 8198/3), are written in integer arithmetic. Both
