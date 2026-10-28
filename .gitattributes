@@ -2,3 +2,5 @@
 /v4.0/** -text
 # Patches to upstream tools apply to CRLF sources and are kept byte-for-byte.
 /patches/** -text
+# Expected FC output, with its CRs, kept byte-for-byte.
+/tests/fc/expect.log -text

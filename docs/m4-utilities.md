@@ -17,6 +17,7 @@ source, the tico16 editor and an AUTOEXEC.BAT. Every image, from 1.44 MB to
 | `ATTRIB.EXE` | `CMD/ATTRIB` (C) | Open Watcom C, `wlink` and libc16 | no |
 | `MORE.COM` | `CMD/MORE` | EXE2BIN | yes |
 | `FIND.EXE` | `CMD/FIND` | `.EXE` as LINK writes it, not EXEPACKed | the EXEPACKed one is |
+| `FC.EXE` | `CMD/FC` (C) | Open Watcom C, `wlink` and libc16 ([FC](fc.md)) | no |
 | `DEBUG.COM` | `CMD/DEBUG` | `.EXE` as LINK writes it, then CONVERT | yes |
 | `MEM.EXE` | `CMD/MEM` (C) | Open Watcom C, `wlink` and libc16 | no |
 | `MODE.COM` | `CMD/MODE` | EXE2BIN | yes |

@@ -67,6 +67,33 @@ extern char XLTab[], XUTab[];
 #define MAXARG	128
 #define MAXPATHLEN  128
 
+#ifdef __WATCOMC__
+/* Before ttypes.h declares them. libc16's declarations of the C library, __cdecl */
+#include <string.h>
+#include <stdlib.h>
+/* The assembly modules use the C calling convention (CMACROS.INC) */
+int min(int, int);
+int max(int, int);
+#pragma aux (__cdecl) Move
+#pragma aux (__cdecl) Fill
+#pragma aux (__cdecl) strbscan
+#pragma aux (__cdecl) strbskip
+#pragma aux (__cdecl) strpre
+#pragma aux (__cdecl) getlpos
+#pragma aux (__cdecl) getlinit
+#pragma aux (__cdecl) getl
+#pragma aux (__cdecl) min
+#pragma aux (__cdecl) max
+/* Called through funcRead and fCmp, as are fgets and strcmp, so
+   __cdecl in their type */
+#include <stdio.h>
+int __cdecl fgetl(char *, int, FILE *);
+int __cdecl strcmpi(unsigned char *, unsigned char *);
+int __cdecl strcmps(unsigned char *, unsigned char *);
+int __cdecl strcmpis(unsigned char *, unsigned char *);
+/* INC/KSTRING.C's, which use DOS's case map and lead byte table */
+#pragma aux (__cdecl) toupper
+#endif
 #include "ttypes.h"
 
 struct vectorType {

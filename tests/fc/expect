@@ -1,0 +1,10 @@
+# Lines GR-DOS's FC must write to COM1 after GRDOS-AB-END, where
+# Microsoft's FC overran its buffers (scripts/smoke-test); the output before
+# it must be expect.log.
+
+^GRDOS-AB-END$
+^fc: cannot open DIRECTRY\\NUMBER\.TWO\\LEVEL3\\LEVEL4\\LEVEL5\\LEVEL6\\NOFILE\.TXT\\NUMBER\.TWO\\LEVEL3\\LEVEL4\\LEVEL5\\LEVEL6\\NOFILE\.TXT - No such file or directory$
+^errorlevel 1$
+^fc: cannot open DIRECTRY\\NUMBER\.TWO\\LEVEL3\\LEVEL4\\LEVEL5\\LEVEL6\\NOFILE\.TXT\\\.\.\\X - No such file or directory$
+^errorlevel 1$
+^GRDOS-TEST-END$
