@@ -148,7 +148,9 @@ unsigned      total_cylinders;                                          /* AN000
 BEGIN                                                                   /* AN000 */
 
 unsigned      percentage_out;                                           /* AN000 */
+#ifndef __WATCOMC__
 double        large_number;                                             /* AN000 */
+#endif
 
      /* This is the same as (cyl_in / tot_cyl) * 100 to get the percentage */
      /* because * 100 is really 100/1 which is (cyl_in*100)/(tot_cyl*1).   */
@@ -157,8 +159,12 @@ double        large_number;                                             /* AN000
          percentage_out = 0;
      else
          BEGIN
+#ifdef __WATCOMC__  /* the same quotient, without floating point */
+         percentage_out = u(((long)cylinders_in * 100l) / total_cylinders);
+#else
          large_number = (double)((long)cylinders_in * 100l);            /* AN000 */
          percentage_out = u(large_number / total_cylinders);            /* AN000 */
+#endif
          END
      /* this should round up to the next percent if more than .5 percent */
      if (((cylinders_in * 100) % total_cylinders) >= (total_cylinders / 2))

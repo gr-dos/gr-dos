@@ -1,0 +1,35 @@
+
+            Delete Logical DOS Drive(s) in the Extended DOS Partition
+
+Drv Volume Label  Mbytes  System  Usage
+D:  Drive deleted
+E:  Drive deleted
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    All logical drives deleted in the Extended DOS Partition.
+
+    Press Esc to return to FDISK Options
+attr 01: 07x12 0Fx57 07x11
+attr 03: 0Fx39 07x41
+attr 04: 0Fx17 07x63
+attr 05: 0Fx17 07x63
+attr 06: 0Fx4 07x76
+attr 07: 0Fx4 07x76
+attr 08: 0Fx4 07x76
+attr 09: 0Fx4 07x76
+attr 22: 07x4 0Fx57 07x19
+attr 24: 07x10 0Fx3 07x67

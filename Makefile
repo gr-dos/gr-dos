@@ -12,7 +12,12 @@
 #                 program in QEMU and check its serial output (tests/smoke),
 #                 and test the utilities (tests/utils); make test-1440 (or
 #                 test-1200, test-720, test-360) boots just one image, and
-#                 make test-utils runs just the utility tests
+#                 make test-utils runs just the utility tests; make
+#                 test-fdisk runs FDISK on disposable hard disk images
+#                 (tests/fdisk), and make test-install installs GR-DOS on
+#                 one (FDISK, FORMAT and SYS) and boots it
+#   make fdisk-expect  write the FDISK tests' expected screens and disks
+#                 with Microsoft's FDISK.EXE of the M1 reference build
 #   make dist     write the release assets to build/linux/release: the four
 #                 images, a ZIP of the binaries, README, build details and
 #                 logs, and SHA256SUMS; the ZIP's tree is build/linux/dist
@@ -21,8 +26,8 @@
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
 # git, curl and xz; mtools for the image and qemu-system-i386 for the test.
 # JWasm, Open Watcom and TICO.EXE (tico16) are fetched into build/tools,
-# and the C runtime for ATTRIB and MEM, the pinned libc16 release, into
-# build/libc16 (scripts/fetch-libc16). make LIBC16_ROOT=../libc16 builds
+# and the C runtime for ATTRIB, MEM and FDISK, the pinned libc16 release,
+# into build/libc16 (scripts/fetch-libc16). make LIBC16_ROOT=../libc16 builds
 # against a libc16 checkout built with its own make instead.
 #
 # The source tree is v4.0/src with the patches in PATCHES applied (the
@@ -41,19 +46,20 @@ PATCHES := $(sort $(wildcard patches/branding/*.patch))
 
 JWFLAGS := -q -Zj -Zm -Zg -Cx -I. -I$(CURDIR)/$(SRC)/INC -I$(CURDIR)/$(SRC)/DOS
 
-# ATTRIB and MEM are C, compiled with Open Watcom C for Microsoft C 5.1's
-# small model and packed structures, with libc16 as their C runtime (its
-# docs/ABI.md): its headers only, as -x ignores INCLUDE, -zl leaves out the
-# references to Open Watcom's libraries, and the default register
+# ATTRIB, MEM and FDISK are C, compiled with Open Watcom C for Microsoft C
+# 5.1's small model and packed structures, with libc16 as their C runtime
+# (its docs/ABI.md): its headers only, as -x ignores INCLUDE, -zl leaves out
+# the references to Open Watcom's libraries, and the default register
 # convention, with the assembly modules' interfaces declared __cdecl in the
-# sources.
+# sources. libc16's headers come first, so that FDISK's own copy of
+# Microsoft C's dos.h, which a quoted #include finds, can include libc16's.
 LIBC16_ROOT ?= build/libc16
 # A release tree, or a checkout, whose make stages the same layout in
 # build/stage.
 LIBC16_DIR  := $(if $(wildcard $(LIBC16_ROOT)/build/stage/VERSION),$(LIBC16_ROOT)/build/stage,$(LIBC16_ROOT))
 LIBC16      := $(LIBC16_DIR)/lib/LIBC16.LIB
 WCFLAGS := -q -w0 -zld -zl -x -ms -0 -os -zp1 -s -j -ei -bt=dos \
-	-I. -I$(CURDIR)/$(SRC)/H -I$(abspath $(LIBC16_DIR))/include
+	-I$(abspath $(LIBC16_DIR))/include -I. -I$(CURDIR)/$(SRC)/H
 
 BOOT_OBJS    := $(SRC)/BOOT/MSBOOT.OBJ
 MSLOAD_OBJS  := $(SRC)/BIOS/MSLOAD.OBJ
@@ -64,13 +70,23 @@ COMMAND_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src CMD/COM
 # The utilities on the system disk (issue #4), in the order they are copied
 # to it; each CMD/X directory but MEM's has its X.LNK.
 UTILITIES := CMD/FORMAT/FORMAT.COM CMD/SYS/SYS.COM CMD/CHKDSK/CHKDSK.COM \
-	CMD/DISKCOPY/DISKCOPY.COM CMD/ATTRIB/ATTRIB.EXE CMD/MORE/MORE.COM CMD/FIND/FIND.EXE \
+	CMD/DISKCOPY/DISKCOPY.COM CMD/FDISK/FDISK.EXE CMD/ATTRIB/ATTRIB.EXE CMD/MORE/MORE.COM CMD/FIND/FIND.EXE \
 	CMD/DEBUG/DEBUG.COM CMD/MEM/MEM.EXE CMD/MODE/MODE.COM
 UTILITY_DIRS := $(patsubst CMD/%/,%,$(dir $(UTILITIES)))
-$(foreach u,$(filter-out MEM,$(UTILITY_DIRS)),\
+$(foreach u,$(filter-out MEM FDISK,$(UTILITY_DIRS)),\
   $(eval $(u)_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src CMD/$(u)/$(u).LNK))))
 # MEM's makefile links mem+_msgret+_parse.
 MEM_OBJS := $(addprefix $(SRC)/CMD/MEM/,MEM.OBJ _MSGRET.OBJ _PARSE.OBJ)
+
+# FDISK (issue #10), C like ATTRIB and MEM. FDBOOT.OBJ, the master boot
+# record, is only assembled for BOOTREC to include (FDBOOT.INC): LINK put
+# its 2 KB in the program too, but nothing refers to it. The five MAPPER
+# routines FDISK calls take the place of MAPPER.LIB.
+FDISK_OBJS := $(addprefix $(SRC)/,$(filter-out %/FDBOOT.OBJ,\
+	$(shell scripts/lnk-objects v4.0/src CMD/FDISK/FDISK.LNK))) \
+	$(addprefix $(SRC)/MAPPER/,BEEP.OBJ EXIT.OBJ SCROLLUP.OBJ SCURPOS.OBJ WCHSTRA.OBJ)
+FDISK_C_OBJS := $(filter-out %/REBOOT.OBJ %/BOOTREC.OBJ %/_PARSE.OBJ %/_MSGRET.OBJ,\
+	$(filter $(SRC)/CMD/FDISK/%,$(FDISK_OBJS)))
 
 OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM \
 	$(UTILITIES)
@@ -88,13 +104,14 @@ MESSAGES := BOOT/BOOT.CL1 \
 	$(call utility_messages,FIND,1 2 A) $(call utility_messages,FORMAT,1 2 A B C) \
 	CMD/FORMAT/BOOT.CL1 $(call utility_messages,MEM,1 2 A B) \
 	$(call utility_messages,MODE,1 2 A B) $(call utility_messages,MORE,1 2 A) \
-	$(call utility_messages,SYS,1 2 A B C D)
+	$(call utility_messages,SYS,1 2 A B C D) \
+	$(call utility_messages,FDISK,1 2 A B) CMD/FDISK/FDISK5.CL1 CMD/FDISK/FDISKM.C
 
-# ATTRIB.EXE and MEM.EXE are built with Open Watcom C, not Microsoft C 5.1,
-# so they are not compared. CONVERT makes CHKDSK.EXE into CHKDSK.COM.
+# ATTRIB.EXE, MEM.EXE and FDISK.EXE are built with Open Watcom C, not
+# Microsoft C 5.1, so they are not compared. CONVERT makes CHKDSK.EXE into CHKDSK.COM.
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
-	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE,$(UTILITIES)) \
-	CMD/CHKDSK/CHKDSK.EXE
+	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE %/FDISK.EXE,$(UTILITIES)) \
+	CMD/CHKDSK/CHKDSK.EXE CMD/FDISK/FDBOOT.BIN CMD/FDISK/FDBOOT.INC
 
 # Floppy formats, by size in KB (scripts/mkimage --format); 1440 is the
 # default.
@@ -130,7 +147,7 @@ check-tree: $(addprefix $(SRC)/,$(OUTPUTS))
 TEST_FORMATS := $(addprefix test-,$(FORMATS))
 TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 
-test: $(TEST_FORMATS) test-utils $(TEST_SYS)
+test: $(TEST_FORMATS) test-utils $(TEST_SYS) test-fdisk test-install
 
 $(TEST_FORMATS): test-%: $(TESTS)/smoke-%k.img
 	scripts/smoke-test --expect tests/smoke/expect-$*k $< tests/smoke/expect $(TESTS)/smoke-$*k
@@ -163,6 +180,44 @@ $(TEST_SYS): test-sys-%: $(TESTS)/sys-%k.img
 	  $< tests/utils/expect-sys $(TESTS)/sys-$*k
 	scripts/smoke-test $(TESTS)/sys-$*k-b.img tests/utils/expect-boot $(TESTS)/sys-$*k-boot
 
+# The FDISK tests (tests/fdisk, issue #10). Each scenario boots the 1.44 MB
+# image, types commands at its prompt and reads the screen, with a new,
+# disposable hard disk image (scripts/disk-test). The expected screens and
+# disks are what Microsoft's FDISK does, written by make fdisk-expect from
+# the M1 reference build's FDISK.EXE (FDISK_REFERENCE) in place of the
+# image's, with the GR-DOS branding of the main menu's first line (message
+# 1001, the same length); the scenarios that start from another's disk (a
+# sectors line) are run after the others.
+DISK_TEST   := $(BUILD)/gr-dos-1440k.img scripts/disk-test scripts/disk-sectors scripts/partition-table
+FDISK_TESTS := $(sort $(patsubst tests/fdisk/%/script,%,$(wildcard tests/fdisk/*/script)))
+TEST_FDISK  := $(addprefix test-fdisk-,$(FDISK_TESTS))
+FDISK_REFERENCE ?= build/m1/SRC/CMD/FDISK/FDISK.EXE
+
+test-fdisk: $(TEST_FDISK)
+
+$(TEST_FDISK): test-fdisk-%: $(DISK_TEST)
+	scripts/disk-test $< tests/fdisk/$* $(TESTS)/fdisk-$*
+
+# The installation tests (tests/install): GR-DOS installed from the 1.44 MB
+# image on a blank hard disk of each size with FDISK, FORMAT and SYS, then
+# booted from it. Their expected partition tables are GR-DOS's own.
+INSTALL_TESTS := $(sort $(patsubst tests/install/%/script,%,$(wildcard tests/install/*/script)))
+TEST_INSTALL  := $(addprefix test-install-,$(INSTALL_TESTS))
+
+test-install: $(TEST_INSTALL)
+
+$(TEST_INSTALL): test-install-%: $(DISK_TEST)
+	scripts/disk-test $< tests/install/$* $(TESTS)/install-$*
+
+fdisk-expect: $(DISK_TEST) $(FDISK_REFERENCE)
+	for t in $$(grep -L '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))) \
+	         $$(grep -l '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))); do \
+	  t=$$(basename $$(dirname $$t)); \
+	  scripts/disk-test --update --fdisk $(FDISK_REFERENCE) $< tests/fdisk/$$t $(TESTS)/fdisk-reference-$$t \
+	    || exit 1; \
+	  sed -i 's/MS-DOS Version 4\.00/GR-DOS Version 4.00/' tests/fdisk/$$t/*.screen; \
+	done
+
 # Release assets (decision 17): the images, a reproducible ZIP of everything
 # else and SHA256SUMS of the images and the ZIP, in $(RELEASE). The ZIP's
 # unpacked tree is kept in $(DIST).
@@ -185,7 +240,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
 	  printf '\ntico16 (TICO.EXE)\n-----------------\n\n'; cat $(dir $(TICO))LICENSE; \
-	  printf '\n\nlibc16 (in ATTRIB.EXE and MEM.EXE)\n----------------------------------\n\n'; \
+	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE and FDISK.EXE)\n---------------------------------------------\n\n'; \
 	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	. ./$(TOOLS) && { \
@@ -210,7 +265,8 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all check check-tree test $(TEST_FORMATS) test-utils $(TEST_SYS) dist clean
+.PHONY: all check check-tree test $(TEST_FORMATS) test-utils $(TEST_SYS) test-fdisk $(TEST_FDISK) \
+	test-install $(TEST_INSTALL) fdisk-expect dist clean
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -233,13 +289,16 @@ $(BUILD)/tree.stamp: $(shell find v4.0/src -type f) $(PATCHES) scripts/prepare-d
 	touch $@
 
 # Message files (BUILDMSG/NOSRVBLD); the case aliases cover their references too.
-$(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/case-alias
+# FDISK's menus are C (MENUBLD), and FDISK5.CL1 the messages of its boot record.
+$(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/menubld scripts/case-alias
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/BOOT/BOOT.SKL
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/BIOS/MSBIO.SKL
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/DOS/MSDOS.SKL
 	scripts/buildmsg $(MSG) $(SRC)/CMD/COMMAND/COMMAND.SKL
 	for u in $(UTILITY_DIRS); do scripts/buildmsg $(MSG) $(SRC)/CMD/$$u/$$u.SKL || exit 1; done
 	cp $(SRC)/BOOT/BOOT.CL1 $(SRC)/CMD/FORMAT/
+	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/CMD/FDISK/FDISK5.SKL
+	scripts/menubld $(SRC)/CMD/FDISK/FDISK.MSG $(MSG) $(SRC)/CMD/FDISK/FDISKM.C
 	scripts/case-alias $(SRC) > /dev/null
 	touch $@
 
@@ -249,7 +308,10 @@ $(SRC)/%.OBJ: $(BUILD)/messages.stamp $(TOOLS)
 # FORMAT and SYS include the boot sector.
 $(SRC)/CMD/FORMAT/MSFOR.OBJ $(SRC)/CMD/SYS/SYS1.OBJ: $(SRC)/INC/BOOT.INC
 
-C_OBJS := $(SRC)/CMD/ATTRIB/ATTRIB.OBJ $(SRC)/CMD/MEM/MEM.OBJ
+# FDISK includes the master boot record.
+$(SRC)/CMD/FDISK/BOOTREC.OBJ: $(SRC)/CMD/FDISK/FDBOOT.INC
+
+C_OBJS := $(SRC)/CMD/ATTRIB/ATTRIB.OBJ $(SRC)/CMD/MEM/MEM.OBJ $(FDISK_C_OBJS)
 
 $(C_OBJS): %.OBJ: $(BUILD)/messages.stamp $(TOOLS) $(BUILD)/libc16.stamp
 	. ./$(TOOLS) && cd $(@D) && PATH=$$WATCOM/binl64:$$PATH \
@@ -260,11 +322,13 @@ $(SRC)/BIOS/MSLOAD.EXE:         $(MSLOAD_OBJS)
 $(SRC)/BIOS/MSBIO.EXE:          $(MSBIO_OBJS)
 $(SRC)/DOS/MSDOS.EXE:           $(MSDOS_OBJS)
 $(SRC)/CMD/COMMAND/COMMAND.EXE: $(COMMAND_OBJS)
-$(foreach u,$(filter-out ATTRIB MEM,$(UTILITY_DIRS)),$(eval $(SRC)/CMD/$(u)/$(u).EXE: $($(u)_OBJS)))
+$(foreach u,$(filter-out ATTRIB MEM FDISK,$(UTILITY_DIRS)),$(eval $(SRC)/CMD/$(u)/$(u).EXE: $($(u)_OBJS)))
+
+$(SRC)/CMD/FDISK/FDBOOT.EXE:    $(SRC)/CMD/FDISK/FDBOOT.OBJ
 
 EXES := $(addprefix $(SRC)/,BOOT/MSBOOT.EXE BIOS/MSLOAD.EXE BIOS/MSBIO.EXE DOS/MSDOS.EXE \
-	CMD/COMMAND/COMMAND.EXE) \
-	$(foreach u,$(filter-out ATTRIB MEM,$(UTILITY_DIRS)),$(SRC)/CMD/$(u)/$(u).EXE)
+	CMD/COMMAND/COMMAND.EXE CMD/FDISK/FDBOOT.EXE) \
+	$(foreach u,$(filter-out ATTRIB MEM FDISK,$(UTILITY_DIRS)),$(SRC)/CMD/$(u)/$(u).EXE)
 
 # The programs CONVERT makes into .COM files are linked as Microsoft LINK
 # writes them, and FIND as LINK /EXEPACK writes it.
@@ -295,10 +359,12 @@ $(BUILD)/libc16.stamp: $(LIBC16) scripts/fetch-watcom
 # is libc16's.
 $(SRC)/CMD/ATTRIB/ATTRIB.EXE: $(ATTRIB_OBJS)
 $(SRC)/CMD/MEM/MEM.EXE:       $(MEM_OBJS)
+$(SRC)/CMD/FDISK/FDISK.EXE:   $(FDISK_OBJS)
 
 # No default libraries: the map, X.MAP, must show only the objects and
 # LIBC16.LIB (scripts/check-runtime).
-$(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE: $(TOOLS) $(BUILD)/libc16.stamp scripts/check-runtime
+$(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE $(SRC)/CMD/FDISK/FDISK.EXE: $(TOOLS) $(BUILD)/libc16.stamp \
+	scripts/check-runtime
 	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos \
 	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
 	  name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) library $(LIBC16)
@@ -342,6 +408,16 @@ $(foreach u,$(CONVERTED),$(SRC)/CMD/$(u)/$(u).COM): %.COM: %.EXE scripts/convert
 # DBOF: the boot sector for FORMAT and SYS.
 $(SRC)/INC/BOOT.INC: $(SRC)/BOOT/MSBOOT.BIN scripts/dbof
 	scripts/dbof $< $@ 7c00 200
+
+# The master boot record for FDISK, at 0:0600 (FDBOOT.ASM's ORG).
+$(SRC)/CMD/FDISK/FDBOOT.BIN: $(SRC)/CMD/FDISK/FDBOOT.EXE $(SRC)/CMD/FDISK/FDBOOT.OBJ scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --size $(size) $< $@
+
+# BOOTREC includes it as fdboot.inc.
+$(SRC)/CMD/FDISK/FDBOOT.INC: $(SRC)/CMD/FDISK/FDBOOT.BIN scripts/dbof
+	scripts/dbof $< $@ 600 200
+	ln -sf FDBOOT.INC $(@D)/fdboot.inc
 
 # The bootable floppy images (decisions 5 and 12).
 CORE := $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM)

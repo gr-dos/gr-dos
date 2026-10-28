@@ -1,3 +1,10 @@
+#ifdef __WATCOMC__
+/* libc16's dos.h, before this directory on the include path: the same
+   structures and macros, and the functions __cdecl */
+#include <dos.h>
+/* Microsoft C kept ES equal to DS */
+#define segread(s) (segread(s), (s)->es = (s)->ds)
+#else
 /* dos.h
  *
  * Defines the structs and unions used to handle the input and output
@@ -78,4 +85,5 @@ int int86x(int, union REGS *, union REGS *, struct SREGS *);
 void segread(struct SREGS *);
 
 #endif	/* LINT_ARGS */
+#endif
 

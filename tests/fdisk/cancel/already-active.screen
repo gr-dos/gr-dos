@@ -1,0 +1,29 @@
+
+
+
+
+                              Set Active Partition
+
+    Current fixed disk drive: 1
+
+    Partition Status   Type    Size in Mbytes   Percentage of Disk Used
+     C: 1        A    PRI DOS          8         39%
+        2             EXT DOS         12         61%
+
+
+
+
+
+
+
+
+
+
+
+    The only startable partition on Drive 1 is already set active.
+
+    Press Esc to return to FDISK Options
+attr 04: 07x30 0Fx20 07x30
+attr 06: 07x30 0Fx1 07x49
+attr 22: 07x4 0Fx63 07x13
+attr 24: 07x10 0Fx3 07x67

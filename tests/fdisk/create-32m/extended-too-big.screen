@@ -1,0 +1,32 @@
+
+
+
+
+                           Create Extended DOS Partition
+
+    Current fixed disk drive: 1
+
+    Partition Status   Type    Size in Mbytes   Percentage of Disk Used
+     C: 1             PRI DOS         32         78%
+
+
+
+
+    Total disk space is   41 Mbytes (1 Mbyte = 1048576 bytes)
+    Maximum space available for partition is    9 Mbytes ( 22%)
+
+
+    Enter partition size in Mbytes or percent of disk space (%) to
+    create an Extended DOS Partition..............................: [ 50%]
+
+
+    Requested partition size exceeds the maximum available space.
+
+    Press Esc to return to FDISK Options
+attr 04: 07x27 0Fx29 07x24
+attr 06: 07x30 0Fx1 07x49
+attr 14: 07x24 0Fx4 07x52
+attr 15: 07x45 0Fx4 07x9 0Fx4 07x18
+attr 19: 07x68 0Fx6 07x6
+attr 22: 07x4 0Fx62 07x14
+attr 24: 07x10 0Fx3 07x67

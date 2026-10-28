@@ -1,0 +1,31 @@
+
+
+
+
+                          Delete Primary DOS Partition
+
+    Current fixed disk drive: 1
+
+    Partition Status   Type    Size in Mbytes   Percentage of Disk Used
+     C: 1        A    PRI DOS          8         39%
+        2             EXT DOS         12         61%
+
+
+
+    Total disk space is   20 Mbytes (1 Mbyte = 1048576 bytes)
+
+
+
+
+
+
+
+    Cannot delete Primary DOS Partition on drive 1
+    when an Extended DOS Partition exists.
+    Press Esc to return to FDISK Options
+attr 04: 07x26 0Fx28 07x26
+attr 06: 07x30 0Fx1 07x49
+attr 14: 07x24 0Fx4 07x52
+attr 22: 07x4 0Fx48 07x28
+attr 23: 07x4 0Fx38 07x38
+attr 24: 07x10 0Fx3 07x67

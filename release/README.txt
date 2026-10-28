@@ -15,7 +15,8 @@ separate downloads from the same release:
 
 All four are double sided, with 512-byte sectors, and hold the same files,
 the files in BIN below except MSBOOT.BIN, so any of them is a complete system
-disk for a machine with one or two floppy drives and no hard disk.
+disk for a machine with one or two floppy drives, and installs GR-DOS on a
+hard disk (see below).
 
 Contents
 --------
@@ -30,6 +31,7 @@ Contents
   BIN\SYS.COM      copies IO.SYS and MSDOS.SYS to a formatted disk
   BIN\CHKDSK.COM   checks a disk
   BIN\DISKCOPY.COM copies a whole disk to another of the same format
+  BIN\FDISK.EXE    creates and deletes hard disk partitions
   BIN\ATTRIB.EXE   shows or sets the read-only and archive attributes
   BIN\MORE.COM     shows its input a screen at a time
   BIN\FIND.EXE     finds lines with a string in files
@@ -43,9 +45,10 @@ Contents
   LOGS\make.log    the build log
   LOGS\test.log    the QEMU test log: each image booted, and the utilities
 
-The utilities are built from the MS-DOS 4.00 source. ATTRIB.EXE and MEM.EXE
-are compiled with Open Watcom C, where Microsoft's were compiled with
-Microsoft C 5.1, and linked with libc16, a C runtime for DOS programs. FIND.EXE is not EXEPACKed, as Microsoft's was: the EXEPACK
+The utilities are built from the MS-DOS 4.00 source. ATTRIB.EXE, MEM.EXE
+and FDISK.EXE are compiled with Open Watcom C, where Microsoft's were
+compiled with Microsoft C 5.1, and linked with libc16, a C runtime for DOS
+programs. FIND.EXE is not EXEPACKed, as Microsoft's was: the EXEPACK
 loader fails with "Packed file is corrupt" when it is loaded in the first
 64 KB of memory, as it is on GR-DOS. TICO.EXE is tico16's release v0.02,
 unchanged (https://github.com/tico-edit/tico16).
@@ -65,6 +68,23 @@ The DOS version reported to programs is 4.00. The boot sector loads IO.SYS
 and MSDOS.SYS only from the first two root directory entries, stored
 contiguously, so copy the images rather than these files to make a boot
 disk, or use FORMAT /S or SYS on GR-DOS.
+
+Installing on a hard disk
+-------------------------
+
+Boot from a GR-DOS floppy and run FDISK. Choose 1, Create DOS Partition,
+then 1, Create Primary DOS Partition, and answer Y to use the whole disk
+and make it active; FDISK then restarts the machine. Boot from the floppy
+again and run:
+
+  FORMAT C:
+  SYS C:
+  COPY COMMAND.COM C:\
+
+Remove the floppy and restart, and the machine boots GR-DOS from the hard
+disk. FDISK and FORMAT erase what is on the disk. Like MS-DOS 4.00, GR-DOS
+uses at most 1024 cylinders of a disk, as the BIOS reports them, and
+partitions of up to 2 GB; it has no FAT32.
 
 Writing a floppy disk
 ---------------------
@@ -116,7 +136,7 @@ Licenses
 GR-DOS's own work is MIT licensed. The MS-DOS 4.00 source it is built from
 keeps its own MIT license. MS-DOS is a trademark of Microsoft. GR-DOS is an
 independent project, not endorsed by Microsoft or IBM. TICO.EXE is tico16's,
-under its MIT license. ATTRIB.EXE and MEM.EXE are compiled with Open Watcom
-C, but contain no Open Watcom code: their C runtime is libc16
+under its MIT license. ATTRIB.EXE, MEM.EXE and FDISK.EXE are compiled with
+Open Watcom C, but contain no Open Watcom code: their C runtime is libc16
 (https://github.com/gr-dos/libc16), under its MIT license. The four MIT
 licenses follow.

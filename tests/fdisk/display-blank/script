@@ -1,0 +1,15 @@
+# A blank 20 MB disk (615 cylinders, 4 heads, 17 sectors): FDISK lists no
+# partitions, and leaves the disk as it was.
+disk 21411840 615/4/17
+unchanged
+wait A:\\>
+type FDISK
+key ret
+screen main
+key 4 ret
+screen display
+key esc
+screen menu
+key esc
+wait A:\\>
+quit

@@ -1,0 +1,426 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use Encode qw( decode );
+use File::Basename qw( dirname );
+use File::Copy qw( copy );
+use File::Temp qw( tempdir );
+use IO::Socket::UNIX;
+use Time::HiRes qw( sleep time );
+
+# ABSTRACT: Drive DOS on a disposable hard disk image through QEMU's screen and keyboard
+
+=head1 SYNOPSIS
+
+ scripts/disk-test [--update] [--fdisk FDISK.EXE] FLOPPY SCENARIO OUTDIR
+
+=head1 DESCRIPTION
+
+Runs the scenario F<SCENARIO/script> in headless C<qemu-system-i386>, with
+the floppy image C<FLOPPY> in drive A: (a snapshot: it is not changed) and
+a new, blank hard disk image, F<OUTDIR/hd.img>, as the first fixed disk.
+Programs are run by typing at the DOS prompt, and the screen is read from
+the text-mode video memory through QEMU's monitor.  This is how the FDISK
+tests (F<tests/fdisk>) work, as FDISK writes to the screen through the
+BIOS, not to standard output.
+
+Never give it a real disk: the hard disk is always a file it creates in
+C<OUTDIR>.
+
+=head2 The script
+
+One directive per line; blank lines and lines starting with C<#> are
+ignored.  These come first:
+
+=over 4
+
+=item C<disk SIZE [CYLS/HEADS/SECS [lba]]>
+
+the hard disk: a sparse image of C<SIZE> bytes (with a suffix C<K>, C<M>
+or C<G>), and the geometry the drive reports, which the BIOS gives DOS
+without translation, or, with C<lba>, translated as SeaBIOS does for
+disks of more than 1024 cylinders (more heads, at most 1024 cylinders).  Without a geometry, QEMU chooses one;
+
+=item C<sectors FILE>
+
+sectors to write to the disk before it is used (F<scripts/disk-sectors>
+C<load>), from C<FILE> in C<SCENARIO>; for example the C<expect.sectors>
+of an earlier scenario;
+
+=item C<expect table>, C<expect sectors>
+
+compare the disk, after QEMU has stopped, with F<SCENARIO/expect.table>
+(F<scripts/partition-table> C<--chs>, with the geometry of C<disk>) and
+F<SCENARIO/expect.sectors> (F<scripts/disk-sectors> C<dump --fdisk>: the
+boot records, and the tracks FDISK tested);
+
+=item C<unchanged>
+
+the disk must be the same at the end as at the start.
+
+=back
+
+Then the steps, in order:
+
+=over 4
+
+=item C<wait REGEX>
+
+waits, for up to 60 seconds, until the screen matches the Perl regular
+expression C<REGEX> (over the 25 lines, joined with newlines);
+
+=item C<key NAME...>
+
+presses the keys, by their QEMU C<sendkey> names (C<ret>, C<esc>, C<1>,
+C<shift-y>, ...);
+
+=item C<type TEXT>
+
+types the text C<TEXT> (letters, digits, space and C<:./\-%>);
+
+=item C<screen NAME>
+
+waits, for up to 60 seconds, until the screen is the one in
+F<SCENARIO/NAME.screen>: its 25 lines of text, without trailing blanks,
+then a line C<attr ROW: ...> for each row with any attribute other than
+07h, giving each run of attributes as C<AAxN>;
+
+=item C<eject>, C<reset>
+
+removes the floppy disk from drive A:, and resets the machine, which
+boots from drive A:, or from the hard disk if A: is empty;
+
+=item C<quit>
+
+stops QEMU.  The script must end with it.
+
+=back
+
+=head2 Options
+
+With C<--update>, C<screen> waits for the screen to stay the same for two
+seconds instead, and every expected file is written instead of compared:
+this is how they are made from Microsoft's FDISK, with C<--fdisk>
+F<build/m1/SRC/CMD/FDISK/FDISK.EXE>.  C<--fdisk> copies the given program
+over F<FDISK.EXE> on a copy of C<FLOPPY>.
+
+Each screen read is saved in F<OUTDIR> as F<NAME.screen>, and the disk as
+F<OUTDIR/table.txt>, F<OUTDIR/sectors.txt> (C<dump --fdisk>) and
+F<OUTDIR/all-sectors.txt> (C<dump>).  Exits non-zero at the first
+step that fails, or if the disk is not as expected.
+
+=cut
+
+my $root = dirname(dirname(__FILE__));
+my $step_timeout = 60;
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "unable to write $path: $!";
+  print $fh $data;
+  close $fh or die "unable to write $path: $!";
+}
+
+sub size_bytes ($size) {
+  my %unit = ( '' => 1, K => 1024, M => 1024**2, G => 1024**3 );
+  $size =~ /^(\d+)([KMG]?)\z/ or die "disk: bad size $size\n";
+  return $1 * $unit{$2};
+}
+
+# The scenario: [ header directives ], [ steps ].
+sub parse ($file) {
+  my(%head, @steps);
+  for my $line (split /\n/, slurp($file)) {
+    $line =~ s/\r//;
+    next if $line !~ /\S/ || $line =~ /^\s*#/;
+    my($cmd, $arg) = $line =~ /^(\S+)(?:\s+(.*))?\z/;
+    $arg //= '';
+    if($cmd eq 'disk') {
+      my($size, $chs, $lba) = split ' ', $arg;
+      die "$file: disk SIZE [C/H/S [lba]]\n" if defined $chs && $chs !~ m{^\d+/\d+/\d+\z}
+        or defined $lba && $lba ne 'lba';
+      $head{disk} = { size => size_bytes($size), chs => $chs, lba => defined $lba };
+    } elsif($cmd eq 'sectors') {
+      push $head{sectors}->@*, $arg;
+    } elsif($cmd eq 'expect') {
+      $arg =~ /^(table|sectors)\z/ or die "$file: expect table|sectors\n";
+      $head{expect}{$arg} = 1;
+    } elsif($cmd eq 'unchanged') {
+      $head{unchanged} = 1;
+    } elsif($cmd =~ /^(wait|key|type|screen|eject|reset|quit)\z/) {
+      push @steps, [$cmd, $arg];
+    } else {
+      die "$file: unknown directive $cmd\n";
+    }
+  }
+  die "$file: no disk\n" unless $head{disk};
+  my %screen;
+  $screen{$_->[1]}++ and die "$file: screen $_->[1] twice\n" for grep { $_->[0] eq 'screen' } @steps;
+  die "$file: the last step must be quit\n" unless @steps && $steps[-1][0] eq 'quit';
+  return (\%head, \@steps);
+}
+
+# QEMU's human monitor, on a Unix socket.
+package Monitor {
+  sub new ($class, $path) {
+    my $sock;
+    for(1 .. 100) {
+      $sock = IO::Socket::UNIX->new(Peer => $path) and last;
+      main::sleep(0.1);
+    }
+    die "no QEMU monitor at $path\n" unless $sock;
+    my $self = bless { sock => $sock }, $class;
+    $self->read_prompt;
+    return $self;
+  }
+
+  sub read_prompt ($self) {
+    my $out = '';
+    my $deadline = main::time() + 10;
+    while(main::time() < $deadline) {
+      my $n = sysread $self->{sock}, my $buf, 65536;
+      die "QEMU monitor closed\n" unless $n;
+      $out .= $buf;
+      return $out if $out =~ /\(qemu\) \z/;
+    }
+    die "no answer from the QEMU monitor\n";
+  }
+
+  sub cmd ($self, $command) {
+    syswrite $self->{sock}, "$command\n";
+    return $self->read_prompt;
+  }
+}
+
+# The 80x25 text screen, as text lines and attribute lines.
+sub screen ($mon) {
+  my $out = $mon->cmd('xp /2000hx 0xb8000');
+  my @cells;
+  for my $line (split /\r?\n/, $out) {
+    next unless $line =~ /^[0-9a-f]+:((?:\s+0x[0-9a-f]{4})+)\s*$/;
+    push @cells, map { hex } $1 =~ /0x([0-9a-f]{4})/g;
+  }
+  die "screen: read ", scalar @cells, " cells, not 2000\n" unless @cells == 2000;
+  my(@text, @attr);
+  for my $row (0 .. 24) {
+    my @row = @cells[$row * 80 .. $row * 80 + 79];
+    my $chars = join '', map { my $c = $_ & 0xFF; $c ? chr $c : ' ' } @row;
+    push @text, decode('cp437', $chars) =~ s/ +\z//r;
+    my @a = map { $_ >> 8 } @row;
+    next unless grep { $_ != 0x07 } @a;
+    my @runs;
+    for my $a (@a) {
+      if(@runs && $runs[-1][0] == $a) { $runs[-1][1]++ } else { push @runs, [$a, 1] }
+    }
+    push @attr, sprintf 'attr %02d: %s', $row, join ' ', map { sprintf '%02Xx%d', @$_ } @runs;
+  }
+  return join("\n", @text, @attr) . "\n";
+}
+
+my %char_key = (
+  ' ' => 'spc', ':' => 'shift-semicolon', '.' => 'dot', '/' => 'slash',
+  '\\' => 'backslash', '-' => 'minus', '%' => 'shift-5',
+);
+
+sub type_keys ($text) {
+  return map {
+    /[a-z0-9]/ ? $_ : /[A-Z]/ ? 'shift-' . lc : $char_key{$_} // die "type: cannot type '$_'\n"
+  } split //, $text;
+}
+
+sub run_steps ($mon, $steps, $scenario, $outdir, $update) {
+  for my $step (@$steps) {
+    my($cmd, $arg) = @$step;
+    say "disk-test: $cmd $arg";
+    if($cmd eq 'wait') {
+      my $re = qr/$arg/;
+      my $deadline = time + $step_timeout;
+      my $s;
+      while(time < $deadline) {
+        $s = screen($mon);
+        last if $s =~ $re;
+        sleep 0.25;
+      }
+      if($s !~ $re) {
+        spew("$outdir/timeout.screen", Encode::encode('UTF-8', $s));
+        say "disk-test: timed out waiting for $arg; the screen is in $outdir/timeout.screen";
+        return 0;
+      }
+    } elsif($cmd eq 'key' || $cmd eq 'type') {
+      for my $key ($cmd eq 'key' ? split(' ', $arg) : type_keys($arg)) {
+        my $out = $mon->cmd("sendkey $key");
+        die "sendkey $key: $out\n" if $out =~ /error|invalid|unknown/i;
+        sleep 0.1;
+      }
+    } elsif($cmd eq 'screen') {
+      my $expect_file = "$scenario/$arg.screen";
+      my $s;
+      if($update) {
+        my($last, $since) = ('', time);
+        my $deadline = time + $step_timeout;
+        while(time < $deadline) {
+          $s = screen($mon);
+          ($last, $since) = ($s, time) if $s ne $last;
+          last if time - $since >= 2;
+          sleep 0.25;
+        }
+        spew($expect_file, Encode::encode('UTF-8', $s));
+      } else {
+        my $want = decode('UTF-8', slurp($expect_file));
+        my $deadline = time + $step_timeout;
+        while(time < $deadline) {
+          $s = screen($mon);
+          last if $s eq $want;
+          sleep 0.25;
+        }
+        spew("$outdir/$arg.screen", Encode::encode('UTF-8', $s));
+        if($s ne $want) {
+          say "disk-test: the screen is not $expect_file:";
+          system 'diff', '-u', $expect_file, "$outdir/$arg.screen";
+          return 0;
+        }
+        spew("$outdir/$arg.screen", Encode::encode('UTF-8', $s));
+      }
+    } elsif($cmd eq 'eject') {
+      $mon->cmd('eject -f floppy0');
+    } elsif($cmd eq 'reset') {
+      $mon->cmd('system_reset');
+    } elsif($cmd eq 'quit') {
+      syswrite $mon->{sock}, "quit\n";
+    }
+  }
+  return 1;
+}
+
+sub check_file ($want, $got, $update) {
+  if($update) {
+    copy($got, $want) or die "unable to write $want: $!";
+    return 1;
+  }
+  return 1 if slurp($want) eq slurp($got);
+  say "disk-test: the disk is not as in $want:";
+  system 'diff', '-u', $want, $got;
+  return 0;
+}
+
+sub main (@args) {
+  my($update, $fdisk);
+  while(@args && $args[0] =~ /^--(update|fdisk)\z/) {
+    shift @args;
+    if($1 eq 'update') { $update = 1 } else { $fdisk = shift @args // die "--fdisk needs a file\n" }
+  }
+  die "usage: $0 [--update] [--fdisk FDISK.EXE] FLOPPY SCENARIO OUTDIR\n" unless @args == 3;
+  my($floppy, $scenario, $outdir) = @args;
+  my($head, $steps) = parse("$scenario/script");
+
+  system('rm', '-rf', $outdir) == 0 or die "unable to remove $outdir\n";
+  mkdir $outdir or die "unable to create $outdir: $!";
+
+  if(defined $fdisk) {
+    copy($floppy, "$outdir/floppy.img") or die "unable to copy $floppy: $!";
+    system('mcopy', '-o', '-i', "$outdir/floppy.img", $fdisk, '::FDISK.EXE') == 0
+      or die "mcopy $fdisk failed\n";
+    $floppy = "$outdir/floppy.img";
+  }
+
+  # The disposable hard disk.
+  my $hd = "$outdir/hd.img";
+  truncate_new($hd, $head->{disk}{size});
+  system("$root/scripts/disk-sectors", 'load', "$scenario/$_", $hd) == 0 or die "loading $_ failed\n"
+    for ($head->{sectors} // [])->@*;
+  my $before = $head->{unchanged} ? dump_sectors($hd) : undef;
+
+  my $disk = $head->{disk};
+  my $device = 'ide-hd,drive=hd0,bus=ide.0,unit=0';
+  if(defined $disk->{chs}) {
+    my($c, $h, $s) = split m{/}, $disk->{chs};
+    $device .= ",cyls=$c,heads=$h,secs=$s,bios-chs-trans=" . ($disk->{lba} ? 'lba' : 'none');
+  }
+
+  # A Unix socket's path is limited to about 100 bytes.
+  my $sock = tempdir('disk-test-XXXXXX', TMPDIR => 1, CLEANUP => 1) . '/monitor';
+  my @cmd = (
+    'qemu-system-i386',
+    -display => 'none',
+    -m       => 4,
+    -drive   => "file=$floppy,if=floppy,index=0,format=raw,snapshot=on",
+    -drive   => "file=$hd,if=none,id=hd0,format=raw",
+    -device  => $device,
+    -boot    => 'order=ac',
+    -serial  => 'none',
+    -monitor => "unix:$sock,server=on,wait=off",
+  );
+  my $pid = fork // die "fork: $!";
+  if($pid == 0) {
+    open STDOUT, '>', "$outdir/qemu.log" or die "unable to write $outdir/qemu.log: $!";
+    open STDERR, '>&', \*STDOUT or die "dup: $!";
+    exec @cmd or die "exec qemu-system-i386: $!";
+  }
+
+  my $ok = eval { run_steps(Monitor->new($sock), $steps, $scenario, $outdir, $update) };
+  my $err = $@;
+  # QEMU exits on quit; otherwise stop it.
+  for(1 .. 40) {
+    last if waitpid($pid, 1) == $pid;
+    sleep 0.25;
+  }
+  if(kill 0, $pid) {
+    kill 'TERM', $pid;
+    waitpid $pid, 0;
+  }
+  die $err if $err;
+
+  spew("$outdir/sectors.txt", dump_sectors('--fdisk', $hd));
+  spew("$outdir/all-sectors.txt", dump_sectors($hd));
+  system("$root/scripts/partition-table" . (defined $disk->{chs} ? ' --chs ' . bios_chs($disk) : '')
+    . " $hd > $outdir/table.txt");
+  if($ok && $head->{expect}{table}) {
+    $ok = check_file("$scenario/expect.table", "$outdir/table.txt", $update);
+  }
+  if($ok && $head->{expect}{sectors}) {
+    $ok = check_file("$scenario/expect.sectors", "$outdir/sectors.txt", $update);
+  }
+  if($ok && defined $before && dump_sectors($hd) ne $before) {
+    say 'disk-test: the disk was changed';
+    $ok = 0;
+  }
+  say $ok ? 'disk-test: passed' : 'disk-test: FAILED';
+  return $ok ? 0 : 1;
+}
+
+# The geometry the BIOS gives DOS: the drive's, or, translated, as
+# SeaBIOS's LBA translation does: 63 sectors, the heads from the total
+# (16, 32, 64, 128 or 255) and at most 1024 cylinders.
+sub bios_chs ($disk) {
+  my($c, $h, $s) = split m{/}, $disk->{chs};
+  return "$c/$h/$s" unless $disk->{lba};
+  my $total = $c * $h * $s;
+  return "1024/255/63" if $total > 63 * 255 * 1024;
+  my $tracks = int($total / 63);
+  my $n = int($tracks / 1024);
+  $h = $n > 128 ? 255 : $n > 64 ? 128 : $n > 32 ? 64 : $n > 16 ? 32 : 16;
+  $c = int($tracks / $h);
+  $c = 1024 if $c > 1024;
+  return "$c/$h/63";
+}
+
+sub truncate_new ($path, $size) {
+  unlink $path;
+  open my $fh, '>', $path or die "unable to create $path: $!";
+  truncate $fh, $size or die "unable to size $path: $!";
+  close $fh;
+}
+
+sub dump_sectors (@args) {
+  my $out = `"$root/scripts/disk-sectors" dump @args`;
+  die "disk-sectors dump failed\n" if $?;
+  return $out;
+}
+
+exit main(@ARGV);

@@ -1,5 +1,5 @@
 # The 1.44 MB smoke test image (scripts/smoke-test --expect): DIR reports
-# 1,100,000 to 1,199,999 bytes free (1,153,024 with the utilities of issue
-# #4), which a 1.2 MB disk cannot hold.
+# 1,100,000 to 1,199,999 bytes free (1,124,864 with the utilities of issue
+# #4 and FDISK), which a 1.2 MB disk cannot hold.
 
-^ +14 File\(s\) +11\d{5} bytes free$
+^ +15 File\(s\) +11\d{5} bytes free$

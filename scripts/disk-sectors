@@ -1,0 +1,120 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Write the non-zero sectors of a disk image as text, or back
+
+=head1 SYNOPSIS
+
+ scripts/disk-sectors dump [--fdisk] IMAGE > SECTORS.txt
+ scripts/disk-sectors load SECTORS.txt IMAGE
+
+=head1 DESCRIPTION
+
+C<dump> writes every sector of the raw image C<IMAGE> that is not all
+zero, in order, as a line C<sector N> followed by 16 lines of 32 bytes in
+hexadecimal.  The FDISK tests (F<tests/fdisk>) compare a disk with what
+Microsoft's FDISK left on the same disk in this form, exactly.
+
+With C<--fdisk>, only the boot records are written (the master boot
+record, and the extended boot records in the chain of an extended
+partition, type 05h), and the sectors that are all F6h.  FDISK's
+C<verify_tracks> tests the first tracks of a new partition by writing a
+whole track from its 512-byte C<boot_record> buffer, filled with F6h: the
+first sector of each track is F6h, and the rest is whatever data follows
+the buffer in FDISK's data segment, which is not the same in two builds.
+
+C<load> writes the sectors of such a file into C<IMAGE>, which must exist
+and be large enough; other sectors are not changed.  Lines starting with
+C<#> are comments.
+
+=cut
+
+# The sector numbers of the master and extended boot records.
+sub boot_records ($fh) {
+  my $sector = sub ($lba) {
+    sysseek $fh, $lba * 512, 0 or die "seek: $!";
+    (sysread($fh, my $buf, 512) // 0) == 512 or return undef;
+    return $buf;
+  };
+  my $entries = sub ($buf) {
+    map { [unpack 'x4 C x3 V', substr $buf, 446 + 16 * $_, 16] } 0 .. 3;
+  };
+  my %lbas = ( 0 => 1 );
+  my $mbr = $sector->(0) // return \%lbas;
+  my($ext) = map { $_->[1] } grep { $_->[0] == 0x05 } $entries->($mbr);
+  my $at = $ext;
+  while(defined $at && !$lbas{$at}++) {
+    my $ebr = $sector->($at) // last;
+    my($next) = map { $_->[1] } grep { $_->[0] == 0x05 } $entries->($ebr);
+    $at = defined $next ? $ext + $next : undef;
+  }
+  return \%lbas;
+}
+
+sub dump_image ($image, $fdisk = 0) {
+  open my $fh, '<:raw', $image or die "unable to read $image: $!";
+  my $records = $fdisk ? boot_records($fh) : undef;
+  sysseek $fh, 0, 0 or die "seek: $!";
+  my $zero = "\0" x 512;
+  my $fill = "\xF6" x 512;
+  my $lba = 0;
+  # Sparse images are mostly zero: read in large blocks and skip zero ones.
+  while((my $n = sysread $fh, my $block, 512 * 2048) > 0) {
+    my $sectors = int($n / 512);
+    if($block !~ /[^\0]/) {
+      $lba += $sectors;
+      next;
+    }
+    for my $i (0 .. $sectors - 1) {
+      my $sector = substr $block, $i * 512, 512;
+      next if $records && !$records->{$lba + $i} && $sector ne $fill;
+      if($sector ne $zero) {
+        say "sector ", $lba + $i;
+        say unpack 'H64', substr $sector, $_ * 32, 32 for 0 .. 15;
+      }
+    }
+    $lba += $sectors;
+  }
+  return 0;
+}
+
+sub load ($file, $image) {
+  open my $in, '<', $file or die "unable to read $file: $!";
+  my %sectors;
+  my $lba;
+  while(my $line = <$in>) {
+    chomp $line;
+    next if $line =~ /^#/ || $line !~ /\S/;
+    if($line =~ /^sector (\d+)\z/) {
+      $lba = $1;
+      die "$file: sector $lba twice\n" if exists $sectors{$lba};
+      $sectors{$lba} = '';
+    } elsif(defined $lba && $line =~ /^[0-9a-f]{64}\z/) {
+      $sectors{$lba} .= pack 'H64', $line;
+    } else {
+      die "$file: line $.: not a sector or 32 bytes of hexadecimal\n";
+    }
+  }
+  my $size = -s $image // die "$image does not exist\n";
+  open my $fh, '+<:raw', $image or die "unable to write $image: $!";
+  for my $lba (sort { $a <=> $b } keys %sectors) {
+    die "$file: sector $lba is not 512 bytes\n" unless length $sectors{$lba} == 512;
+    die "$image: too small for sector $lba\n" if ($lba + 1) * 512 > $size;
+    sysseek $fh, $lba * 512, 0 or die "seek: $!";
+    syswrite $fh, $sectors{$lba} or die "unable to write $image: $!";
+  }
+  close $fh or die "unable to write $image: $!";
+  return 0;
+}
+
+sub main (@args) {
+  my $cmd = shift @args // '';
+  return dump_image(@args) if $cmd eq 'dump' && @args == 1;
+  return dump_image($args[1], 1) if $cmd eq 'dump' && @args == 2 && $args[0] eq '--fdisk';
+  return load(@args) if $cmd eq 'load' && @args == 2;
+  die "usage: $0 dump [--fdisk] IMAGE\n       $0 load SECTORS.txt IMAGE\n";
+}
+
+exit main(@ARGV);

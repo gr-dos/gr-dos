@@ -64,7 +64,11 @@
 #include <string.h>                                                     /* AN000 */
 #include <fdiskmsg.h>                                                   /* AN000 */
 #include <msgret.h>                                                     /* AN000 */
+#ifdef __WATCOMC__  /* libc16 declares exit() in stdlib.h */
+#include <stdlib.h>
+#else
 #include <process.h>                                                    /* AN000 */
+#endif
 #include <stdio.h>                                                      /* AN000 */
 
 /*  */
@@ -650,7 +654,11 @@ BEGIN
     temp = volume_display();
 
     /* Set up partition size message */
+#ifdef __WATCOMC__
+    fdisk_number(insert,(int)(get_partition_size( uc(EXTENDED) )),u(4),"");
+#else
     sprintf(insert,"%4.0d",get_partition_size( uc(EXTENDED) ) );
+#endif
     display(menu_21);
 
     /* print ESC prompt */

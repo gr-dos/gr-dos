@@ -1,0 +1,29 @@
+
+
+
+
+                          Display Partition Information
+
+    Current fixed disk drive: 1
+
+    Partition Status   Type    Size in Mbytes   Percentage of Disk Used
+     C: 1        A    PRI DOS        127        100%
+
+
+
+
+    Total disk space is  127 Mbytes (1 Mbyte = 1048576 bytes)
+
+
+
+
+
+
+
+
+
+    Press Esc to return to FDISK Options
+attr 04: 07x26 0Fx29 07x25
+attr 06: 07x30 0Fx1 07x49
+attr 14: 07x24 0Fx4 07x52
+attr 24: 07x10 0Fx3 07x67

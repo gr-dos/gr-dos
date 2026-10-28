@@ -6,7 +6,9 @@
 #include "fdiskmsg.h"                                                   /* AN000 */
 #include "string.h"
 #include "stdio.h"
+#ifndef __WATCOMC__  /* libc16 declares memset() in string.h */
 #include "memory.h"
+#endif
 
 /*  */
 char volume_display()
@@ -115,6 +117,19 @@ unsigned    insert_offset;
                         ext_table[cur_disk][sort[i]].drive_letter = c(' ');
                    else ext_table[cur_disk][sort[i]].drive_letter = drive_letter;
 
+#ifdef __WATCOMC__  /* the sprintf below */
+                insert[insert_offset++] = ext_table[cur_disk][sort[i]].drive_letter;
+                insert[insert_offset++] =
+                        ( ext_table[cur_disk][sort[i]].drive_letter == c(' ') ) ? ' ' : ':';
+                insert_offset += fdisk_text(&insert[insert_offset],
+                        ext_table[cur_disk][sort[i]].vol_label,u(11));
+                insert_offset += fdisk_number(&insert[insert_offset],
+                        (int)ext_table[cur_disk][sort[i]].mbytes_used,u(4),"");
+                insert_offset += fdisk_text(&insert[insert_offset],
+                        ext_table[cur_disk][sort[i]].system,u(8));
+                insert_offset += fdisk_number(&insert[insert_offset],
+                        (int)ext_table[cur_disk][sort[i]].percent_used,u(3),"%");
+#else
                 insert_offset += sprintf(&insert[insert_offset],"%c%c%-11.11s%4.0d%-8.8s%3.0d%%",
                         ext_table[cur_disk][sort[i]].drive_letter,
                         ( ext_table[cur_disk][sort[i]].drive_letter == c(' ') ) ? ' ' : ':',
@@ -122,6 +137,7 @@ unsigned    insert_offset;
                         ext_table[cur_disk][sort[i]].mbytes_used,
                         ext_table[cur_disk][sort[i]].system,
                         ext_table[cur_disk][sort[i]].percent_used );
+#endif
 
 
                 drive_letter++;

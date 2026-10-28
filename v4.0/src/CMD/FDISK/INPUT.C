@@ -325,7 +325,11 @@ unsigned long  very_big_input;
 
                     /* Indicate that we are not using the default */
                     default_used = FALSE;
+#ifdef __WATCOMC__
+                    fdisk_number(&insert[prompt_location],(int)large_input,u(4),"");
+#else
                     sprintf(&insert[prompt_location],"%4.0d",large_input);  /* AN000 */
+#endif
                     display(input_message);
                     break;
 
@@ -337,7 +341,11 @@ unsigned long  very_big_input;
                         /* Round down if > 999.9 */
                         if (large_input > u(999))                       /* AN000 */
                             large_input = (large_input%1000);           /* AN000 */
+#ifdef __WATCOMC__
+                        fdisk_number(&insert[prompt_location],(int)large_input,u(3),"%");
+#else
                         sprintf(&insert[prompt_location],"%3.0d%%",large_input);  /* AN000 */
+#endif
                         /* Indicate that we are not using the default */
                         default_used = FALSE;                           /* AN000 */
                         display(input_message);                         /* AN000 */

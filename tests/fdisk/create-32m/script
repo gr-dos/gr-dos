@@ -1,0 +1,53 @@
+# A blank 40 MB disk (820 cylinders, 6 heads, 17 sectors): a Primary DOS
+# Partition of 32 MB, which FDISK keeps within 65,535 sectors, the most DOS
+# 3.3 can use, and an Extended DOS Partition of half the disk, given as a
+# percentage, which is more than is left and is refused, then of 20%,
+# with a logical drive of all of it.
+disk 42823680 820/6/17
+expect table
+expect sectors
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 1 ret
+wait Enter choice
+key 1 ret
+wait make the partition active
+key n ret
+wait Enter partition size
+type 32
+key ret
+screen primary-32m
+key esc
+wait Enter choice
+key 1 ret
+wait Enter choice
+key 2 ret
+wait Enter partition size
+type 50%
+screen extended-percent
+key ret
+wait exceeds the maximum
+screen extended-too-big
+key esc
+wait Enter choice
+key 1 ret
+wait Enter choice
+key 2 ret
+wait Enter partition size
+type 20%
+key ret
+wait Extended DOS Partition created
+screen extended-created
+key esc
+wait Enter logical drive size
+key ret
+screen logical-created
+key esc
+wait Enter choice
+key esc
+wait Press any key
+key spc
+wait A:\\>
+quit

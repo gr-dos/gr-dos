@@ -1,0 +1,48 @@
+# Install GR-DOS on a blank 20 MB disk (615 cylinders, 4 heads, 17
+# sectors) from the 1.44 MB release image: FDISK makes a Primary DOS
+# Partition of all of it, active, and restarts the machine; FORMAT C: and
+# SYS C: make it a system disk, and COMMAND.COM is copied to it. With the
+# floppy ejected, the machine boots from the hard disk. FORMAT gives the
+# partition of fewer than 65,536 sectors type 04h.
+disk 21411840 615/4/17
+expect table
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 1 ret
+wait Enter choice
+key 1 ret
+wait make the partition active
+key ret
+wait System will now restart
+key spc
+wait A:\\>
+type FORMAT C:
+key ret
+wait Proceed with Format \(Y/N\)\?
+key y ret
+wait Volume label \(11 characters, ENTER for none\)\?
+type GRDOS
+key ret
+wait 21309440 bytes total disk space\n +21309440 bytes available on disk\n\n +2048 bytes in each allocation unit(?s:.*)A:\\>
+type SYS C:
+key ret
+wait System transferred(?s:.*)A:\\>
+type COPY COMMAND.COM C:\
+key ret
+wait 1 File\(s\) copied(?s:.*)A:\\>
+eject
+reset
+wait Enter new date
+key ret
+wait Enter new time
+key ret
+wait \nC>
+type VER
+key ret
+wait GR-DOS Version 4\.00\n+C>
+type DIR
+key ret
+wait Volume in drive C is GRDOS(?s:.*)COMMAND +COM +\d+(?s:.*)1 File\(s\) +\d+ bytes free\n+C>
+quit

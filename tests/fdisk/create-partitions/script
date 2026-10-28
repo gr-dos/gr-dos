@@ -1,0 +1,45 @@
+# A blank 20 MB disk: a Primary DOS Partition of 8 MB, an Extended DOS
+# Partition of the rest, logical drives of 5 MB and of the rest of it, and
+# the primary partition made active.
+disk 21411840 615/4/17
+expect table
+expect sectors
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 1 ret
+wait Create Primary DOS Partition
+key 1 ret
+screen primary-max
+key n ret
+screen primary-size
+key 8 ret
+screen primary-created
+key esc
+screen no-active
+key 1 ret
+wait Create Extended
+key 2 ret
+screen extended-size
+key ret
+screen extended-created
+key esc
+screen logical-size
+key 5 ret
+screen logical-created
+key ret
+screen logical-all
+key esc
+wait Enter choice
+key 2 ret
+screen set-active
+key 1 ret
+screen made-active
+key esc
+screen menu
+key esc
+screen restart
+key spc
+wait A:\\>
+quit

@@ -27,7 +27,8 @@ _data   segment public
         cld
         mov di,0600h    ;where to relocate this boot record to
         mov cx,100h
-        repnz movsw     ;relocate to 0:0600
+        db   0F2h       ; REPNZ (JWasm rejects it before MOVSW)
+        movsw           ;relocate to 0:0600
 ;       jmp entry2
         db   0eah
         dw   $+4,0

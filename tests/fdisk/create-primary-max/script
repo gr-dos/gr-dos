@@ -1,0 +1,18 @@
+# A blank 20 MB disk: a Primary DOS Partition of all the disk, made active,
+# with the first question's default. FDISK then restarts the machine.
+disk 21411840 615/4/17
+expect table
+expect sectors
+wait A:\\>
+type FDISK
+key ret
+screen main
+key 1 ret
+screen create
+key 1 ret
+screen create-primary
+key ret
+screen restart
+key spc
+wait A:\\>
+quit

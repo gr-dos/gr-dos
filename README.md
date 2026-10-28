@@ -5,12 +5,14 @@ the MIT license. It is built on Linux with open tools, booted in QEMU, and
 tested in GitHub Actions.
 
 Today the build produces the boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM and
-ten utilities (FORMAT, SYS, CHKDSK, DISKCOPY, ATTRIB, MORE, FIND, DEBUG, MEM
-and MODE), and bootable 1.44 MB, 1.2 MB, 720 KB and 360 KB floppy images,
-which all hold the same files, with the tico16 editor. Apart from the GR-DOS
-branding of the banner and `VER` (`patches/branding`), the binaries of the
-assembly sources are byte-identical to the original MASM/LINK build; ATTRIB
-and MEM, which are C, are built with Open Watcom C and GR-DOS's own C
+eleven utilities (FORMAT, SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND,
+DEBUG, MEM and MODE), and bootable 1.44 MB, 1.2 MB, 720 KB and 360 KB floppy
+images, which all hold the same files, with the tico16 editor. With FDISK,
+FORMAT and SYS, GR-DOS installs on a hard disk and boots from it
+([`docs/fdisk.md`](docs/fdisk.md)). Apart from the GR-DOS branding of the
+banner, `VER` and FDISK's menu (`patches/branding`), the binaries of the
+assembly sources are byte-identical to the original MASM/LINK build; ATTRIB,
+MEM and FDISK, which are C, are built with Open Watcom C and GR-DOS's own C
 runtime ([`docs/m4-utilities.md`](docs/m4-utilities.md)). See
 [`docs/00-mvp.md`](docs/00-mvp.md) for the plan and its status.
 
@@ -33,10 +35,10 @@ make dist     # package the release assets in build/linux/release
 
 | Format | Image | Bytes | Geometry | Free |
 |---|---|---:|---|---:|
-| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 1,159,168 |
-| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 915,456 |
-| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 425,984 |
-| 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 58,368 |
+| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 1,125,376 |
+| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 881,664 |
+| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 392,192 |
+| 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 24,576 |
 
 `make` builds all four, with the same files in each, in this order:
 
@@ -44,7 +46,7 @@ make dist     # package the release assets in build/linux/release
 |---|---|
 | `IO.SYS`, `MSDOS.SYS` | the DOS BIOS and kernel (hidden, system, read-only) |
 | `COMMAND.COM` | the command interpreter |
-| `FORMAT.COM`, `SYS.COM`, `CHKDSK.COM`, `DISKCOPY.COM` | disk utilities |
+| `FORMAT.COM`, `SYS.COM`, `CHKDSK.COM`, `DISKCOPY.COM`, `FDISK.EXE` | disk utilities |
 | `ATTRIB.EXE`, `MORE.COM`, `FIND.EXE`, `DEBUG.COM`, `MEM.EXE`, `MODE.COM` | other utilities |
 | `TICO.EXE` | the tico16 text editor, v0.02 (instead of EDLIN) |
 | `AUTOEXEC.BAT` | `PROMPT $P$G` and `PATH A:\` |
@@ -81,7 +83,10 @@ The images are reproducible: file times and the volume serial number come
 from `SOURCE_DATE_EPOCH`, by default the time of the last commit. `make test`
 boots each one (`make test-1440`, `test-1200`, `test-720` or `test-360` for
 one) and tests the utilities (`make test-utils`, `make test-sys-1440` and so
-on), FORMAT, SYS and DISKCOPY on blank, disposable images in drive B:.
+on), FORMAT, SYS and DISKCOPY on blank, disposable images in drive B:. It
+also runs FDISK on disposable hard disk images against Microsoft's build of
+it (`make test-fdisk`), and installs GR-DOS on a blank hard disk and boots
+it (`make test-install`).
 
 ## Releases
 
@@ -107,8 +112,8 @@ gr-dos-VERSION/
 │   ├── MSDOS.SYS
 │   ├── COMMAND.COM
 │   ├── MSBOOT.BIN
-│   ├── FORMAT.COM, SYS.COM, CHKDSK.COM, DISKCOPY.COM, ATTRIB.EXE,
-│   │   MORE.COM, FIND.EXE, DEBUG.COM, MEM.EXE, MODE.COM
+│   ├── FORMAT.COM, SYS.COM, CHKDSK.COM, DISKCOPY.COM, FDISK.EXE,
+│   │   ATTRIB.EXE, MORE.COM, FIND.EXE, DEBUG.COM, MEM.EXE, MODE.COM
 │   ├── TICO.EXE
 │   └── AUTOEXEC.BAT
 ├── BUILDINFO         the commit and tool versions
@@ -149,6 +154,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   86Box check on an 8088 and a V20.
 - [`docs/m4-utilities.md`](docs/m4-utilities.md): the utilities, TICO.EXE,
   the four images and the utility tests.
+- [`docs/fdisk.md`](docs/fdisk.md): FDISK, its tests against Microsoft's
+  build, and installing on a hard disk.
 
 ## License
 
@@ -156,7 +163,7 @@ GR-DOS's own scripts, patches and documentation are MIT, see
 [`LICENSE`](LICENSE). The MS-DOS 4.00 source in `v4.0` keeps its own MIT
 license, [`v4.0/LICENSE`](v4.0/LICENSE). TICO.EXE is
 [tico16](https://github.com/tico-edit/tico16)'s, under its MIT license.
-ATTRIB.EXE and MEM.EXE are compiled with Open Watcom C but linked with
+ATTRIB.EXE, MEM.EXE and FDISK.EXE are compiled with Open Watcom C but linked with
 [libc16](https://github.com/gr-dos/libc16), an MIT C runtime, and contain
 no Open Watcom code ([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes
 these notices. MS-DOS is a trademark of

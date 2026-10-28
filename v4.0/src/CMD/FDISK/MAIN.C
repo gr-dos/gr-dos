@@ -59,11 +59,17 @@
 #include <doscall.h>                                                    /* AN000 */
 #include <ctype.h>                                                      /* AN000 */
 #include <extern.h>                                                     /* AN000 */
+#ifndef __WATCOMC__  /* libc16 has no signal() */
 #include <signal.h>                                                     /* AN000 */
+#endif
 #include <string.h>                                                     /* AN000 */
 #include <fdiskmsg.h>                                                   /* AN000 */
 #include <msgret.h>                                                     /* AN000 */
+#ifdef __WATCOMC__  /* libc16 declares exit() in stdlib.h */
+#include <stdlib.h>
+#else
 #include <process.h>                                                    /* AN001 */
+#endif
 #include <stdio.h>                                                      /* AN000 */
 
 /*  */
@@ -151,10 +157,21 @@
 /*                                                                        */
 /**************************************************************************/
 /*  */
+#ifdef __WATCOMC__
+/* signal(SIGINT, SIG_IGN) as Microsoft C 5.1 did it: an INT 23h handler that
+   returns, so DOS carries on after Ctrl-C. DOS restores INT 23h at exit. */
+static void __interrupt __far ignore_ctrl_c(void)
+{
+}
+
+/* argc and argv are unused: parse_command_line reads the PSP */
+void main(void)
+#else
 void main(argc,argv)                                                    /* AC000 */
 
 int     argc;                                                           /* AN000 */
 char    *argv[];                                                        /* AN000 */
+#endif
 
 BEGIN
 
@@ -163,7 +180,11 @@ BEGIN
 
     /* DISABLE CNTL-BREAK HERE */
     /* Gets defines from signal.h */
+#ifdef __WATCOMC__
+    _dos_setvect(0x23, ignore_ctrl_c);
+#else
     signal( (int) SIGINT, SIG_IGN );                                    /* AN000 */
+#endif
 
     no_fatal_error = TRUE;                                              /* AN000 */
 
@@ -173,7 +194,11 @@ BEGIN
     BEGIN                                                               /* AN000 */
 
         /* Parse the command line for syntax and switches */
+#ifdef __WATCOMC__
+        if(parse_command_line(0,(char **)0))
+#else
         if(parse_command_line(argc,argv))                               /* AN000 */
+#endif
 
         BEGIN                                                           /* AN000 */
         /* check to see if switches were set */

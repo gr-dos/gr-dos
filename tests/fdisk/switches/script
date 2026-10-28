@@ -1,0 +1,27 @@
+# A blank 20 MB disk, partitioned from the command line: a Primary DOS
+# Partition of 8 MB (made active), an Extended DOS Partition of 12 MB and
+# a logical drive of 5 MB, and /Q not to restart. Then FDISK's errors for
+# a switch, a drive number and a command line it does not take. CLS first,
+# so that the screen has none of the BIOS's messages.
+disk 21411840 615/4/17
+expect table
+expect sectors
+wait A:\\>
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type FDISK 1 /PRI:8 /EXT:12 /LOG:5 /Q
+key ret
+wait A:\\>FDISK.*\n+A:\\>
+type IF ERRORLEVEL 1 ECHO LEVEL1
+key ret
+type IF NOT ERRORLEVEL 1 ECHO LEVEL0
+key ret
+type FDISK /X
+key ret
+type FDISK 3 /PRI:5
+key ret
+type FDISK /PRI:5
+key ret
+screen dos
+quit

@@ -1,0 +1,32 @@
+
+
+
+
+                           Create Primary DOS Partition
+
+    Current fixed disk drive: 1
+
+
+
+
+
+
+
+    Total disk space is   20 Mbytes (1 Mbyte = 1048576 bytes)
+    Maximum space available for partition is   20 Mbytes (100%)
+
+
+    Enter partition size in Mbytes or percent of disk space (%) to
+    create a Primary DOS Partition.................................: [  20]
+
+    No partitions defined
+
+
+    Press Esc to return to FDISK Options
+attr 04: 07x27 0Fx28 07x25
+attr 06: 07x30 0Fx1 07x49
+attr 14: 07x24 0Fx4 07x52
+attr 15: 07x45 0Fx4 07x9 0Fx4 07x18
+attr 19: 07x69 0Fx6 07x5
+attr 21: 07x4 0Fx22 07x54
+attr 24: 07x10 0Fx3 07x67

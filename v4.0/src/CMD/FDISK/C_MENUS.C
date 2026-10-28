@@ -464,7 +464,11 @@ BEGIN
     /* Display partition table-it will return if no partitions there */
     table_display();
 
+#ifdef __WATCOMC__
+    fdisk_number(insert,(int)(total_mbytes[cur_disk]),u(4),"");
+#else
     sprintf(insert,"%4.0d",total_mbytes[cur_disk]);
+#endif
     display(menu_15);
 
     /* Get the free space */
@@ -475,14 +479,23 @@ BEGIN
 
         BEGIN
         /* Display disk space */
+#ifdef __WATCOMC__
+        fdisk_number(insert,(int)(total_mbytes[cur_disk]),u(4),"");
+#else
         sprintf(insert,"%4.0d",total_mbytes[cur_disk]);
+#endif
         display(menu_15);
 
         /* Setup and print max partition size */
 
+#ifdef __WATCOMC__
+        fdisk_number(&insert[fdisk_number(insert,(int)free_space[temp].mbytes_unused,u(4),"")],
+                     (int)free_space[temp].percent_unused,u(3),"%");
+#else
         sprintf(insert,"%4.0d%3.0d%%",
                 free_space[temp].mbytes_unused,
                 free_space[temp].percent_unused);
+#endif
         display(menu_16);
 
         /* Force repeats on the input until something valid (Non-Zero return) */
@@ -493,7 +506,11 @@ BEGIN
 
             BEGIN
             /* Display prompt */
+#ifdef __WATCOMC__
+            fdisk_number(insert,(int)(default_entry),u(4),"");
+#else
             sprintf(insert,"%4.0d",default_entry);
+#endif
             display(menu_39);
 
             input = get_large_num_input(default_entry,free_space[temp].mbytes_unused,free_space[temp].percent_unused,menu_39,u(0),error_13);       /* AC000 */
@@ -681,14 +698,23 @@ BEGIN
                 BEGIN
 
                 /* Display disk space */
+#ifdef __WATCOMC__
+                fdisk_number(insert,(int)(total_mbytes[cur_disk]),u(4),"");
+#else
                 sprintf(insert,"%4.0d",total_mbytes[cur_disk]);
+#endif
                 display(menu_15);
 
                 /* Setup and print max partition size */
 
+#ifdef __WATCOMC__
+                fdisk_number(&insert[fdisk_number(insert,(int)free_space[temp].mbytes_unused,u(4),"")],
+                             (int)free_space[temp].percent_unused,u(3),"%");
+#else
                 sprintf(insert,"%4.0d%3.0d%%",
                         free_space[temp].mbytes_unused,
                         free_space[temp].percent_unused);
+#endif
                 display(menu_16);
 
                 /* Force repeats on the input until something valid (Non-Zero return) */
@@ -710,9 +736,17 @@ BEGIN
                     BEGIN
                     /* Display prompt */
                     if (!PercentFlag)                                   /* AN000 */
+#ifdef __WATCOMC__
+                        fdisk_number(insert,(int)(default_entry),u(4),"");
+#else
                         sprintf(insert,"%4.0d",default_entry);
+#endif
                     else                                                /* AN000 */
+#ifdef __WATCOMC__
+                        fdisk_number(insert,(int)(default_entry),u(3),"%");
+#else
                         sprintf(insert,"%3.0d%%",default_entry);        /* AN000 */
+#endif
                     display(menu_42);                                   /* AC000 */
 
                     input = get_large_num_input(default_entry,free_space[temp].mbytes_unused,free_space[temp].percent_unused,menu_42,u(0),error_13);   /*  AC000 */
@@ -957,14 +991,23 @@ BEGIN
                 BEGIN
 
                 /* Display disk space */
+#ifdef __WATCOMC__
+                fdisk_number(insert,(int)(get_partition_size(uc(EXTENDED))),u(4),"");
+#else
                 sprintf(insert,"%4.0d",get_partition_size(uc(EXTENDED)) );
+#endif
                 display(menu_21);
 
                 /* Setup and print max partition size */
 
+#ifdef __WATCOMC__
+                fdisk_number(&insert[fdisk_number(insert,(int)free_space[location].mbytes_unused,u(4),"")],
+                             (int)ext_part_percent_unused,u(3),"%");
+#else
                 sprintf(insert,"%4.0d%3.0d%%",
                         free_space[location].mbytes_unused,
                         ext_part_percent_unused);
+#endif
                 display(menu_22);
 
                 /* Force repeats on the input until something valid (Non-Zero return) */
@@ -986,9 +1029,17 @@ BEGIN
                     BEGIN
                     /* Display prompt */
                     if (!PercentFlag)                                   /* AN000 */
+#ifdef __WATCOMC__
+                        fdisk_number(insert,(int)(default_entry),u(4),"");
+#else
                         sprintf(insert,"%4.0d",default_entry);
+#endif
                     else                                                /* AN000 */
+#ifdef __WATCOMC__
+                        fdisk_number(insert,(int)(default_entry),u(3),"%");
+#else
                         sprintf(insert,"%3.0d%%",default_entry);        /* AN000 */
+#endif
 
                     display(menu_40);
 

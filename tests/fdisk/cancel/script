@@ -1,0 +1,65 @@
+# The disk of create-partitions: every way of not changing it. FDISK
+# refuses a choice not on the menu, to delete the primary partition while
+# there is an extended one, or the extended partition while it has logical
+# drives, and to create a second primary or extended partition, or a
+# logical drive with no space left; the default answer to "Are you sure"
+# before deleting a logical drive is No. FDISK then exits without
+# restarting, and the disk is as it was.
+disk 21411840 615/4/17
+sectors ../create-partitions/expect.sectors
+unchanged
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 9 ret
+screen bad-choice
+key 3 ret
+wait Enter choice
+key 1 ret
+screen primary-refused
+key esc
+wait Enter choice
+key 3 ret
+wait Enter choice
+key 2 ret
+screen extended-refused
+key esc
+wait Enter choice
+key 3 ret
+wait Enter choice
+key 3 ret
+wait What drive
+key shift-e ret
+wait Volume Label
+key ret
+wait Are you sure
+key ret
+screen logical-kept
+key esc
+wait Enter choice
+key 1 ret
+wait Enter choice
+key 1 ret
+screen primary-exists
+key esc
+wait Enter choice
+key 1 ret
+wait Enter choice
+key 2 ret
+screen extended-exists
+key esc
+wait Enter choice
+key 1 ret
+wait Enter choice
+key 3 ret
+screen no-space
+key esc
+wait Enter choice
+key 2 ret
+screen already-active
+key esc
+screen menu
+key esc
+wait A:\\>
+quit

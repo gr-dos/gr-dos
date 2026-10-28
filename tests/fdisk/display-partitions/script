@@ -1,0 +1,20 @@
+# The disk of create-partitions: the partition information, then the
+# logical drives. The disk is not changed.
+disk 21411840 615/4/17
+sectors ../create-partitions/expect.sectors
+unchanged
+wait A:\\>
+type FDISK
+key ret
+screen main
+key 4 ret
+screen display
+key ret
+screen logical
+key esc
+screen display-again
+key esc
+screen menu
+key esc
+wait A:\\>
+quit

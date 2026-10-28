@@ -1,0 +1,28 @@
+# A blank 500 MB disk (1015 cylinders, 16 heads, 63 sectors, all within the
+# BIOS limit of 1024): a Primary DOS Partition of all of it, made active,
+# and displayed.
+disk 523837440 1015/16/63
+expect table
+expect sectors
+wait A:\\>
+type FDISK
+key ret
+screen main
+key 1 ret
+wait Enter choice
+key 1 ret
+screen create-primary
+key ret
+screen restart
+key spc
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 4 ret
+screen display
+key esc
+wait Enter choice
+key esc
+wait A:\\>
+quit

@@ -1,0 +1,25 @@
+
+A:\>FDISK 1 /PRI:8 /EXT:12 /LOG:5 /Q
+
+A:\>IF ERRORLEVEL 1 ECHO LEVEL1
+
+A:\>IF NOT ERRORLEVEL 1 ECHO LEVEL0
+LEVEL0
+
+A:\>FDISK /X
+Invalid switch -  /X
+
+A:\>FDISK 3 /PRI:5
+Parameter value not in allowed range -  3
+
+A:\>FDISK /PRI:5
+Invalid parameter
+
+A:\>
+
+
+
+
+
+
+
