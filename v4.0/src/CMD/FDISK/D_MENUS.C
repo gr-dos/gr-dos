@@ -292,7 +292,11 @@ BEGIN
     if (table_display())
        BEGIN
 
+#ifdef __WATCOMC__
+        fdisk_number(insert,(int)(total_mbytes[cur_disk]),u(4),"");
+#else
         sprintf(insert,"%4.0d",total_mbytes[cur_disk]);
+#endif
         display(menu_15);
 
         /* See if drive 1 and extended partition exists */
@@ -333,8 +337,13 @@ BEGIN
                                    part_table[cur_disk][i].mbytes_used = f(0);      /* AN000 */
                                    part_table[cur_disk][i].percent_used = u(0);     /* AN000 */
 
+#ifdef __WATCOMC__  /* strcpy from a null pointer copied "" with Microsoft C, whose DS:0 is 0 */
+                                   part_table[cur_disk][i].system[0] = c(NUL);
+                                   part_table[cur_disk][i].vol_label[0] = c(NUL);
+#else
                                    strcpy(part_table[cur_disk][i].system,c(NUL));   /* AN000 */
                                    strcpy(part_table[cur_disk][i].vol_label,c(NUL)); /* AN000 */
+#endif
 
                                    /* Redisplay the partition info */
                                    table_display();
@@ -485,7 +494,11 @@ BEGIN
 
     /* Display partition data and double check if partition exists*/
     table_display();                                                    /* AC000 */
+#ifdef __WATCOMC__
+    fdisk_number(insert,(int)(total_mbytes[cur_disk]),u(4),"");
+#else
     sprintf(insert,"%4.0d",total_mbytes[cur_disk]);
+#endif
     display(menu_15);
 
        BEGIN
@@ -521,8 +534,13 @@ BEGIN
                                part_table[cur_disk][i].mbytes_used = f(0);      /* AN000 */
                                part_table[cur_disk][i].percent_used = u(0);     /* AN000 */
 
+#ifdef __WATCOMC__  /* strcpy from a null pointer copied "" with Microsoft C, whose DS:0 is 0 */
+                               part_table[cur_disk][i].system[0] = c(NUL);
+                               part_table[cur_disk][i].vol_label[0] = c(NUL);
+#else
                                strcpy(part_table[cur_disk][i].system,c(NUL));   /* AN000 */
                                strcpy(part_table[cur_disk][i].vol_label,c(NUL)); /* AN000 */
+#endif
 
                                /* Redisplay the partition info */
                                table_display();
@@ -705,7 +723,11 @@ BEGIN
         END
 
     /* Set up partition size message */
+#ifdef __WATCOMC__
+    fdisk_number(insert,(int)(get_partition_size( uc(EXTENDED) )),u(4),"");
+#else
     sprintf(insert,"%4.0d",get_partition_size( uc(EXTENDED) ) );
+#endif
     display(menu_21);
 
     /* Assume no drives deleted */
@@ -918,8 +940,13 @@ BEGIN
                         ext_table[cur_disk][j].percent_used = u(0);     /* AN000 */
                         ext_table[cur_disk][j].changed = TRUE;          /* AN000 */
                         ext_table[cur_disk][j].drive_letter = NUL;      /* AN000 */
+#ifdef __WATCOMC__  /* strcpy from a null pointer copied "" with Microsoft C, whose DS:0 is 0 */
+                        ext_table[cur_disk][j].system[0] = c(NUL);
+                        ext_table[cur_disk][j].vol_label[0] = c(NUL);
+#else
                         strcpy(ext_table[cur_disk][j].system,c(NUL));   /* AN000 */
                         strcpy(ext_table[cur_disk][j].vol_label,c(NUL)); /* AN000 */
+#endif
                         END                                             /* AN011 */
                     END                                                 /* AN011 */
                 END

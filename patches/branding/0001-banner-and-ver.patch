@@ -1,6 +1,7 @@
-GR-DOS branding (decision 7): COMMAND's startup banner and the VER output
-say GR-DOS. The version programs see is unchanged (4.00), and the banner
-keeps the Microsoft copyright line (decision 16).
+GR-DOS branding (decision 7): COMMAND's startup banner, the VER output
+and the first line of FDISK's main menu say GR-DOS. The version programs
+see is unchanged (4.00), and the banner and FDISK keep the Microsoft
+copyright line (decision 16).
 
 Applied to a copy of v4.0/src before it is converted to CRLF (Makefile,
 PATCHES). `make check` builds without it.
@@ -25,3 +26,12 @@ PATCHES). `make check` builds without it.
  1044 U 0000 "Invalid directory",CR,LF
  1046 U 0000 "Invalid path, not directory,",CR,LF,"or directory not empty",CR,LF
  1047 U 0000 "Must specify ON or OFF",CR,LF
+@@ -1037,7 +1037,7 @@
+ 0007 U 0000 "Error writing fixed disk",CR,LF
+ 0009 U 0003 "Y",0
+ 0010 U 0003 "N",0
+-1001 U 0000 "MS-DOS Version 4.00"
++1001 U 0000 "GR-DOS Version 4.00"
+ 1002 U 0000 "Fixed Disk Setup Program"
+ 1003 U 0000 "(C)Copyright Microsoft Corp. 1983, 1988"
+ 1004 U 0000 "FDISK Options"

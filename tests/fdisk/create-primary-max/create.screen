@@ -1,0 +1,32 @@
+
+
+
+
+                    Create DOS Partition or Logical DOS Drive
+
+    Current fixed disk drive: 1
+
+    Choose one of the following:
+
+    1. Create Primary DOS Partition
+    2. Create Extended DOS Partition
+    3. Create Logical DOS Drive(s) in the Extended DOS Partition
+
+
+
+
+    Enter choice: [1]
+
+
+
+
+
+
+    Press Esc to return to FDISK Options
+attr 04: 07x20 0Fx41 07x19
+attr 06: 07x30 0Fx1 07x49
+attr 10: 07x4 0Fx3 07x73
+attr 11: 07x4 0Fx3 07x73
+attr 12: 07x4 0Fx3 07x73
+attr 17: 07x4 0Fx17 07x59
+attr 24: 07x10 0Fx3 07x67

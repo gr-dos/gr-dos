@@ -1,5 +1,5 @@
 # The 360 KB smoke test image (scripts/smoke-test --expect): DIR reports
-# 10,000 to 99,999 bytes free (51,200 with the utilities of issue #4): all
-# the files fit.
+# 10,000 to 99,999 bytes free (23,552 with the utilities of issue #4 and
+# FDISK): all the files fit.
 
-^ +14 File\(s\) +[1-9]\d{4} bytes free$
+^ +15 File\(s\) +[1-9]\d{4} bytes free$

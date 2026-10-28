@@ -1,0 +1,145 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use Digest::SHA qw( sha256_hex );
+
+# ABSTRACT: List the partition tables of a hard disk image
+
+=head1 SYNOPSIS
+
+ scripts/partition-table [--chs C/H/S] IMAGE
+
+=head1 DESCRIPTION
+
+Reads the master boot record of the raw hard disk image C<IMAGE> and, for
+an extended partition (type 05h), the chain of extended boot records in
+it, and prints them, independently of FDISK, for the FDISK tests
+(F<tests/fdisk>):
+
+ mbr code 54b224b3...01efdc signature 55AA
+ mbr 1 80 06 0/1/1 240/3/17 17 16371
+ mbr 2 00 05 241/0/1 613/3/17 16388 25364
+ ebr 16388 1 00 06 241/1/1 391/3/17 17 10251
+ ebr 16388 2 00 05 392/0/1 613/3/17 10268 15096
+ ebr 26656 1 00 06 392/1/1 613/3/17 17 15079
+
+Each entry line gives the table (C<mbr>, or C<ebr> and the absolute
+sector of the record), the entry number, the boot indicator and the
+system id in hexadecimal, the start and end as cylinder/head/sector, and
+the relative start sector and the length in sectors; empty entries (all
+zero) are left out.  The C<code> of the master boot record is the SHA-256
+of its first 446 bytes.  C<signature> is the last two bytes, which must
+be C<55AA>.  An extended boot record's start is relative to the start of
+the extended partition for its type 05h entry, and to the record itself
+for the others.
+
+With C<--chs>, the disk's geometry as the BIOS reports it, each entry is
+also checked: its start and end in cylinder/head/sector must be the
+sectors that its relative start and length give, and every line of a
+mismatch says C<CHS MISMATCH>.  Partitions beyond cylinder 1023 are
+stored, as DOS does, with the cylinder modulo 1024, and are compared that
+way.  Exits non-zero for a bad signature, a mismatch, or a loop in the
+chain.
+
+=cut
+
+sub read_sector ($fh, $lba) {
+  sysseek $fh, $lba * 512, 0 or die "seek to sector $lba: $!";
+  my $n = sysread $fh, my $buf, 512;
+  die "sector $lba: beyond the image\n" unless defined $n && $n == 512;
+  return $buf;
+}
+
+# Cylinder/head/sector of the 3-byte form.
+sub chs ($bytes) {
+  my($h, $s, $c) = unpack 'C3', $bytes;
+  return (($c | (($s & 0xC0) << 2)), $h, $s & 0x3F);
+}
+
+sub lba_to_chs ($lba, $geom) {
+  my($cyls, $heads, $secs) = @$geom;
+  my $c = int($lba / ($heads * $secs));
+  my $h = int($lba / $secs) % $heads;
+  my $s = $lba % $secs + 1;
+  return ($c % 1024, $h, $s);
+}
+
+# The entries of the table in sector $buf: hashes of the fields.
+sub entries ($buf) {
+  my @e;
+  for my $i (0 .. 3) {
+    my $raw = substr $buf, 446 + 16 * $i, 16;
+    next if $raw eq "\0" x 16;
+    my($boot, $start, $type, $end, $rel, $len) = unpack 'C a3 C a3 V V', $raw;
+    push @e, { n => $i + 1, boot => $boot, type => $type, start => [chs($start)],
+      end => [chs($end)], rel => $rel, len => $len };
+  }
+  return @e;
+}
+
+sub show ($prefix, $e, $base, $geom, $bad) {
+  my $line = sprintf '%s %d %02X %02X %s %s %u %u', $prefix, $e->{n}, $e->{boot}, $e->{type},
+    join('/', $e->{start}->@*), join('/', $e->{end}->@*), $e->{rel}, $e->{len};
+  if($geom) {
+    my @start = lba_to_chs($base + $e->{rel}, $geom);
+    my @end   = lba_to_chs($base + $e->{rel} + $e->{len} - 1, $geom);
+    if("@start" ne "@{$e->{start}}" || "@end" ne "@{$e->{end}}") {
+      $line .= sprintf ' CHS MISMATCH (expected %s %s)', join('/', @start), join('/', @end);
+      $$bad = 1;
+    }
+  }
+  say $line;
+}
+
+sub main (@args) {
+  my $geom;
+  if(@args && $args[0] eq '--chs') {
+    shift @args;
+    my $chs = shift @args // '';
+    die "$0: --chs C/H/S\n" unless $chs =~ m{^(\d+)/(\d+)/(\d+)\z};
+    $geom = [$1, $2, $3];
+  }
+  die "usage: $0 [--chs C/H/S] IMAGE\n" unless @args == 1;
+  my $image = $args[0];
+  open my $fh, '<:raw', $image or die "unable to read $image: $!";
+
+  my $bad = 0;
+  my $mbr = read_sector($fh, 0);
+  my $sig = uc unpack 'H4', substr $mbr, 510, 2;
+  say 'mbr code ', sha256_hex(substr $mbr, 0, 446), " signature $sig";
+  $bad = 1 if $sig ne '55AA';
+
+  my $ext;
+  for my $e (entries($mbr)) {
+    show('mbr', $e, 0, $geom, \$bad);
+    $ext //= $e->{rel} if $e->{type} == 0x05;
+  }
+
+  # The chain of extended boot records.
+  my %seen;
+  my $at = $ext;
+  while(defined $at) {
+    if($seen{$at}++) {
+      say "ebr $at: LOOP";
+      return 1;
+    }
+    my $ebr = read_sector($fh, $at);
+    my $esig = uc unpack 'H4', substr $ebr, 510, 2;
+    say "ebr $at signature $esig" if $esig ne '55AA';
+    $bad = 1 if $esig ne '55AA';
+    my $next;
+    for my $e (entries($ebr)) {
+      if($e->{type} == 0x05) {
+        show("ebr $at", $e, $ext, $geom, \$bad);
+        $next = $ext + $e->{rel};
+      } else {
+        show("ebr $at", $e, $at, $geom, \$bad);
+      }
+    }
+    $at = $next;
+  }
+  return $bad;
+}
+
+exit main(@ARGV);

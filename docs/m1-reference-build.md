@@ -14,7 +14,7 @@ scripts/reference-boot       # boot test of build/m1 in QEMU
 
 ### `scripts/reference-build`
 
-1. `scripts/prepare-dos-tree` copies `v4.0/src` to `build/m1/SRC`, converting text files to CRLF and stripping `^Z` from `.SKL` files. Files with a binary extension (`EXE COM OBJ LIB SYS CPI`) or a NUL byte are copied unchanged. The vendored tree is not modified.
+1. `scripts/prepare-dos-tree` copies `v4.0/src` to `build/m1/SRC`, converting text files to CRLF, stripping `^Z` from `.SKL` files and a final `^Z` from `.C` and `.H` files (Microsoft C stops reading at it; Open Watcom C rejects it). Files with a binary extension (`EXE COM OBJ LIB SYS CPI`) or a NUL byte are copied unchanged. The vendored tree is not modified.
 2. A generated `BUILD.BAT` replaces `SETENV.BAT`, with `LIB` and `INCLUDE` pointing at `TOOLS\BLD\LIB` and `TOOLS\BLD\INC` (the paths in `SETENV.BAT` are wrong), then runs `nmake` at `SRC`.
 3. DOSBox-X runs headless (`SDL_VIDEODRIVER=dummy`, `-silent`) with `cycles=max`, `dos ver=5.0` and `lfn=false`.
 

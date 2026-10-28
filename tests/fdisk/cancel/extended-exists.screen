@@ -1,0 +1,29 @@
+
+
+
+
+                           Create Extended DOS Partition
+
+    Current fixed disk drive: 1
+
+    Partition Status   Type    Size in Mbytes   Percentage of Disk Used
+     C: 1        A    PRI DOS          8         39%
+        2             EXT DOS         12         61%
+
+
+
+
+
+
+
+
+
+
+
+    Extended DOS Partition already exists.
+
+    Press Esc to return to FDISK Options
+attr 04: 07x27 0Fx29 07x24
+attr 06: 07x30 0Fx1 07x49
+attr 22: 07x4 0Fx39 07x37
+attr 24: 07x10 0Fx3 07x67

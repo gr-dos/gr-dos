@@ -12,6 +12,7 @@
 ^SYS      COM +\d+ 
 ^CHKDSK   COM +\d+ 
 ^DISKCOPY COM +\d+ 
+^FDISK    EXE +\d+ 
 ^ATTRIB   EXE +\d+ 
 ^MORE     COM +\d+ 
 ^FIND     EXE +\d+ 
@@ -21,7 +22,7 @@
 ^TICO     EXE +29702 
 ^AUTOEXEC BAT +\d+ 
 ^HELLO    COM +\d+ 
-^ +14 File\(s\) +\d+ bytes free$
+^ +15 File\(s\) +\d+ bytes free$
 # COPY and TYPE
 ^ +1 File\(s\) copied$
 ^hello$

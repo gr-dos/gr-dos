@@ -1,0 +1,29 @@
+
+            Delete Logical DOS Drive(s) in the Extended DOS Partition
+
+
+
+
+
+
+
+
+    No logical drives defined
+
+
+
+
+
+
+
+    Drive letters have been changed or deleted
+
+
+
+
+
+    Press Esc to return to FDISK Options
+attr 01: 07x12 0Fx57 07x11
+attr 10: 07x4 0Fx26 07x50
+attr 18: 07x4 0Fx42 07x34
+attr 24: 07x10 0Fx3 07x67

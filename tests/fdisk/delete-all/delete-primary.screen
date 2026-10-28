@@ -1,0 +1,31 @@
+
+
+
+
+                          Delete Primary DOS Partition
+
+    Current fixed disk drive: 1
+
+    Partition Status   Type    Size in Mbytes   Percentage of Disk Used
+     C: 1        A    PRI DOS          8         39%
+
+
+
+
+    Total disk space is   20 Mbytes (1 Mbyte = 1048576 bytes)
+
+    WARNING! Data in the deleted Primary DOS Partition will be lost.
+    Do you wish to continue (Y/N).................? [N]
+
+
+
+
+
+
+    Press Esc to return to FDISK Options
+attr 04: 07x26 0Fx28 07x26
+attr 06: 07x30 0Fx1 07x49
+attr 14: 07x24 0Fx4 07x52
+attr 16: 07x4 8Fx9 07x67
+attr 17: 07x52 0Fx3 07x25
+attr 24: 07x10 0Fx3 07x67

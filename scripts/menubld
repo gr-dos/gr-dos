@@ -1,0 +1,76 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Build FDISK's menu source from its message template and a message file
+
+=head1 SYNOPSIS
+
+ scripts/menubld TEMPLATE MSGFILE OUT.C
+
+=head1 DESCRIPTION
+
+Replacement for the C<MENUBLD> tool of the MS-DOS 4.00 build, which
+writes F<CMD/FDISK/FDISKM.C> from F<FDISK.MSG> and
+F<MESSAGES/USA-MS.MSG>.  C<TEMPLATE> is copied to C<OUT.C> with every
+reference to a message replaced by the message's text: a reference is
+the byte E8h followed by the four digits of a message number of the
+C<FDISK> component of C<MSGFILE>.
+
+Each message of the component that a reference names must be a single
+line C<NNNN U NNNN "text">; C<text>, without the quotes, is put in place
+of the reference, inside the C string of the template.  A reference to a
+message that is missing, or not of that form, is an error.  The output
+is byte-identical to the M1 reference build's F<FDISKM.C>.
+
+=cut
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+# The texts of the FDISK component's messages, by number.  undef for a
+# message that is not a single quoted string.
+sub messages ($msgfile) {
+  my %text;
+  my $in = 0;
+  for my $line (split /\r?\n/, slurp($msgfile)) {
+    if($line =~ /^(\S+)\s+[0-9A-Fa-f]{4}\s+[0-9A-Fa-f]{4}\s*\z/) {
+      $in = $1 eq 'FDISK';
+      next;
+    }
+    next unless $in;
+    if($line =~ /^(\d{4}) U \d{4} "([^"]*)"\s*\z/) {
+      $text{$1} = $2;
+    } elsif($line =~ /^(\d{4}) /) {
+      $text{$1} = undef;
+    } elsif($line =~ /^\t/) {
+      die "$msgfile: a continued FDISK message is not supported: $line\n";
+    }
+  }
+  die "$msgfile: no FDISK component\n" unless %text;
+  return \%text;
+}
+
+sub main (@args) {
+  die "usage: $0 TEMPLATE MSGFILE OUT.C\n" unless @args == 3;
+  my($template, $msgfile, $out) = @args;
+
+  my $text = messages($msgfile);
+  my $data = slurp($template);
+  $data =~ s{\xE8(\d{4})}{
+    exists $text->{$1} or die "$template: message $1 is not in $msgfile\n";
+    $text->{$1} // die "$msgfile: message $1 is not a single quoted string\n";
+  }ge;
+  die "$template: an E8h byte that is not a message reference\n" if $data =~ /\xE8/;
+
+  open my $fh, '>:raw', $out or die "unable to write $out: $!";
+  print $fh $data;
+  close $fh or die "unable to write $out: $!";
+  return 0;
+}
+
+exit main(@ARGV);

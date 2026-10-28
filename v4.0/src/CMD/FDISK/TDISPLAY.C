@@ -6,7 +6,9 @@
 #include "fdiskmsg.h"                                                   /* AN000 */
 #include "stdio.h"
 #include "string.h"
+#ifndef __WATCOMC__  /* libc16 declares memset() in string.h */
 #include "memory.h"
+#endif
 
 /*  */
 char table_display()
@@ -49,9 +51,16 @@ char        partition_num;
                  case DOS12:
                      ThisPartitionType = DOS_part;
                      part_table[cur_disk][sort[i]].drive_letter = table_drive_letter();         /* AN000 */
+#ifdef __WATCOMC__  /* the sprintf below */
+                     ThisPartitionLetter[0] = part_table[cur_disk][sort[i]].drive_letter;
+                     ThisPartitionLetter[1] =
+                             ( part_table[cur_disk][sort[i]].drive_letter == c(' ') ) ? ' ' : ':';
+                     ThisPartitionLetter[2] = c('\0');
+#else
                      sprintf(ThisPartitionLetter,"%c%c",
                              part_table[cur_disk][sort[i]].drive_letter,
                              ( part_table[cur_disk][sort[i]].drive_letter == c(' ') ) ? ' ' : ':');
+#endif
                      break;
                  case EXTENDED:
                      ThisPartitionType = EXTENDED_part;
@@ -73,6 +82,14 @@ char        partition_num;
                      break;
                  END
 
+#ifdef __WATCOMC__  /* the sprintf below */
+             io += fdisk_text(&insert[io],ThisPartitionLetter,u(2));
+             insert[io++] = partition_num+'1';
+             insert[io++] = (part_table[cur_disk][sort[i]].boot_ind == uc(0x80)) ? 'A' : ' ';
+             io += fdisk_text(&insert[io],ThisPartitionType,u(7));
+             io += fdisk_number(&insert[io],(int)part_table[cur_disk][sort[i]].mbytes_used,u(4),"");
+             io += fdisk_number(&insert[io],(int)part_table[cur_disk][sort[i]].percent_used,u(3),"%");
+#else
              io += sprintf(&insert[io],"%-2.2s%c%c%-7.7s%4.0d%3.0d%%",
                         ThisPartitionLetter,
                         partition_num+'1',
@@ -80,6 +97,7 @@ char        partition_num;
                         ThisPartitionType,
                         part_table[cur_disk][sort[i]].mbytes_used,
                         part_table[cur_disk][sort[i]].percent_used);
+#endif
 
              partition_num++;
 

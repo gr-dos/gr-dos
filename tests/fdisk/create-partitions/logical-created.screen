@@ -1,0 +1,38 @@
+
+            Create Logical DOS Drive(s) in the Extended DOS Partition
+
+Drv Volume Label  Mbytes  System  Usage
+D:                    5  UNKNOWN    40%
+
+
+
+
+
+
+
+
+
+
+
+
+    Total Extended DOS Partition size is   12 Mbytes (1 MByte = 1048576 bytes)
+    Maximum space available for logical drive is    7 Mbytes ( 60%)
+
+    Enter logical drive size in Mbytes or percent of disk space (%)...[   7]
+
+    Logical DOS Drive created, drive letters changed or added
+
+    Press Esc to return to FDISK Options
+attr 01: 07x12 0Fx57 07x11
+attr 03: 0Fx39 07x41
+attr 04: 0Fx4 07x76
+attr 05: 0Fx4 07x76
+attr 06: 0Fx4 07x76
+attr 07: 0Fx4 07x76
+attr 08: 0Fx4 07x76
+attr 09: 0Fx4 07x76
+attr 17: 07x41 0Fx4 07x35
+attr 18: 07x49 0Fx4 07x8 0Fx6 07x13
+attr 20: 07x70 0Fx6 07x4
+attr 22: 07x4 0Fx57 07x19
+attr 24: 07x10 0Fx3 07x67

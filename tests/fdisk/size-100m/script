@@ -1,0 +1,27 @@
+# A blank 100 MB disk (203 cylinders, 16 heads, 63 sectors): a Primary DOS
+# Partition of all of it, made active, and displayed.
+disk 104767488 203/16/63
+expect table
+expect sectors
+wait A:\\>
+type FDISK
+key ret
+screen main
+key 1 ret
+wait Enter choice
+key 1 ret
+screen create-primary
+key ret
+screen restart
+key spc
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 4 ret
+screen display
+key esc
+wait Enter choice
+key esc
+wait A:\\>
+quit

@@ -1,0 +1,28 @@
+# The disk of create-partitions: delete logical drive E:, the last one.
+disk 21411840 615/4/17
+sectors ../create-partitions/expect.sectors
+expect table
+expect sectors
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 3 ret
+screen delete
+key 3 ret
+screen which-drive
+key shift-e ret
+screen volume-label
+key ret
+screen sure
+key y ret
+screen deleted
+key esc
+screen letters-changed
+key esc
+screen menu
+key esc
+screen restart
+key spc
+wait A:\\>
+quit

@@ -1,0 +1,34 @@
+                              GR-DOS Version 4.00
+                            Fixed Disk Setup Program
+                        (C)Copyright Microsoft Corp. 1983, 1988
+
+                                 FDISK Options
+
+    Current fixed disk drive: 1
+
+    Choose one of the following:
+
+    1. Create DOS Partition or Logical DOS Drive
+    2. Set active partition
+    3. Delete DOS Partition or Logical DOS Drive
+    4. Display partition information
+
+
+
+    Enter choice: [9]
+
+
+
+
+
+    9 is not a choice. Please enter 1-4.
+    Press Esc to exit FDISK
+attr 04: 07x33 0Fx14 07x33
+attr 06: 07x30 0Fx1 07x49
+attr 10: 07x4 0Fx3 07x73
+attr 11: 07x4 0Fx3 07x73
+attr 12: 07x4 0Fx3 07x73
+attr 13: 07x4 0Fx3 07x73
+attr 17: 07x4 0Fx17 07x59
+attr 23: 07x4 0Fx36 07x40
+attr 24: 07x10 0Fx3 07x67

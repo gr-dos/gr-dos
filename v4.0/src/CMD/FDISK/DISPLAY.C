@@ -8,6 +8,10 @@
 #include "doscall.h"                                                    /* AN000 */
 #include "fdiskmsg.h"                                                   /* AN000 */
 #include "ctype.h"                                                      /* AN000 */
+#ifdef __WATCOMC__
+#include "string.h"
+#include "libc16.h"
+#endif
 
 /*  */
 /******************* START OF SPECIFICATIONS *******************/
@@ -309,7 +313,11 @@ BEGIN
 char    mbytes[32];
 
         /* Divide the space down and get it into decimal */
+#ifdef __WATCOMC__
+        fdisk_number(mbytes,(int)number,u(4),"");
+#else
         sprintf(mbytes,"%4.0d",number);
+#endif
         insert[start+0] = mbytes[0];
         insert[start+1] = mbytes[1];
         insert[start+2] = mbytes[2];
@@ -332,7 +340,11 @@ BEGIN                                                                   /* AN000
 char    percent[32];
 
         /* Divide the space down and get it into decimal */
+#ifdef __WATCOMC__
+        fdisk_number(percent,(int)number,u(3),"%");
+#else
         sprintf(percent,"%3.0d%%",number);                              /* AC000 */
+#endif
         insert[start+0] = percent[0];                                   /* AC000 */
         insert[start+1] = percent[1];                                   /* AC000 */
         insert[start+2] = percent[2];                                   /* AC000 */
@@ -341,6 +353,59 @@ char    percent[32];
         return;
 
 END                                                                     /* AN000 */
+
+#ifdef __WATCOMC__
+/*  */
+/* sprintf(string,"%W.0d%s",number,suffix), with W the width: number in  */
+/* decimal, right-justified in at least W columns, with no digits for 0  */
+/* (a precision of 0), then suffix. Returns the length, as sprintf does.  */
+unsigned fdisk_number(string,number,width,suffix)
+
+char        *string;
+int         number;
+unsigned    width;
+char        *suffix;
+
+BEGIN
+
+char        digits[7];
+unsigned    length;
+unsigned    i;
+
+        digits[0] = c('\0');
+        if (number != 0)
+            libc16_ltoa((long)number,digits,10);
+        length = strlen(digits);
+        for (i = u(0); i + length < width; i++)
+            string[i] = c(' ');
+        strcpy(&string[i],digits);
+        strcpy(&string[i+length],suffix);
+        return(i + length + strlen(suffix));
+
+END
+
+/*  */
+/* sprintf(string,"%-W.Ws",text), with W the width: text, cut to W      */
+/* characters or padded to them with blanks. Returns W.                  */
+unsigned fdisk_text(string,text,width)
+
+char        *string;
+char        *text;
+unsigned    width;
+
+BEGIN
+
+unsigned    i;
+
+        for (i = u(0); (i < width) && (text[i] != c('\0')); i++)
+            string[i] = text[i];
+        for (; i < width; i++)
+            string[i] = c(' ');
+        string[i] = c('\0');
+        return(width);
+
+END
+#endif
 
 /*  */
 void string_in_msg(string_ptr,start)                                    /* AN000 */

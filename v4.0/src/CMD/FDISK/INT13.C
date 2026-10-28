@@ -197,7 +197,12 @@ char head;
         else
            BEGIN
             /* 12 bit */
+#ifdef __WATCOMC__  /* the same quotient without floating point: 2 + 512*8/1.5 is 8198/3 */
+            sectors_per_fat = ((unsigned)((((total_sectors -33)/ul(6 + (BYTES_PER_SECTOR *16)))*3) +
+                                          ((((total_sectors -33)%ul(6 + (BYTES_PER_SECTOR *16)))*3)/ul(6 + (BYTES_PER_SECTOR *16)))));
+#else
             sectors_per_fat = ((unsigned)((total_sectors -33)/(2 + ((BYTES_PER_SECTOR *8)/1.5))));
+#endif
            END
 
         /* Round up one just to handle any rounding errors */

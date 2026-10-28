@@ -6,6 +6,10 @@ void     number_in_msg(XFLOAT,unsigned);
 void     percent_in_msg(unsigned,unsigned);                             /* AN000 */
 void     string_in_msg(char far *,unsigned);                            /* AN000 */
 void     volume_in_msg(char far *,unsigned);                            /* AN000 */
+#ifdef __WATCOMC__  /* in place of sprintf, which libc16 does not have */
+unsigned fdisk_number(char *,int,unsigned,char *);
+unsigned fdisk_text(char *,char *,unsigned);
+#endif
 
 /*************************************************************/
 /* VIDEO.C ROUTINES                                          */
@@ -89,7 +93,11 @@ char     table_drive_letter(void);
 /*************************************************************/
 /* FDISK.C ROUTINES                                          */
 /*************************************************************/
+#ifdef __WATCOMC__  /* the command line is read from the PSP */
+void     main(void);
+#else
 void     main(int,char * []);
+#endif
 void     load_logical_drive(char,unsigned char);
 void     init_partition_tables(void);
 char     check_valid_environment(void);
@@ -109,6 +117,9 @@ void     create_partition(void);
 void     do_main_menu(void);
 void     internal_program_error(void);
 void     reboot(void);
+#ifdef __WATCOMC__  /* the C calling convention of REBOOT */
+#pragma aux (__cdecl) reboot
+#endif
 
 /*************************************************************/
 /* CONVERT ROUTINES                                          */
@@ -131,6 +142,9 @@ void     parse_init(void);                                              /* AN000
 void     check_disk_validity(void);                                     /* AN000 */
 void     process_switch(void);                                          /* AN000 */
 void     parse(union REGS *, union REGS *);                             /* AN000 */
+#ifdef __WATCOMC__  /* the C calling convention of _PARSE */
+#pragma aux (__cdecl) parse
+#endif
 void     Parse_msg(int,int,unsigned char);                              /* AN010 */
 
 
@@ -142,6 +156,11 @@ void     display_msg(int,int,int,int *,char,char);                      /* AN000
 void     sysloadmsg(union REGS *, union REGS *);                        /* AN000 */
 void     sysdispmsg(union REGS *, union REGS *);                        /* AN000 */
 void     sysgetmsg(union REGS *, struct SREGS *, union REGS *);         /* AN012 */
+#ifdef __WATCOMC__  /* the C calling convention of _MSGRET */
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysdispmsg
+#pragma aux (__cdecl) sysgetmsg
+#endif
 char     get_yes_no_values(void);                                       /* AN012 */
 
 
@@ -149,10 +168,14 @@ char     get_yes_no_values(void);                                       /* AN012
 /* C ROUTINES                                                */
 /*************************************************************/
 
+#ifdef __WATCOMC__  /* libc16's headers declare them, __cdecl */
+#include <conio.h>
+#else
 int      getch(void);
 void     putch(int);
 
 int      int86x(int, union REGS *, union REGS *, struct SREGS *);
 int      int86(int, union REGS *, union REGS *);
 int      intdos(union REGS *, union REGS *);
+#endif
 

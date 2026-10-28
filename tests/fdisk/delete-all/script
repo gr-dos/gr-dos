@@ -1,0 +1,51 @@
+# The disk of create-partitions: delete both logical drives, then the
+# Extended DOS Partition, then the Primary DOS Partition.
+disk 21411840 615/4/17
+sectors ../create-partitions/expect.sectors
+expect table
+expect sectors
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 3 ret
+wait Enter choice
+key 3 ret
+wait What drive
+key shift-e ret
+wait Volume Label
+key ret
+wait Are you sure
+key y ret
+wait What drive
+key shift-d ret
+wait Volume Label
+key ret
+wait Are you sure
+key y ret
+screen logical-deleted
+key esc
+screen no-logical
+key esc
+wait Enter choice
+key 3 ret
+wait Enter choice
+key 2 ret
+screen delete-extended
+key y ret
+screen extended-deleted
+key esc
+wait Enter choice
+key 3 ret
+wait Enter choice
+key 1 ret
+screen delete-primary
+key y ret
+screen primary-deleted
+key esc
+screen menu
+key esc
+screen restart
+key spc
+wait A:\\>
+quit

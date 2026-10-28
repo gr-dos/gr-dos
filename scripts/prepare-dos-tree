@@ -28,6 +28,11 @@ Line endings become CRLF.
 
 C<^Z> is stripped from C<.SKL> message skeletons, which C<NOSRVBLD> rejects.
 
+=item *
+
+A final C<^Z> is stripped from C<.C> and C<.H> files, which Open Watcom C
+rejects; Microsoft C stops reading at it.
+
 =back
 
 A file is treated as binary, and copied unchanged, if its extension is one of
@@ -47,6 +52,7 @@ sub is_binary ($path, $data) {
 sub to_dos ($path, $data) {
   $data =~ s/\r?\n/\r\n/g;
   $data =~ s/\x1a//g if $path =~ /\.SKL\z/i;
+  $data =~ s/\x1a\z// if $path =~ /\.[CH]\z/i;
   return $data;
 }
 

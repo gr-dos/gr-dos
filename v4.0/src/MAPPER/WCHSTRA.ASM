@@ -2,6 +2,10 @@
 page 60,132
 ;
 title CP/DOS VioWrtCharStrAtt mapper
+
+IFDEF __JWASM__
+	OPTION NOKEYWORD:<ADDR>
+ENDIF
 ;
 vioxxx  segment byte public 'vio'
         assume  cs:vioxxx,ds:nothing,es:nothing,ss:nothing

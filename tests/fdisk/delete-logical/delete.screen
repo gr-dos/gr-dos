@@ -1,0 +1,32 @@
+
+
+
+
+                   Delete DOS Partition or Logical DOS Drive
+
+    Current fixed disk drive: 1
+
+    Choose one of the following:
+
+    1.  Delete Primary DOS Partition
+    2.  Delete Extended DOS Partition
+    3.  Delete Logical DOS Drive(s) in the Extended DOS Partition
+
+
+
+
+    Enter choice: [ ]
+
+
+
+
+
+
+    Press Esc to return to FDISK Options
+attr 04: 07x19 0Fx41 07x20
+attr 06: 07x30 0Fx1 07x49
+attr 10: 07x4 0Fx4 07x72
+attr 11: 07x4 0Fx4 07x72
+attr 12: 07x4 0Fx4 07x72
+attr 17: 07x4 0Fx17 07x59
+attr 24: 07x10 0Fx3 07x67

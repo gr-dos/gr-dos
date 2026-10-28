@@ -1,0 +1,30 @@
+# A blank 20 MB disk: leave the creation of a Primary DOS Partition with
+# Esc, at its first question and at the size. No partition is made, but
+# the disk is not as it was: choosing to create the partition has FDISK
+# test the tracks at the start of the free space by writing to them
+# (verify_tracks), before the first question, as Microsoft's FDISK does.
+# The master boot record is not written.
+disk 21411840 615/4/17
+expect table
+expect sectors
+wait A:\\>
+type FDISK
+key ret
+wait Enter choice
+key 1 ret
+wait Enter choice
+key 1 ret
+wait make the partition active
+key esc
+screen menu
+key 1 ret
+wait Enter choice
+key 1 ret
+wait make the partition active
+key n ret
+wait Enter partition size
+key esc
+screen menu-again
+key esc
+wait A:\\>
+quit

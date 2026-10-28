@@ -1,0 +1,36 @@
+
+            Create Logical DOS Drive(s) in the Extended DOS Partition
+
+Drv Volume Label  Mbytes  System  Usage
+D:                    5  FAT12      40%
+E:                    7  FAT12      60%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    All available space in the Extended DOS Partition
+    is assigned to logical drives.
+    Press Esc to return to FDISK Options
+attr 01: 07x12 0Fx57 07x11
+attr 03: 0Fx39 07x41
+attr 04: 0Fx4 07x76
+attr 05: 0Fx4 07x76
+attr 06: 0Fx4 07x76
+attr 07: 0Fx4 07x76
+attr 08: 0Fx4 07x76
+attr 09: 0Fx4 07x76
+attr 22: 07x4 0Fx50 07x26
+attr 23: 07x4 0Fx30 07x46
+attr 24: 07x10 0Fx3 07x67
