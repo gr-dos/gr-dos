@@ -11,6 +11,7 @@ use Fcntl qw( O_RDONLY O_RDWR O_EXCL SEEK_SET );
 use File::Basename qw( basename dirname );
 use Getopt::Long qw( GetOptionsFromArray );
 use IO::Handle;
+use List::Util qw( sum0 );
 use POSIX qw( ceil strftime );
 use Time::Local qw( timegm );
 
@@ -62,9 +63,10 @@ record must still be exact.
 
 The distribution is the directory C<--dist> (default
 F<build/linux/cf>, made by C<make>): F<manifest.txt>, the files it lists,
-F<MSBOOT.BIN>, F<FDBOOT.BIN> and F<VERSION>.  C: gets those files, with
-IO.SYS and MSDOS.SYS first, and a generated F<CONFIG.SYS>,
-F<AUTOEXEC.BAT> and F<GRDOS.ID>.
+F<MSBOOT.BIN>, F<FDBOOT.BIN> and F<VERSION>.  C:'s root gets IO.SYS and
+MSDOS.SYS first, COMMAND.COM, and a generated F<CONFIG.SYS>,
+F<AUTOEXEC.BAT> (with C<PATH C:\DOS>) and F<GRDOS.ID>; the other files go
+in F<C:\DOS>.
 
 C<provision> and C<update> ask for the target's name (C<sdd>, or the image
 file's name) on the terminal, or take it as C<--confirm NAME>.  C<--dry-run>
@@ -344,33 +346,62 @@ sub fat_set ($fat, $bits, $n, $v) {
 }
 
 sub dir_entry ($name, $attr, $cluster, $size, $mtime, $utc) {
-  my($base, $ext) = split /\./, $name;
+  my($base, $ext) = $name =~ /^\.\.?\z/ ? ($name, '') : split /\./, $name;
   my($time, $date) = dos_time($mtime, $utc);
   return pack 'A8 A3 C x10 v v v V', $base, $ext // '', $attr, $time, $date, $cluster, $size;
 }
 
+sub is_dir ($f) { exists $f->{children} }
+
+# The files of a tree, subdirectories' included.
+sub count_files ($files) { sum0 map { is_dir($_) ? count_files($_->{children}) : 1 } @$files }
+
 # The first sectors of a volume: boot sector, FATs, root directory and, from
-# the first cluster on, the files' data, contiguous in their order. The rest
-# of the volume is free space and is not written.
+# the first cluster on, the files' data, contiguous: the root's entries in
+# their order, then each subdirectory's (an entry with children, whose own
+# clusters come where it is listed). The rest of the volume is free space
+# and is not written.
 sub volume_image ($p, $geom, $boot_tmpl, $serial, $label, $files = []) {
   my $csize = $p->{spc} * SECTOR;
+  my $eoc = $p->{bits} == 16 ? 0xFFFF : 0xFFF;
   my $fat = "\0" x ($p->{spf} * SECTOR);
   fat_set(\$fat, $p->{bits}, 0, $p->{bits} == 16 ? 0xFFF8 : 0xFF8);
-  fat_set(\$fat, $p->{bits}, 1, $p->{bits} == 16 ? 0xFFFF : 0xFFF);
-  my($dir, $data, $next) = ('', '', 2);
+  fat_set(\$fat, $p->{bits}, 1, $eoc);
   fail 'too many files for the root directory' if @$files > ROOT_ENTRIES;
-  for my $f (@$files) {
-    my $n = ceil(length($f->{data}) / $csize);
-    fail sprintf 'insufficient file system space: C: has %d clusters of %d bytes; the distribution needs more',
-        $p->{clusters}, $csize
-      if $next + $n - 2 > $p->{clusters};
-    for my $k (0 .. $n - 1) {
-      fat_set(\$fat, $p->{bits}, $next + $k, $k == $n - 1 ? ($p->{bits} == 16 ? 0xFFFF : 0xFFF) : $next + $k + 1);
+  # Clusters, in order.
+  my($next, %first, @order) = (2);
+  my @todo = ([$files, 0]);
+  while(my $t = shift @todo) {
+    my($list, $parent) = @$t;
+    for my $f (@$list) {
+      my $len = is_dir($f) ? 32 * (2 + $f->{children}->@*) : length $f->{data};
+      my $n = ceil($len / $csize);
+      fail sprintf 'insufficient file system space: C: has %d clusters of %d bytes; the distribution needs more',
+          $p->{clusters}, $csize
+        if $next + $n - 2 > $p->{clusters};
+      for my $k (0 .. $n - 1) {
+        fat_set(\$fat, $p->{bits}, $next + $k, $k == $n - 1 ? $eoc : $next + $k + 1);
+      }
+      $first{$f} = $n ? $next : 0;
+      push @order, [$f, $n, $parent];
+      $next += $n;
     }
-    $dir .= dir_entry($f->{name}, $f->{attr}, $n ? $next : 0, length $f->{data}, $f->{mtime}, $f->{utc});
-    $data .= $f->{data} . "\0" x ($n * $csize - length $f->{data});
-    $next += $n;
+    push @todo, map { [$_->{children}, $first{$_}] } grep { is_dir($_) } @$list;
   }
+  my $entries = sub ($list) {
+    join '', map { dir_entry($_->{name}, $_->{attr}, $first{$_}, is_dir($_) ? 0 : length $_->{data}, $_->{mtime},
+      $_->{utc}) } @$list;
+  };
+  my $data = '';
+  for(@order) {
+    my($f, $n, $parent) = @$_;
+    my $bytes = is_dir($f)
+      ? dir_entry('.', 0x10, $first{$f}, 0, $f->{mtime}, $f->{utc})
+        . dir_entry('..', 0x10, $parent, 0, $f->{mtime}, $f->{utc}) . $entries->($f->{children})
+      : $f->{data};
+    $data .= $bytes . "\0" x ($n * $csize - length $bytes);
+  }
+  my $dir = $entries->($files);
   $dir .= "\0" x ($p->{root_secs} * SECTOR - length $dir);
   return { bytes => boot_sector($boot_tmpl, $p, $geom, $serial, $label) . $fat . $fat . $dir . $data,
     used_clusters => $next - 2 };
@@ -380,8 +411,12 @@ sub serial_of ($seed) { unpack 'V', pack 'H8', sha256_hex($seed) }
 
 sub crlf ($text) { $text =~ s/\n/\r\n/gr }
 
-# C:'s files: the distribution's, with the generated CONFIG.SYS,
-# AUTOEXEC.BAT and GRDOS.ID after COMMAND.COM.
+# The distribution's files that stay in C:'s root; the rest go in C:\DOS.
+my %in_root = map { $_ => 1 } qw( IO.SYS MSDOS.SYS COMMAND.COM );
+
+# C:'s files: IO.SYS, MSDOS.SYS and COMMAND.COM, the generated CONFIG.SYS,
+# AUTOEXEC.BAT and GRDOS.ID, and the directory DOS with the rest of the
+# distribution.
 sub system_files ($dist, $l, $disk_id, $now) {
   my $stamp = strftime '%Y-%m-%dT%H:%M:%SZ', gmtime $now;
   my @gen = (
@@ -394,7 +429,7 @@ sub system_files ($dist, $l, $disk_id, $now) {
       REM GR-DOS system defaults. Every deploy-cf update replaces C:,
       REM so keep your own settings in D:\AUTOEXEC.BAT.
       PROMPT $P$G
-      PATH C:\
+      PATH C:\DOS
       REM User configuration is on persistent storage
       IF EXIST D:\AUTOEXEC.BAT CALL D:\AUTOEXEC.BAT
       END
@@ -404,8 +439,8 @@ sub system_files ($dist, $l, $disk_id, $now) {
       "system $l->{system}{start} $l->{system}{len}\n", "installed $stamp\n") },
   );
   my @f = $dist->{files}->@*;
-  my($cmd) = grep { $f[$_]{name} eq 'COMMAND.COM' } 0 .. $#f;
-  return (@f[0 .. $cmd], @gen, @f[$cmd + 1 .. $#f]);
+  return ((grep { $in_root{$_->{name}} } @f), @gen,
+    { name => 'DOS', attr => 0x10, mtime => $now, children => [grep { !$in_root{$_->{name}} } @f] });
 }
 
 sub system_image ($dist, $l, $disk_id, $now) {
@@ -629,16 +664,21 @@ sub read_volume ($disk, $base) {
   $v{bits} = $v{clusters} >= 4086 ? 16 : 12;
   $v{fat} = $disk->read($base + 1, $v{spf});
   $v{fat2} = $disk->read($base + 1 + $v{spf}, $v{spf});
-  my $dir = $disk->read($base + 1 + 2 * $v{spf}, $v{root_secs});
-  for my $i (0 .. $v{root} - 1) {
-    my $e = substr $dir, 32 * $i, 32;
-    last if ord $e == 0;
-    next if ord $e == 0xE5;
-    my($n, $x, $attr, $cl, $size) = unpack 'A8 A3 C x14 v V', $e;
-    push $v{entries}->@*, { name => length $x ? "$n.$x" : $n, attr => $attr, cluster => $cl, size => $size };
-  }
-  $v{entries} //= [];
+  $v{entries} = dir_entries($disk->read($base + 1 + 2 * $v{spf}, $v{root_secs}));
   return \%v;
+}
+
+# A directory's entries, without deleted ones, "." and "..".
+sub dir_entries ($dir) {
+  my @entries;
+  for(my $i = 0; $i + 32 <= length $dir; $i += 32) {
+    my $e = substr $dir, $i, 32;
+    last if ord $e == 0;
+    next if ord $e == 0xE5 || ord $e == ord '.';
+    my($n, $x, $attr, $cl, $size) = unpack 'A8 A3 C x14 v V', $e;
+    push @entries, { name => length $x ? "$n.$x" : $n, attr => $attr, cluster => $cl, size => $size };
+  }
+  return \@entries;
 }
 
 sub fat_get ($v, $n) {
@@ -647,15 +687,26 @@ sub fat_get ($v, $n) {
   return $n & 1 ? $w >> 4 : $w & 0xFFF;
 }
 
-sub read_file ($disk, $v, $e) {
-  my($data, $cl, $steps) = ('', $e->{cluster}, 0);
+# The clusters of a chain, at most $max bytes of them.
+sub read_chain ($disk, $v, $cl, $max) {
+  my($data, $steps) = ('', 0);
   my $eof = $v->{bits} == 16 ? 0xFFF8 : 0xFF8;
-  while($e->{size} && $cl >= 2 && $cl < $eof) {
+  while(length $data < $max && $cl >= 2 && $cl < $eof) {
     return undef if $cl > $v->{clusters} + 1 || ++$steps > $v->{clusters};
     $data .= $disk->read($v->{base} + $v->{data_start} + ($cl - 2) * $v->{spc}, $v->{spc});
     $cl = fat_get($v, $cl);
   }
+  return $data;
+}
+
+sub read_file ($disk, $v, $e) {
+  my $data = read_chain($disk, $v, $e->{cluster}, $e->{size}) // return undef;
   return length $data >= $e->{size} ? substr($data, 0, $e->{size}) : undef;
+}
+
+sub read_dir ($disk, $v, $e) {
+  my $data = read_chain($disk, $v, $e->{cluster}, 1 << 21) // return undef;
+  return length $data ? dir_entries($data) : undef;
 }
 
 # The partition tables as they are: lines for inspect.
@@ -759,16 +810,26 @@ sub verify_system ($disk, $l, $img) {
   $back eq $img->{bytes} or fail 'C: reads back differently from what was written (a failing card?)';
   my $v = read_volume($disk, $s->{start}) // fail 'C: has no valid boot sector after writing';
   $v->{fat} eq $v->{fat2} or fail "C:'s two FATs differ";
-  my @want = map { $_->{name} } $img->{files}->@*;
-  my @got = map { $_->{name} } $v->{entries}->@*;
-  "@got" eq "@want" or fail "C:'s files are not the distribution's: @got";
-  for my $i (0 .. $#want) {
-    my($f, $e) = ($img->{files}[$i], $v->{entries}[$i]);
-    my $data = read_file($disk, $v, $e);
-    defined $data && $data eq $f->{data} && $e->{attr} == $f->{attr} or fail "C:\\$f->{name} is not as written";
-  }
+  my $check;
+  $check = sub ($files, $entries, $path) {
+    my @want = map { $_->{name} } @$files;
+    my @got = map { $_->{name} } @$entries;
+    "@got" eq "@want" or fail "${path}'s files are not the distribution's: @got";
+    for my $i (0 .. $#want) {
+      my($f, $e) = ($files->[$i], $entries->[$i]);
+      $e->{attr} == $f->{attr} or fail "$path$f->{name} is not as written";
+      if(is_dir($f)) {
+        my $sub = read_dir($disk, $v, $e) // fail "$path$f->{name} is not as written";
+        $check->($f->{children}, $sub, "$path$f->{name}\\");
+      } else {
+        my $data = read_file($disk, $v, $e);
+        defined $data && $data eq $f->{data} or fail "$path$f->{name} is not as written";
+      }
+    }
+  };
+  $check->($img->{files}, $v->{entries}, 'C:\\');
   $v->{entries}[0]{cluster} == 2 or fail 'IO.SYS does not start at cluster 2';
-  return scalar @want;
+  return count_files($img->{files});
 }
 
 # --- Commands ---------------------------------------------------------------
@@ -851,7 +912,7 @@ sub cmd_provision ($o, $path) {
   my $unused = $t->{sectors} - $l->{cylinders} * $geom->[1] * $geom->[2];
   say "Unused:   $unused sectors at the end (" . mib($unused) . '), beyond the last whole cylinder the BIOS reaches'
     if $unused;
-  say sprintf 'C: gets GR-DOS %s: %d files, %d of its %d clusters', $dist->{version}, scalar $sys->{files}->@*,
+  say sprintf 'C: gets GR-DOS %s: %d files, %d of its %d clusters', $dist->{version}, count_files($sys->{files}),
     $sys->{used_clusters}, $l->{system}{params}{clusters};
   if($o->{dry_run}) {
     say 'Dry run: nothing was written.';
@@ -911,7 +972,7 @@ sub cmd_update ($o, $path) {
   my $sys = system_image($dist, $l, $r->{disk_id}, $now);
   my $s = $l->{system};
   say sprintf 'update rewrites only C:, sectors %d-%d, with GR-DOS %s: %d files, %d of %d clusters',
-    $s->{start}, $s->{start} + $s->{len} - 1, $dist->{version}, scalar $sys->{files}->@*, $sys->{used_clusters},
+    $s->{start}, $s->{start} + $s->{len} - 1, $dist->{version}, count_files($sys->{files}), $sys->{used_clusters},
     $s->{params}{clusters};
   if($o->{dry_run}) {
     say 'Dry run: nothing was written.';

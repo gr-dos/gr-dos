@@ -170,13 +170,16 @@ sub hash_outside_c ($img, $r) {
 sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
 
 sub c_files ($img, $r) {
-  my $out = must('mdir', '-a', '-b', '-i', at($img, $r->{sys_start}), '::');
+  my $out = must('mdir', '-/', '-a', '-b', '-i', at($img, $r->{sys_start}), '::');
   return join ' ', sort map { m{^::/(.*)} ? $1 : () } split /\n/, $out;
 }
 
+# IO.SYS, MSDOS.SYS, COMMAND.COM and the generated files in C:'s root, the
+# rest in C:\DOS.
 sub dist_files ($dir) {
+  my %root = map { $_ => 1 } qw( IO.SYS MSDOS.SYS COMMAND.COM );
   my @n = map { (split ' ')[-1] } split /\n/, slurp("$dir/manifest.txt");
-  return join ' ', sort @n, qw( AUTOEXEC.BAT CONFIG.SYS GRDOS.ID );
+  return join ' ', sort +(map { $root{$_} ? $_ : "DOS/$_" } @n), qw( AUTOEXEC.BAT CONFIG.SYS GRDOS.ID DOS/ );
 }
 
 sub test_size ($size, $out) {
@@ -224,7 +227,7 @@ sub test_size ($size, $out) {
     push @expect, "^sentinel $letter $l->[0]\$", "^ *$free bytes available on disk\$";
     $letter++;
   }
-  spew("$out/expect", join "\n", '^GRDOS-USER-AUTOEXEC$', '^GR-DOS Version 4\.00$', '^PATH=C:\\\\$',
+  spew("$out/expect", join "\n", '^GRDOS-USER-AUTOEXEC$', '^GR-DOS Version 4\.00$', '^PATH=C:\\\\DOS$',
     '^layout 1$', @expect, '^GRDOS-TEST-END$', 'count 1 ^GRDOS-USER-AUTOEXEC$', '');
   my $hash = hash_outside_c($img, $r);
   my @boot = ("$root/scripts/hd-boot-test", '--chs', $drive, '--timeout', 120, '--prompt', '^GR>$',
@@ -236,6 +239,7 @@ sub test_size ($size, $out) {
   # one removed, then the real one twice.
   spew("$out/OLD.TXT", "obsolete\r\n");
   must('mcopy', '-i', at($img, $r->{sys_start}), "$out/OLD.TXT", '::');
+  must('mcopy', '-i', at($img, $r->{sys_start}), "$out/OLD.TXT", '::DOS');
   my $alt = "$out/dist-renamed";
   system('rm', '-rf', $alt);
   mkdir $alt or die "mkdir $alt: $!";

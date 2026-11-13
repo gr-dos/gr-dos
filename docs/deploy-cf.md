@@ -106,14 +106,14 @@ cylinders are large. The current distribution uses 94 of C:'s clusters of
 
 ### C:
 
-C: is formatted afresh on every deployment, and holds the following files
-in this order:
+C: is formatted afresh on every deployment. Its root directory holds the
+following, in this order:
 
 1. `IO.SYS` and `MSDOS.SYS`, the first two directory entries. IO.SYS starts
    at cluster 2.
-2. `COMMAND.COM`.
+2. `COMMAND.COM`, where DOS looks for it without a `SHELL=` line.
 3. `CONFIG.SYS`: `FILES=20` and `BUFFERS=20`.
-4. `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH C:\`, ending with:
+4. `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH C:\DOS`, ending with:
 
    ```bat
    REM User configuration is on persistent storage
@@ -123,9 +123,12 @@ in this order:
 5. `GRDOS.ID`, the marker (read-only): the layout version, the disk id,
    the GR-DOS version, the geometry, C:'s sectors and the installation
    time.
-6. The other files of the distribution, as on the floppy images: FORMAT,
+6. The directory `DOS`, with the other files of the distribution: FORMAT,
    SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND, FC, DEBUG, MEM, MODE
-   and TICO.
+   and TICO. The floppy images keep them in the root directory.
+
+If `D:\AUTOEXEC.BAT` sets its own `PATH`, include `C:\DOS` in it, for
+example `PATH C:\DOS;D:\BIN`.
 
 `D:\AUTOEXEC.BAT` is yours. Neither command creates or changes it. It runs
 after C:'s defaults, so it can change `PATH`, `PROMPT` and the rest. CALL
