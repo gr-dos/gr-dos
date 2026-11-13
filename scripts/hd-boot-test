@@ -1,0 +1,206 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Temp qw( tempdir );
+use IO::Socket::UNIX;
+use Time::HiRes qw( sleep time );
+
+# ABSTRACT: Boot a GR-DOS hard disk image in headless QEMU, type at its prompt, and check its serial output
+
+=head1 SYNOPSIS
+
+ scripts/hd-boot-test [--chs C/H/S[/lba]] [--timeout SECONDS] [--prompt REGEX --type TEXT]
+                      IMAGE EXPECT OUTDIR
+
+=head1 DESCRIPTION
+
+Boots the hard disk image C<IMAGE> as the first fixed disk of headless
+C<qemu-system-i386>, with no floppy, and COM1 written to
+F<OUTDIR/serial.log>.  QEMU writes to a snapshot: the image is not changed.
+C<--chs> gives the drive's geometry, which the BIOS reports untranslated,
+or, with C</lba>, translated as SeaBIOS does (see F<scripts/disk-test>).
+
+With C<--prompt> and C<--type>, it waits until the last non-blank line of
+the screen matches C<REGEX> (read from video memory through QEMU's monitor),
+then types C<TEXT> and Enter: so the test shows that the AUTOEXEC.BATs have
+finished and DOS is at its prompt.  The run ends at the serial line
+C<GRDOS-TEST-END>, or after C<--timeout> seconds (default 60).
+
+The output, without carriage returns, is saved as F<OUTDIR/serial.txt>.
+Each line of C<EXPECT> is a Perl regular expression that must match a line
+of the output, in order; a line C<count N REGEX> requires exactly C<N>
+matching lines anywhere.  Blank lines and lines starting with C<#> are
+ignored.  Exits non-zero if anything is missing.
+
+=cut
+
+my $end_marker = 'GRDOS-TEST-END';
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or return '';
+  local $/;
+  return scalar <$fh>;
+}
+
+package Monitor {
+  sub new ($class, $path) {
+    my $sock;
+    for(1 .. 100) {
+      $sock = IO::Socket::UNIX->new(Peer => $path) and last;
+      main::sleep(0.1);
+    }
+    die "no QEMU monitor at $path\n" unless $sock;
+    my $self = bless { sock => $sock }, $class;
+    $self->read_prompt;
+    return $self;
+  }
+
+  sub read_prompt ($self) {
+    my $out = '';
+    my $deadline = main::time() + 10;
+    while(main::time() < $deadline) {
+      my $n = sysread $self->{sock}, my $buf, 65536;
+      die "QEMU monitor closed\n" unless $n;
+      $out .= $buf;
+      return $out if $out =~ /\(qemu\) \z/;
+    }
+    die "no answer from the QEMU monitor\n";
+  }
+
+  sub cmd ($self, $command) {
+    syswrite $self->{sock}, "$command\n";
+    return $self->read_prompt;
+  }
+}
+
+# The last non-blank line of the 80x25 text screen.
+sub last_line ($mon) {
+  my $out = $mon->cmd('xp /2000hx 0xb8000');
+  my @cells;
+  for my $line (split /\r?\n/, $out) {
+    next unless $line =~ /^[0-9a-f]+:((?:\s+0x[0-9a-f]{4})+)\s*$/;
+    push @cells, map { hex } $1 =~ /0x([0-9a-f]{4})/g;
+  }
+  my @rows = map { join('', map { my $c = $_ & 0x7F; $c >= 32 ? chr $c : ' ' } @cells[$_ * 80 .. $_ * 80 + 79]) =~ s/ +\z//r }
+    0 .. 24;
+  my($last) = grep { /\S/ } reverse @rows;
+  return $last // '';
+}
+
+my %char_key = (
+  ' ' => 'spc', ':' => 'shift-semicolon', '.' => 'dot', '/' => 'slash', '\\' => 'backslash',
+  '-' => 'minus', '>' => 'shift-dot', '<' => 'shift-comma', '=' => 'equal',
+);
+
+sub type_keys ($text) {
+  return map {
+    /[a-z0-9]/ ? $_ : /[A-Z]/ ? 'shift-' . lc : $char_key{$_} // die "type: cannot type '$_'\n"
+  } split //, $text;
+}
+
+sub bios_chs ($c, $h, $s) {
+  my $total = $c * $h * $s;
+  return "1024/255/63" if $total > 63 * 255 * 1024;
+  my $n = int(int($total / 63) / 1024);
+  $h = $n > 128 ? 255 : $n > 64 ? 128 : $n > 32 ? 64 : $n > 16 ? 32 : 16;
+  $c = int(int($total / 63) / $h);
+  return ($c > 1024 ? 1024 : $c) . "/$h/63";
+}
+
+sub main (@args) {
+  my($chs, $timeout, $prompt, $type) = (undef, 60);
+  while(@args && $args[0] =~ /^--(chs|timeout|prompt|type)\z/) {
+    shift @args;
+    my $v = shift @args // die "--$1 needs a value\n";
+    if($1 eq 'chs') { $chs = $v } elsif($1 eq 'timeout') { $timeout = $v }
+    elsif($1 eq 'prompt') { $prompt = qr/$v/ } else { $type = $v }
+  }
+  die "usage: $0 [--chs C/H/S[/lba]] [--timeout S] [--prompt REGEX --type TEXT] IMAGE EXPECT OUTDIR\n"
+    unless @args == 3 && !defined($prompt) == !defined($type);
+  my($image, $expect, $outdir) = @args;
+  system('mkdir', '-p', $outdir) == 0 or die "unable to create $outdir\n";
+  my $serial = "$outdir/serial.log";
+  unlink $serial;
+
+  my $device = 'ide-hd,drive=hd0,bus=ide.0,unit=0';
+  if(defined $chs) {
+    my($c, $h, $s, $lba) = $chs =~ m{^(\d+)/(\d+)/(\d+)(/lba)?\z} or die "bad --chs $chs\n";
+    $device .= ",cyls=$c,heads=$h,secs=$s,bios-chs-trans=" . ($lba ? 'lba' : 'none');
+    say "hd-boot-test: drive $c/$h/$s, BIOS geometry ", $lba ? bios_chs($c, $h, $s) : "$c/$h/$s";
+  }
+  my $sock = tempdir('hd-boot-XXXXXX', TMPDIR => 1, CLEANUP => 1) . '/monitor';
+  my @cmd = (
+    'qemu-system-i386',
+    -display => 'none',
+    -m       => 4,
+    '-no-reboot',
+    -drive   => "file=$image,if=none,id=hd0,format=raw,snapshot=on",
+    -device  => $device,
+    -boot    => 'c',
+    -serial  => "file:$serial",
+    -monitor => "unix:$sock,server=on,wait=off",
+  );
+  my $pid = fork // die "fork: $!";
+  if($pid == 0) {
+    open STDOUT, '>', "$outdir/qemu.log" or die "unable to write $outdir/qemu.log: $!";
+    open STDERR, '>&', \*STDOUT or die "dup: $!";
+    exec @cmd or die "exec qemu-system-i386: $!";
+  }
+
+  my $mon = Monitor->new($sock);
+  my $deadline = time + $timeout;
+  my($finished, $typed, $line) = (0, !defined $type, '');
+  while(time < $deadline) {
+    if(slurp($serial) =~ /^\Q$end_marker\E\r?$/m) {
+      $finished = 1;
+      last;
+    }
+    last if waitpid($pid, 1) == $pid;
+    if(!$typed) {
+      $line = last_line($mon);
+      if($line =~ $prompt) {
+        say "hd-boot-test: at the prompt ($line); typing $type";
+        $mon->cmd("sendkey $_"), sleep 0.05 for type_keys($type), 'ret';
+        $typed = 1;
+      }
+    }
+    sleep 0.25;
+  }
+  kill 'TERM', $pid;
+  waitpid $pid, 0;
+  say "hd-boot-test: never at a prompt matching $prompt; the last line was: $line" unless $typed;
+  say "hd-boot-test: no $end_marker within $timeout seconds" unless $finished;
+
+  my $out = slurp($serial) =~ s/\r//gr;
+  open my $fh, '>', "$outdir/serial.txt" or die "unable to write $outdir/serial.txt: $!";
+  print $fh $out;
+  close $fh;
+  print $out;
+
+  my @lines = split /\n/, $out;
+  my($i, $ok) = (0, $finished && $typed);
+  for my $want (grep { /\S/ && !/^#/ } split /\n/, slurp($expect)) {
+    if($want =~ /^count (\d+) (.*)\z/) {
+      my($n, $re) = ($1, qr/$2/);
+      my $got = grep { $_ =~ $re } @lines;
+      next if $got == $n;
+      say "hd-boot-test: $got lines match $2, not $n";
+      $ok = 0;
+      next;
+    }
+    my $re = qr/$want/;
+    $i++ while $i < @lines && $lines[$i] !~ $re;
+    if($i >= @lines) {
+      say "hd-boot-test: not found (in order): $want";
+      $ok = 0;
+      $i = 0;
+      next;
+    }
+    $i++;
+  }
+  say $ok ? 'hd-boot-test: passed' : 'hd-boot-test: FAILED';
+  return $ok ? 0 : 1;
+}
+
+exit main(@ARGV);

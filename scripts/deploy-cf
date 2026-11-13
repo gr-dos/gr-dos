@@ -1,0 +1,1019 @@
+#!/usr/bin/env perl
+
+# 5.40, not 5.42 like the other scripts: this one runs under sudo, whose
+# PATH finds the system perl (Ubuntu 24.04 and Debian 13 have 5.38/5.40;
+# nothing here needs more than 5.36's signatures).
+use v5.36;
+use warnings;
+use Cwd qw( realpath );
+use Digest::SHA qw( sha256_hex );
+use Fcntl qw( O_RDONLY O_RDWR O_EXCL SEEK_SET );
+use File::Basename qw( basename dirname );
+use Getopt::Long qw( GetOptionsFromArray );
+use IO::Handle;
+use List::Util qw( sum0 );
+use POSIX qw( ceil strftime );
+use Time::Local qw( timegm );
+
+# ABSTRACT: Install GR-DOS on a CF card or hard disk image: provision once, then update only C:
+
+=head1 SYNOPSIS
+
+ scripts/deploy-cf inspect   [--dist DIR] TARGET
+ scripts/deploy-cf provision [--system-size SIZE] [--geometry C/H/S] [--allow-unaddressable]
+                             [--allow-fixed-disk] [--dist DIR] [--dry-run] [--confirm NAME] TARGET
+ scripts/deploy-cf update    [--recover] [--allow-fixed-disk] [--dist DIR] [--dry-run]
+                             [--confirm NAME] TARGET
+
+=head1 DESCRIPTION
+
+Deploys GR-DOS to C<TARGET>, a whole disk (a CF card in a USB reader, such
+as F</dev/sdX> or F</dev/disk/by-id/usb-...>) or a raw disk image file of
+the same layout, for QEMU and the tests.  See F<docs/deploy-cf.md>.
+
+=over 4
+
+=item C<inspect>
+
+reads the target and shows its identity, its partitions, whether it holds a
+GR-DOS layout, and what C<provision> or C<update> would do.  It writes
+nothing.
+
+=item C<provision>
+
+destroys everything on the target.  It writes a master boot record with an
+active primary partition for C: (10 MiB by default, C<--system-size>, in
+whole cylinders) and an extended partition holding FAT16 logical drives,
+D:, E:, ... (at most 2000 MiB each) over the rest of the disk; formats all
+of them; installs the distribution on C:; and writes the layout record in
+sector 1, which C<update> checks.
+
+=item C<update>
+
+checks that the target has the layout C<provision> wrote, byte for byte,
+then rewrites only the sectors of partition 1, C:, with a new file system
+and the current distribution.  Every other sector, including the master
+and extended boot records and the logical drives, is never written: the
+writes are checked against the range of partition 1.  With C<--recover>, a
+C: that is missing its marker, F<GRDOS.ID>, or is unreadable (an
+interrupted update) is replaced too; the partition tables and the layout
+record must still be exact.
+
+=back
+
+The distribution is the directory C<--dist> (default
+F<build/linux/cf>, made by C<make>): F<manifest.txt>, the files it lists,
+F<MSBOOT.BIN>, F<FDBOOT.BIN> and F<VERSION>.  C:'s root gets IO.SYS and
+MSDOS.SYS first, COMMAND.COM, and a generated F<CONFIG.SYS>,
+F<AUTOEXEC.BAT> (with C<PATH C:\DOS>) and F<GRDOS.ID>; the other files go
+in F<C:\DOS>.
+
+C<provision> and C<update> ask for the target's name (C<sdd>, or the image
+file's name) on the terminal, or take it as C<--confirm NAME>.  C<--dry-run>
+does every check and shows the plan, but writes nothing.  Block devices
+must be whole, removable or USB disks (C<--allow-fixed-disk> to lift the
+latter) with 512-byte sectors, not in use (mounted, swap, or held by
+device-mapper or md), and not the disk of F</>, F</boot>, F</usr>,
+F</var> or F</home>; they are opened with C<O_EXCL>.
+
+=head2 Geometry
+
+DOS 4.00 reaches the disk only through INT 13h in cylinders, heads and
+sectors, so every partition must lie in the first 1024 cylinders of the
+geometry the BIOS reports, and the boot sectors and partition tables must
+use that same geometry.  The default is the usual LBA-assisted translation
+of the disk's size: 63 sectors, and 16, 32, 64, 128 or 255 heads, the
+fewest that reach the whole disk within 1024 cylinders.  C<--geometry>
+gives another.  A disk larger than 1024 x 255 x 63 sectors (8.4 GB) is
+refused, unless C<--allow-unaddressable> leaves the rest unused.
+
+=cut
+
+use constant {
+  SECTOR      => 512,
+  MAX_VOLUME  => 2000 * 2048,    # sectors of a logical drive's extent: 2000 MiB
+  MIN_DATA    => 2048,           # sectors: the smallest D: worth making
+  ROOT_ENTRIES => 512,
+  MAX_DRIVES  => 23,             # C: to Z:, IO.SYS's table (INC/MSBDS.INC)
+  RECORD_MAGIC => 'GRDOS-CF-LAYOUT 1',
+  BLKFLSBUF   => 0x1261,
+  BLKRRPART   => 0x125F,
+};
+
+my $root = dirname(dirname(realpath(__FILE__)));
+
+sub fail ($msg) { die "deploy-cf: $msg\n" }
+sub note ($msg) { say $msg }
+
+# Sizes: a number of bytes, with a suffix K, M or G (binary).
+sub parse_size ($s) {
+  my %unit = ('' => 1, K => 1024, M => 1024**2, G => 1024**3);
+  $s =~ /^(\d+)([KMG]?)(?:i?B)?\z/i or fail "bad size $s (use for example 10M)";
+  return $1 * $unit{uc $2};
+}
+
+sub mib ($sectors) { sprintf '%.1f MiB', $sectors / 2048 }
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or fail "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+# --- The distribution -------------------------------------------------------
+
+sub dos_time ($epoch, $utc = 0) {
+  my @t = $utc ? gmtime $epoch : localtime $epoch;
+  my $date = (($t[5] + 1900 - 1980) << 9) | (($t[4] + 1) << 5) | $t[3];
+  my $time = ($t[2] << 11) | ($t[1] << 5) | int($t[0] / 2);
+  return ($time, $date);
+}
+
+my %attr_bit = (R => 0x01, H => 0x02, S => 0x04, A => 0x20);
+my %generated = map { $_ => 1 } qw( CONFIG.SYS AUTOEXEC.BAT GRDOS.ID );
+
+sub load_dist ($dir) {
+  -d $dir or fail "no distribution in $dir (run make, or give --dist)";
+  my %d = (dir => $dir, files => []);
+  for my $line (split /\n/, slurp("$dir/manifest.txt")) {
+    my($sha, $size, $attrs, $y, $mo, $da, $h, $mi, $s, $name) = $line =~
+      /^([0-9a-f]{64})\s+(\d+)\s+([-RHSA]{4})\s+(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)\s+(\S+)\z/
+      or fail "$dir/manifest.txt: bad line: $line";
+    $name =~ /^[A-Z0-9_\-]{1,8}(?:\.[A-Z0-9_\-]{1,3})?\z/ or fail "$dir/manifest.txt: bad name $name";
+    next if $generated{$name};
+    my $data = slurp("$dir/$name");
+    length $data == $size && sha256_hex($data) eq $sha or fail "$dir/$name: does not match manifest.txt";
+    my $attr = 0;
+    $attr |= $attr_bit{$_} for grep { $_ ne '-' } split //, $attrs;
+    push $d{files}->@*, { name => $name, data => $data, attr => $attr,
+      mtime => timegm($s, $mi, $h, $da, $mo - 1, $y), utc => 1 };
+  }
+  my @names = map { $_->{name} } $d{files}->@*;
+  "@names[0, 1]" eq 'IO.SYS MSDOS.SYS' or fail "$dir/manifest.txt: IO.SYS and MSDOS.SYS must come first";
+  grep { $_ eq 'COMMAND.COM' } @names or fail "$dir/manifest.txt: no COMMAND.COM";
+  my $msboot = slurp("$dir/MSBOOT.BIN");
+  $d{boot} = substr $msboot, -512;
+  substr($d{boot}, 3, 8) eq 'MSDOS4.0' && substr($d{boot}, 510) eq "\x55\xAA" && ord(substr $d{boot}, 0x26) == 0x29
+    or fail "$dir/MSBOOT.BIN: not the MS-DOS 4.00 boot sector";
+  my $fdboot = slurp("$dir/FDBOOT.BIN");
+  length $fdboot == 2048 && substr($fdboot, 0x600 + 510, 2) eq "\x55\xAA"
+    or fail "$dir/FDBOOT.BIN: not FDISK's master boot record";
+  $d{mbr_code} = substr $fdboot, 0x600, 446;
+  ($d{version}) = slurp("$dir/VERSION") =~ /^(\S+)/ or fail "$dir/VERSION: empty";
+  return \%d;
+}
+
+# --- Geometry and layout ----------------------------------------------------
+
+sub default_geometry ($total) {
+  my $s = 63;
+  my($h) = grep { $total <= 1024 * $_ * $s } 16, 32, 64, 128, 255;
+  $h //= 255;
+  my $c = int($total / ($h * $s));
+  $c = 1024 if $c > 1024;
+  return [$c, $h, $s];
+}
+
+sub parse_geometry ($g) {
+  my($c, $h, $s) = $g =~ m{^(\d+)/(\d+)/(\d+)\z} or fail "bad --geometry $g (use C/H/S)";
+  fail "unsupported geometry $g: at most 1024 cylinders, 2 to 255 heads and 1 to 63 sectors"
+    if $c < 1 || $c > 1024 || $h < 2 || $h > 255 || $s < 1 || $s > 63;
+  return [$c, $h, $s];
+}
+
+sub gstr ($g) { join '/', @$g }
+
+# The FAT parameters IO.SYS (DiskTable2, MSINIT.ASM) and FORMAT give a fixed
+# disk partition of $len sectors: 1 reserved sector, 2 FATs, 512 root
+# entries, media F8h.
+sub volume_params ($len, $hidden) {
+  fail "a volume of $len sectors is too small" if $len < 64;
+  my($spc, $bits) =
+      $len <= 32680    ? (8, 12)
+    : $len <= 0x40000  ? (4, 16)
+    : $len <= 0x80000  ? (8, 16)
+    : $len <= 0x100000 ? (16, 16)
+    : $len <= 0x200000 ? (32, 16)
+    : $len <= 0x400000 ? (64, 16)
+    : fail "a volume of $len sectors is larger than DOS 4.00's FAT16 allows";
+  my $root_secs = ROOT_ENTRIES * 32 / SECTOR;
+  my($spf, $clusters) = (1, 0);
+  while(1) {
+    $clusters = int(($len - 1 - 2 * $spf - $root_secs) / $spc);
+    my $need = ceil(($clusters + 2) * ($bits == 12 ? 1.5 : 2) / SECTOR);
+    last if $need <= $spf;
+    $spf = $need;
+  }
+  # IO.SYS and MSLOAD take FAT16 from 4086 clusters, the kernel from 4085;
+  # FAT16 cluster numbers from FFF8h are end of file.
+  fail "a volume of $len sectors gives $clusters clusters, which DOS 4.00 cannot use"
+    if $bits == 12 ? $clusters > 4084 || $clusters < 1 : $clusters < 4086 || $clusters > 65524;
+  my $type = $len + $hidden >= 65536 ? 0x06 : $bits == 16 ? 0x04 : 0x01;
+  return { len => $len, hidden => $hidden, spc => $spc, bits => $bits, spf => $spf,
+    clusters => $clusters, root_secs => $root_secs, type => $type,
+    data_start => 1 + 2 * $spf + $root_secs };
+}
+
+# The layout: C: from the second track to a cylinder boundary, then an
+# extended partition of the rest of the reachable cylinders, split evenly
+# into logical drives of at most MAX_VOLUME sectors. Every extended boot
+# record is at head 0, sector 1 of a cylinder (IO.SYS adds the EBR's
+# cylinder to the logical drive's CHS), its drive one track later.
+sub plan_layout ($total, $geom, $system_sectors) {
+  my($c, $h, $s) = @$geom;
+  my $cyl = $h * $s;
+  my $cyls = int($total / $cyl);
+  $cyls = $c if $cyls > $c;
+  fail "the disk has " . mib($total) . ", less than one cylinder of " . gstr($geom) if $cyls < 1;
+  my $sys_cyls = ceil(($system_sectors + $s) / $cyl);
+  my $rest = $cyls - $sys_cyls;
+  fail sprintf 'insufficient capacity: %s reachable with geometry %s, C: needs %d cylinders (%s) and D: at least %s',
+      mib($cyls * $cyl), gstr($geom), $sys_cyls, mib($sys_cyls * $cyl - $s), mib(MIN_DATA)
+    if $rest * $cyl - $s < MIN_DATA;
+  my %l = (geometry => [@$geom], total => $total, cylinders => $cyls);
+  $l{system} = { start => $s, len => $sys_cyls * $cyl - $s };
+  $l{extended} = { start => $sys_cyls * $cyl, len => $rest * $cyl };
+  my $per = int(MAX_VOLUME / $cyl);
+  my $n = ceil($rest / $per);
+  fail "too many drives ($n logical drives)" if 1 + $n > MAX_DRIVES;
+  my $at = $sys_cyls;
+  for my $i (0 .. $n - 1) {
+    my $k = int($rest / $n) + ($i < $rest % $n ? 1 : 0);
+    push $l{logical}->@*, { ebr => $at * $cyl, start => $at * $cyl + $s, len => $k * $cyl - $s,
+      extent => $k * $cyl };
+    $at += $k;
+  }
+  $l{system}{params} = volume_params($l{system}{len}, $s);
+  $_->{params} = volume_params($_->{len}, $s) for $l{logical}->@*;
+  return \%l;
+}
+
+# --- Partition tables -------------------------------------------------------
+
+sub chs_bytes ($lba, $geom) {
+  my(undef, $h, $s) = @$geom;
+  my $c = int($lba / ($h * $s));
+  fail "sector $lba is beyond cylinder 1023" if $c > 1023;
+  return pack 'C3', int($lba / $s) % $h, ($lba % $s + 1) | (($c >> 2) & 0xC0), $c & 0xFF;
+}
+
+sub entry ($boot, $type, $abs, $rel, $len, $geom) {
+  return pack 'C a3 C a3 V V', $boot, chs_bytes($abs, $geom), $type, chs_bytes($abs + $len - 1, $geom),
+    $rel, $len;
+}
+
+sub mbr_table ($l) {
+  my $g = $l->{geometry};
+  return entry(0x80, $l->{system}{params}{type}, $l->{system}{start}, $l->{system}{start}, $l->{system}{len}, $g)
+    . entry(0x00, 0x05, $l->{extended}{start}, $l->{extended}{start}, $l->{extended}{len}, $g)
+    . "\0" x 32 . "\x55\xAA";
+}
+
+sub ebr_sector ($l, $i) {
+  my $g = $l->{geometry};
+  my $d = $l->{logical}[$i];
+  my $t = entry(0x00, $d->{params}{type}, $d->{start}, $d->{start} - $d->{ebr}, $d->{len}, $g);
+  if(my $next = $l->{logical}[$i + 1]) {
+    $t .= entry(0x00, 0x05, $next->{ebr}, $next->{ebr} - $l->{extended}{start}, $next->{extent}, $g);
+  }
+  return "\0" x 446 . $t . "\0" x (64 - length $t) . "\x55\xAA";
+}
+
+# The layout record, sector 1 (in the first track, which DOS leaves unused).
+sub record_text ($l, $disk_id, $created) {
+  my $t = join '', RECORD_MAGIC, "\n", "disk-id $disk_id\n", 'geometry ', gstr($l->{geometry}), "\n",
+    "sectors $l->{total}\n", "system $l->{system}{start} $l->{system}{len}\n",
+    "extended $l->{extended}{start} $l->{extended}{len}\n",
+    (map { "logical $_->{ebr} $_->{start} $_->{len}\n" } $l->{logical}->@*), "created $created\n";
+  $t .= 'sha256 ' . sha256_hex($t) . "\n";
+  fail 'layout record too long' if length $t > SECTOR;
+  return $t . "\0" x (SECTOR - length $t);
+}
+
+sub parse_record ($sector) {
+  my($text) = $sector =~ /^([^\0]*)/;
+  return undef unless $text =~ /\A\Q${\RECORD_MAGIC}\E\n/;
+  my($body, $sha) = $text =~ /\A(.*\n)sha256 ([0-9a-f]{64})\n\z/s or return undef;
+  return undef unless sha256_hex($body) eq $sha && $sector eq $text . "\0" x (SECTOR - length $text);
+  my %r = (logical => []);
+  for (split /\n/, $body) {
+    if(/^disk-id ([0-9a-f]{16})\z/) { $r{disk_id} = $1 }
+    elsif(m{^geometry (\d+)/(\d+)/(\d+)\z}) { $r{geometry} = [$1, $2, $3] }
+    elsif(/^sectors (\d+)\z/) { $r{total} = $1 }
+    elsif(/^system (\d+) (\d+)\z/) { $r{system} = { start => $1, len => $2 } }
+    elsif(/^extended (\d+) (\d+)\z/) { $r{extended} = { start => $1, len => $2 } }
+    elsif(/^logical (\d+) (\d+) (\d+)\z/) { push $r{logical}->@*, { ebr => $1, start => $2, len => $3 } }
+    elsif(/^created (.+)\z/) { $r{created} = $1 }
+  }
+  return undef unless $r{disk_id} && $r{geometry} && $r{total} && $r{system} && $r{extended} && $r{logical}->@*;
+  return \%r;
+}
+
+# The layout a record describes, as it is: update never re-plans it, so a
+# disk provisioned with another --system-size, or by a later policy, keeps
+# its partitions. The tables made from it must be the disk's, byte for byte.
+sub layout_from_record ($r) {
+  my $g = $r->{geometry};
+  my $cyl = $g->[1] * $g->[2];
+  my $l = { geometry => $g, total => $r->{total}, system => { %{$r->{system}} },
+    extended => { %{$r->{extended}} }, cylinders => int(($r->{extended}{start} + $r->{extended}{len}) / $cyl),
+    logical => [map { { %$_, extent => $_->{len} + ($_->{start} - $_->{ebr}) } } $r->{logical}->@*] };
+  $l->{system}{params} = volume_params($l->{system}{len}, $l->{system}{start});
+  $_->{params} = volume_params($_->{len}, $_->{start} - $_->{ebr}) for $l->{logical}->@*;
+  return $l;
+}
+
+# --- FAT volumes ------------------------------------------------------------
+
+sub boot_sector ($tmpl, $p, $geom, $serial, $label) {
+  my $b = $tmpl;
+  my $small = $p->{len} < 65536;
+  substr($b, 0x0B, 0x3E - 0x0B) = pack 'v C v C v v C v v v V V C C C V A11 A8',
+    SECTOR, $p->{spc}, 1, 2, ROOT_ENTRIES, $small ? $p->{len} : 0, 0xF8, $p->{spf}, $geom->[2], $geom->[1],
+    $p->{hidden}, $small ? 0 : $p->{len}, 0x80, 0, 0x29, $serial, $label, "FAT$p->{bits}";
+  return $b;
+}
+
+sub fat_set ($fat, $bits, $n, $v) {
+  if($bits == 16) {
+    substr($$fat, 2 * $n, 2) = pack 'v', $v;
+  } else {
+    my $o = int($n * 3 / 2);
+    my $w = unpack 'v', substr $$fat, $o, 2;
+    $w = $n & 1 ? ($w & 0x000F) | ($v << 4) : ($w & 0xF000) | ($v & 0xFFF);
+    substr($$fat, $o, 2) = pack 'v', $w;
+  }
+}
+
+sub dir_entry ($name, $attr, $cluster, $size, $mtime, $utc) {
+  my($base, $ext) = $name =~ /^\.\.?\z/ ? ($name, '') : split /\./, $name;
+  my($time, $date) = dos_time($mtime, $utc);
+  return pack 'A8 A3 C x10 v v v V', $base, $ext // '', $attr, $time, $date, $cluster, $size;
+}
+
+sub is_dir ($f) { exists $f->{children} }
+
+# The files of a tree, subdirectories' included.
+sub count_files ($files) { sum0 map { is_dir($_) ? count_files($_->{children}) : 1 } @$files }
+
+# The first sectors of a volume: boot sector, FATs, root directory and, from
+# the first cluster on, the files' data, contiguous: the root's entries in
+# their order, then each subdirectory's (an entry with children, whose own
+# clusters come where it is listed). The rest of the volume is free space
+# and is not written.
+sub volume_image ($p, $geom, $boot_tmpl, $serial, $label, $files = []) {
+  my $csize = $p->{spc} * SECTOR;
+  my $eoc = $p->{bits} == 16 ? 0xFFFF : 0xFFF;
+  my $fat = "\0" x ($p->{spf} * SECTOR);
+  fat_set(\$fat, $p->{bits}, 0, $p->{bits} == 16 ? 0xFFF8 : 0xFF8);
+  fat_set(\$fat, $p->{bits}, 1, $eoc);
+  fail 'too many files for the root directory' if @$files > ROOT_ENTRIES;
+  # Clusters, in order.
+  my($next, %first, @order) = (2);
+  my @todo = ([$files, 0]);
+  while(my $t = shift @todo) {
+    my($list, $parent) = @$t;
+    for my $f (@$list) {
+      my $len = is_dir($f) ? 32 * (2 + $f->{children}->@*) : length $f->{data};
+      my $n = ceil($len / $csize);
+      fail sprintf 'insufficient file system space: C: has %d clusters of %d bytes; the distribution needs more',
+          $p->{clusters}, $csize
+        if $next + $n - 2 > $p->{clusters};
+      for my $k (0 .. $n - 1) {
+        fat_set(\$fat, $p->{bits}, $next + $k, $k == $n - 1 ? $eoc : $next + $k + 1);
+      }
+      $first{$f} = $n ? $next : 0;
+      push @order, [$f, $n, $parent];
+      $next += $n;
+    }
+    push @todo, map { [$_->{children}, $first{$_}] } grep { is_dir($_) } @$list;
+  }
+  my $entries = sub ($list) {
+    join '', map { dir_entry($_->{name}, $_->{attr}, $first{$_}, is_dir($_) ? 0 : length $_->{data}, $_->{mtime},
+      $_->{utc}) } @$list;
+  };
+  my $data = '';
+  for(@order) {
+    my($f, $n, $parent) = @$_;
+    my $bytes = is_dir($f)
+      ? dir_entry('.', 0x10, $first{$f}, 0, $f->{mtime}, $f->{utc})
+        . dir_entry('..', 0x10, $parent, 0, $f->{mtime}, $f->{utc}) . $entries->($f->{children})
+      : $f->{data};
+    $data .= $bytes . "\0" x ($n * $csize - length $bytes);
+  }
+  my $dir = $entries->($files);
+  $dir .= "\0" x ($p->{root_secs} * SECTOR - length $dir);
+  return { bytes => boot_sector($boot_tmpl, $p, $geom, $serial, $label) . $fat . $fat . $dir . $data,
+    used_clusters => $next - 2 };
+}
+
+sub serial_of ($seed) { unpack 'V', pack 'H8', sha256_hex($seed) }
+
+sub crlf ($text) { $text =~ s/\n/\r\n/gr }
+
+# The distribution's files that stay in C:'s root; the rest go in C:\DOS.
+my %in_root = map { $_ => 1 } qw( IO.SYS MSDOS.SYS COMMAND.COM );
+
+# C:'s files: IO.SYS, MSDOS.SYS and COMMAND.COM, the generated CONFIG.SYS,
+# AUTOEXEC.BAT and GRDOS.ID, and the directory DOS with the rest of the
+# distribution.
+sub system_files ($dist, $l, $disk_id, $now) {
+  my $stamp = strftime '%Y-%m-%dT%H:%M:%SZ', gmtime $now;
+  my @gen = (
+    { name => 'CONFIG.SYS', attr => 0x20, mtime => $now, data => crlf(<<~'END') },
+      FILES=20
+      BUFFERS=20
+      END
+    { name => 'AUTOEXEC.BAT', attr => 0x20, mtime => $now, data => crlf(<<~'END') },
+      @ECHO OFF
+      REM GR-DOS system defaults. Every deploy-cf update replaces C:,
+      REM so keep your own settings in D:\AUTOEXEC.BAT.
+      PROMPT $P$G
+      PATH C:\DOS
+      REM User configuration is on persistent storage
+      IF EXIST D:\AUTOEXEC.BAT CALL D:\AUTOEXEC.BAT
+      END
+    { name => 'GRDOS.ID', attr => 0x21, mtime => $now, data => crlf(join '',
+      "GR-DOS installation (scripts/deploy-cf)\n", "layout 1\n", "disk-id $disk_id\n",
+      "version $dist->{version}\n", 'geometry ', gstr($l->{geometry}), "\n",
+      "system $l->{system}{start} $l->{system}{len}\n", "installed $stamp\n") },
+  );
+  my @f = $dist->{files}->@*;
+  return ((grep { $in_root{$_->{name}} } @f), @gen,
+    { name => 'DOS', attr => 0x10, mtime => $now, children => [grep { !$in_root{$_->{name}} } @f] });
+}
+
+sub system_image ($dist, $l, $disk_id, $now) {
+  my $p = $l->{system}{params};
+  my @files = system_files($dist, $l, $disk_id, $now);
+  my $img = volume_image($p, $l->{geometry}, $dist->{boot}, serial_of("$disk_id C: $now"), 'NO NAME', \@files);
+  return { %$img, files => \@files };
+}
+
+# --- Targets ----------------------------------------------------------------
+
+sub sysfs ($path) {
+  open my $fh, '<', $path or return undef;
+  my $v = <$fh> // '';
+  chomp $v;
+  return $v =~ s/\s+\z//r;
+}
+
+# The whole disks under block device MAJ:MIN: through partitions, and
+# device-mapper and md members.
+sub disks_of ($majmin, $seen = {}) {
+  my $dir = realpath("/sys/dev/block/$majmin") or return ();
+  return () if $seen->{$dir}++;
+  $dir = dirname($dir) if -e "$dir/partition";
+  my @slaves = glob "$dir/slaves/*";
+  return basename($dir) unless @slaves;
+  return map { my $mm = sysfs("$_/dev"); defined $mm ? disks_of($mm, $seen) : () } @slaves;
+}
+
+sub majmin_of_path ($path) {
+  my @st = stat $path or return undef;
+  return sprintf '%d:%d', $st[6] >> 8 & 0xFFF | ($st[6] >> 32 & ~0xFFF), $st[6] & 0xFF | ($st[6] >> 12 & ~0xFF);
+}
+
+# Mounted and swap devices, as { disk => [what, ...] }, and the disks of
+# the system's own file systems.
+sub disk_usage () {
+  my(%used, %system);
+  my %sys_mp = map { $_ => 1 } qw( / /boot /boot/efi /usr /var /home );
+  if(open my $fh, '<', '/proc/self/mountinfo') {
+    while(<$fh>) {
+      my @f = split ' ';
+      my($sep) = grep { $f[$_] eq '-' } 0 .. $#f;
+      my $mp = $f[4] =~ s/\\040/ /gr;
+      my @mm = ($f[2]);
+      push @mm, majmin_of_path($f[$sep + 2]) if defined $sep && $f[$sep + 2] =~ m{^/dev/};
+      for my $d (map { disks_of($_) } grep { defined } @mm) {
+        push $used{$d}->@*, "mounted on $mp";
+        $system{$d} = $mp if $sys_mp{$mp};
+      }
+    }
+  }
+  if(open my $fh, '<', '/proc/swaps') {
+    <$fh>;
+    while(<$fh>) {
+      my($dev) = split ' ';
+      my $mm = majmin_of_path($dev) // next;
+      push $used{$_}->@*, "swap $dev" for disks_of($mm);
+    }
+  }
+  return (\%used, \%system);
+}
+
+sub by_id ($name) {
+  for my $link (sort glob '/dev/disk/by-id/*') {
+    next if $link =~ m{/(?:wwn|nvme-eui)-};
+    my $t = readlink $link // next;
+    return basename($link) if basename($t) eq $name;
+  }
+  return undef;
+}
+
+# Describe TARGET and check it may be written; dies otherwise when $write.
+sub examine ($path, %o) {
+  my $real = realpath($path) // fail "$path: no such file or device";
+  my %t = (path => $path, real => $real);
+  my @problems;
+  if(-b $real) {
+    my $mm = majmin_of_path($real);
+    my $dir = realpath("/sys/dev/block/$mm") // fail "$path: not found in /sys";
+    $t{block} = 1;
+    $t{name} = basename($dir);
+    fail "$path is a partition ($t{name}); give the whole disk" if -e "$dir/partition";
+    fail "$path ($t{name}) is not a disk" if $t{name} =~ /^(?:loop|dm-|md|sr|zram|ram)/ && !$o{allow_fixed};
+    $t{sectors} = sysfs("$dir/size") // fail "$path: unknown size";
+    fail "$path ($t{name}): no medium (is the card in the reader?)" unless $t{sectors};
+    my $lbs = sysfs("$dir/queue/logical_block_size") // 512;
+    push @problems, "its logical sectors are $lbs bytes, not 512" if $lbs != 512;
+    $t{removable} = sysfs("$dir/removable") // 0;
+    $t{model} = join ' ', grep { defined && length } sysfs("$dir/device/vendor"), sysfs("$dir/device/model");
+    $t{serial} = sysfs("$dir/device/serial") // '';
+    $t{by_id} = by_id($t{name});
+    my $tran = `lsblk -dno TRAN $real 2>/dev/null`;
+    chomp $tran;
+    $t{tran} = $tran;
+    my($used, $system) = disk_usage();
+    push @problems, "it is the system disk (it holds $system->{$t{name}})" if $system->{$t{name}};
+    push @problems, "it is in use: " . join(', ', do { my %s; grep { !$s{$_}++ } $used->{$t{name}}->@* }) if $used->{$t{name}};
+    # Members of ZFS pools, LVM, md RAID or LUKS: their mounts name no
+    # disk (a ZFS root is "rpool/ROOT/..."), so mountinfo cannot show them.
+    my %member = map { $_ => 1 } qw( zfs_member LVM2_member linux_raid_member crypto_LUKS );
+    for (split /\n/, `lsblk -nro NAME,FSTYPE $real 2>/dev/null`) {
+      my($n, $fs) = split ' ';
+      push @problems, "$n is a $fs, part of a pool, volume group, array or encrypted volume" if $fs && $member{$fs};
+    }
+    for my $holder (glob("$dir/holders/*"), glob("$dir/$t{name}*/holders/*")) {
+      push @problems, 'it is in use by ' . basename($holder);
+    }
+    push @problems, 'it is neither removable nor on USB (--allow-fixed-disk to allow it)'
+      unless $t{removable} || $tran eq 'usb' || $o{allow_fixed};
+    $t{confirm} = $t{name};
+  } elsif(-f $real) {
+    my $size = -s $real;
+    fail "$path: its size, $size bytes, is not a whole number of sectors" if $size % SECTOR;
+    $t{sectors} = $size / SECTOR;
+    $t{confirm} = basename($real);
+    for my $bf (glob '/sys/block/loop*/loop/backing_file') {
+      my $b = sysfs($bf) // next;
+      push @problems, "it is attached to " . basename(dirname(dirname($bf))) if $b eq $real;
+    }
+  } else {
+    fail "$path is neither a block device nor a disk image file";
+  }
+  $t{problems} = \@problems;
+  return \%t;
+}
+
+sub describe ($t) {
+  my $what = $t->{block}
+    ? join(' ', "block device $t->{name}", ($t->{model} ? "\"$t->{model}\"" : ()),
+        ($t->{serial} ? "serial $t->{serial}" : ()), ($t->{tran} ? "on $t->{tran}" : ()),
+        ($t->{removable} ? 'removable' : 'fixed'))
+    : 'disk image file';
+  my $s = "Target:   $t->{path}" . ($t->{real} ne $t->{path} ? " -> $t->{real}" : '') . "\n"
+    . "          $what\n";
+  $s .= "          /dev/disk/by-id/$t->{by_id}\n" if $t->{by_id};
+  $s .= sprintf "Size:     %d sectors, %s bytes (%s)\n", $t->{sectors}, $t->{sectors} * SECTOR, mib($t->{sectors});
+  return $s;
+}
+
+# A disk opened for reading, or for writing only the sectors in the ranges
+# given: every write outside them dies before it is made.
+package Disk {
+  sub open ($class, $t, $write) {
+    my $flags = $write ? Fcntl::O_RDWR() | ($t->{block} ? Fcntl::O_EXCL() : 0) : Fcntl::O_RDONLY();
+    sysopen my $fh, $t->{real}, $flags
+      or main::fail("unable to open $t->{path}" . ($write && $t->{block} ? ' exclusively' : '') . ": $!"
+        . ($!{EACCES} ? ' (run with sudo)' : $!{EBUSY} ? ' (it is mounted or in use)' : ''));
+    my $self = bless { fh => $fh, t => $t, allow => [], written => 0 }, $class;
+    $self->{fail_after} = $ENV{GRDOS_DEPLOY_CF_FAIL_AFTER} if $write;
+    return $self;
+  }
+
+  sub allow ($self, $from, $count) { push $self->{allow}->@*, [$from, $from + $count] }
+
+  sub read ($self, $lba, $n = 1) {
+    sysseek $self->{fh}, $lba * main::SECTOR, Fcntl::SEEK_SET() or main::fail("seek to sector $lba: $!");
+    my $buf = '';
+    while(length $buf < $n * main::SECTOR) {
+      my $got = sysread $self->{fh}, $buf, $n * main::SECTOR - length $buf, length $buf;
+      main::fail("unable to read sector " . ($lba + int(length($buf) / main::SECTOR)) . " of $self->{t}{path}: "
+        . (defined $got ? 'end of disk' : $!)) unless $got;
+    }
+    return $buf;
+  }
+
+  sub write ($self, $lba, $data) {
+    my $n = length($data) / main::SECTOR;
+    main::fail('internal error: partial sector write') if $n != int $n || !$n;
+    my $ok = grep { $lba >= $_->[0] && $lba + $n <= $_->[1] } $self->{allow}->@*;
+    main::fail(sprintf 'internal error: refusing to write sectors %d to %d, outside %s', $lba, $lba + $n - 1,
+      join(', ', map { "$_->[0]-" . ($_->[1] - 1) } $self->{allow}->@*) || 'nothing') unless $ok;
+    sysseek $self->{fh}, $lba * main::SECTOR, Fcntl::SEEK_SET() or main::fail("seek to sector $lba: $!");
+    my $off = 0;
+    while($off < length $data) {
+      my $chunk = 2048 * main::SECTOR;
+      if(defined $self->{fail_after}) {
+        my $left = $self->{fail_after} - $self->{written};
+        main::fail("I/O error writing sector " . ($lba + $off / main::SECTOR)
+          . " (simulated by GRDOS_DEPLOY_CF_FAIL_AFTER)") if $left <= 0;
+        $chunk = $left * main::SECTOR if $left * main::SECTOR < $chunk;
+      }
+      my $w = syswrite $self->{fh}, $data, $chunk, $off;
+      main::fail(sprintf 'I/O error writing sector %d of %s: %s (was the card removed?)',
+        $lba + $off / main::SECTOR, $self->{t}{path}, $! || 'short write') unless $w;
+      $off += $w;
+      $self->{written} += int($w / main::SECTOR);
+    }
+  }
+
+  # To the device, and drop the kernel's cached blocks, so that the reads
+  # that verify come from the card.
+  sub flush ($self) {
+    $self->{fh}->sync or main::fail("unable to flush $self->{t}{path}: $! (was the card removed?)");
+    if($self->{t}{block}) {
+      ioctl $self->{fh}, main::BLKFLSBUF, 0
+        or warn "deploy-cf: unable to drop cached blocks of $self->{t}{path}: $!; verifying through the cache\n";
+    }
+  }
+
+  sub reread_partitions ($self) {
+    return unless $self->{t}{block};
+    ioctl $self->{fh}, main::BLKRRPART, 0
+      or warn "deploy-cf: the kernel did not re-read the partition table: $!\n";
+  }
+}
+
+# --- Reading volumes, for the checks ----------------------------------------
+
+sub read_volume ($disk, $base) {
+  my $bs = $disk->read($base);
+  return undef unless substr($bs, 510) eq "\x55\xAA" && substr($bs, 3, 8) eq 'MSDOS4.0';
+  my %v = (base => $base, boot => $bs);
+  @v{qw( bps spc rsv nfat root tot16 media spf spt heads hidden tot32 drive )}
+    = unpack 'x11 v C v C v v C v v v V V C', $bs;
+  return undef unless $v{bps} == SECTOR && $v{spc} && $v{nfat} == 2 && $v{rsv} == 1 && $v{spf};
+  $v{total} = $v{tot16} || $v{tot32};
+  $v{root_secs} = $v{root} * 32 / SECTOR;
+  $v{data_start} = $v{rsv} + $v{nfat} * $v{spf} + $v{root_secs};
+  $v{clusters} = int(($v{total} - $v{data_start}) / $v{spc});
+  $v{bits} = $v{clusters} >= 4086 ? 16 : 12;
+  $v{fat} = $disk->read($base + 1, $v{spf});
+  $v{fat2} = $disk->read($base + 1 + $v{spf}, $v{spf});
+  $v{entries} = dir_entries($disk->read($base + 1 + 2 * $v{spf}, $v{root_secs}));
+  return \%v;
+}
+
+# A directory's entries, without deleted ones, "." and "..".
+sub dir_entries ($dir) {
+  my @entries;
+  for(my $i = 0; $i + 32 <= length $dir; $i += 32) {
+    my $e = substr $dir, $i, 32;
+    last if ord $e == 0;
+    next if ord $e == 0xE5 || ord $e == ord '.';
+    my($n, $x, $attr, $cl, $size) = unpack 'A8 A3 C x14 v V', $e;
+    push @entries, { name => length $x ? "$n.$x" : $n, attr => $attr, cluster => $cl, size => $size };
+  }
+  return \@entries;
+}
+
+sub fat_get ($v, $n) {
+  return unpack 'v', substr $v->{fat}, 2 * $n, 2 if $v->{bits} == 16;
+  my $w = unpack 'v', substr $v->{fat}, int($n * 3 / 2), 2;
+  return $n & 1 ? $w >> 4 : $w & 0xFFF;
+}
+
+# The clusters of a chain, at most $max bytes of them.
+sub read_chain ($disk, $v, $cl, $max) {
+  my($data, $steps) = ('', 0);
+  my $eof = $v->{bits} == 16 ? 0xFFF8 : 0xFF8;
+  while(length $data < $max && $cl >= 2 && $cl < $eof) {
+    return undef if $cl > $v->{clusters} + 1 || ++$steps > $v->{clusters};
+    $data .= $disk->read($v->{base} + $v->{data_start} + ($cl - 2) * $v->{spc}, $v->{spc});
+    $cl = fat_get($v, $cl);
+  }
+  return $data;
+}
+
+sub read_file ($disk, $v, $e) {
+  my $data = read_chain($disk, $v, $e->{cluster}, $e->{size}) // return undef;
+  return length $data >= $e->{size} ? substr($data, 0, $e->{size}) : undef;
+}
+
+sub read_dir ($disk, $v, $e) {
+  my $data = read_chain($disk, $v, $e->{cluster}, 1 << 21) // return undef;
+  return length $data ? dir_entries($data) : undef;
+}
+
+# The partition tables as they are: lines for inspect.
+sub show_tables ($disk) {
+  my @out;
+  my $mbr = $disk->read(0);
+  push @out, 'MBR:      ' . (substr($mbr, 510) eq "\x55\xAA" ? 'signature 55AA' : 'no boot signature');
+  return @out unless substr($mbr, 510) eq "\x55\xAA";
+  my $ext;
+  my $show = sub ($where, $buf, $base) {
+    for my $i (0 .. 3) {
+      my($boot, $type, $rel, $len) = unpack 'C x3 C x3 V V', substr $buf, 446 + 16 * $i, 16;
+      next unless $type || $len;
+      push @out, sprintf '  %-12s %d: %s type %02Xh, sectors %d-%d (%s)', $where, $i + 1,
+        $boot == 0x80 ? 'active' : '      ', $type, $base + $rel, $base + $rel + $len - 1, mib($len);
+    }
+  };
+  $show->('MBR', $mbr, 0);
+  ($ext) = map { $_->[1] } grep { $_->[0] == 0x05 || $_->[0] == 0x0F }
+    map { [unpack 'x4 C x3 V', substr $mbr, 446 + 16 * $_, 16] } 0 .. 3;
+  my($at, %seen) = ($ext);
+  while(defined $at && !$seen{$at}++ && $at < $disk->{t}{sectors} && keys %seen < 64) {
+    my $ebr = $disk->read($at);
+    last unless substr($ebr, 510) eq "\x55\xAA";
+    my @e = map { [unpack 'x4 C x3 V V', substr $ebr, 446 + 16 * $_, 16] } 0 .. 3;
+    for my $e (@e) {
+      next unless $e->[0];
+      push @out, sprintf '  %-12s  : type %02Xh, sectors %d-%d (%s)', "EBR $at",
+        $e->[0], ($e->[0] == 5 ? $ext : $at) + $e->[1], ($e->[0] == 5 ? $ext : $at) + $e->[1] + $e->[2] - 1, mib($e->[2]);
+    }
+    my($next) = map { $_->[1] } grep { $_->[0] == 0x05 } @e;
+    $at = defined $next ? $ext + $next : undef;
+  }
+  return @out;
+}
+
+# --- Checking an installed layout -------------------------------------------
+
+# The layout of a provisioned disk, checked: the record in sector 1, and
+# the master and extended boot records exactly as it gives them. Dies if
+# anything differs. The state of C: is returned, not required.
+sub check_layout ($disk) {
+  my $t = $disk->{t};
+  my $r = parse_record($disk->read(1))
+    // fail "$t->{path} has no GR-DOS layout record in sector 1: not a disk deploy-cf provisioned"
+      . " (or the record is damaged); refusing to touch it";
+  $r->{total} == $t->{sectors}
+    or fail "$t->{path} has $t->{sectors} sectors, but its layout record says $r->{total}: another disk, or a"
+      . " copy; refusing to touch it";
+  my $l = eval { layout_from_record($r) } // fail "the layout record is not a layout deploy-cf can use: $@";
+  my $mbr = $disk->read(0);
+  substr($mbr, 446) eq mbr_table($l)
+    or fail "the master boot record's partition table is not the one deploy-cf wrote: it was changed;"
+      . " refusing to touch the disk";
+  for my $i (0 .. $l->{logical}->$#*) {
+    $disk->read($l->{logical}[$i]{ebr}) eq ebr_sector($l, $i)
+      or fail "the extended boot record at sector $l->{logical}[$i]{ebr} is not the one deploy-cf wrote: it was"
+        . " changed; refusing to touch the disk";
+  }
+  # C:: its boot sector, and the marker with this disk's id.
+  my($ok, $why) = (0, '');
+  my $v = read_volume($disk, $l->{system}{start});
+  my $p = $l->{system}{params};
+  if(!$v) {
+    $why = 'C: has no MS-DOS 4.00 boot sector';
+  } elsif($v->{total} != $l->{system}{len} || $v->{hidden} != $l->{system}{start} || $v->{spt} != $l->{geometry}[2]
+      || $v->{heads} != $l->{geometry}[1]) {
+    $why = "C:'s boot sector does not describe partition 1";
+  } else {
+    my($e) = grep { $_->{name} eq 'GRDOS.ID' } $v->{entries}->@*;
+    my $id = $e && read_file($disk, $v, $e);
+    if(!defined $id) {
+      $why = 'C: has no GRDOS.ID';
+    } elsif($id !~ /^disk-id $r->{disk_id}\r?$/m) {
+      $why = "C:\\GRDOS.ID is not this disk's";
+    } else {
+      $ok = 1;
+      ($r->{installed_version}) = $id =~ /^version (\S+)/m;
+      ($r->{installed}) = $id =~ /^installed (\S+)/m;
+    }
+  }
+  return ($r, $l, $ok, $why);
+}
+
+# The sectors of the partition tables and the record, which update must
+# leave as they are.
+sub table_sectors ($l) { (0, 1, map { $_->{ebr} } $l->{logical}->@*) }
+
+sub tables_digest ($disk, $l) {
+  return sha256_hex(join '', map { $disk->read($_) } table_sectors($l));
+}
+
+# C: as written: the written sectors read back, then as a file system.
+sub verify_system ($disk, $l, $img) {
+  my $s = $l->{system};
+  my $n = length($img->{bytes}) / SECTOR;
+  my $back = '';
+  for(my $i = 0; $i < $n; $i += 2048) {
+    $back .= $disk->read($s->{start} + $i, $n - $i < 2048 ? $n - $i : 2048);
+  }
+  $back eq $img->{bytes} or fail 'C: reads back differently from what was written (a failing card?)';
+  my $v = read_volume($disk, $s->{start}) // fail 'C: has no valid boot sector after writing';
+  $v->{fat} eq $v->{fat2} or fail "C:'s two FATs differ";
+  my $check;
+  $check = sub ($files, $entries, $path) {
+    my @want = map { $_->{name} } @$files;
+    my @got = map { $_->{name} } @$entries;
+    "@got" eq "@want" or fail "${path}'s files are not the distribution's: @got";
+    for my $i (0 .. $#want) {
+      my($f, $e) = ($files->[$i], $entries->[$i]);
+      $e->{attr} == $f->{attr} or fail "$path$f->{name} is not as written";
+      if(is_dir($f)) {
+        my $sub = read_dir($disk, $v, $e) // fail "$path$f->{name} is not as written";
+        $check->($f->{children}, $sub, "$path$f->{name}\\");
+      } else {
+        my $data = read_file($disk, $v, $e);
+        defined $data && $data eq $f->{data} or fail "$path$f->{name} is not as written";
+      }
+    }
+  };
+  $check->($img->{files}, $v->{entries}, 'C:\\');
+  $v->{entries}[0]{cluster} == 2 or fail 'IO.SYS does not start at cluster 2';
+  return count_files($img->{files});
+}
+
+# --- Commands ---------------------------------------------------------------
+
+sub confirm ($t, $o, $question) {
+  if(defined $o->{confirm}) {
+    return if $o->{confirm} eq $t->{confirm};
+    fail "--confirm $o->{confirm} does not name the target, $t->{confirm}";
+  }
+  open my $tty, '+<', '/dev/tty' or fail "no terminal to confirm on: give --confirm $t->{confirm}";
+  print $tty "$question\nType $t->{confirm} to continue: ";
+  my $answer = <$tty> // '';
+  chomp $answer;
+  fail 'not confirmed; nothing was written' unless $answer eq $t->{confirm};
+}
+
+sub show_layout ($l) {
+  my @o = (sprintf 'Geometry: %s (cylinders/heads/sectors), %d cylinders used, %s',
+    gstr($l->{geometry}), $l->{cylinders} // $l->{geometry}[0],
+    mib(($l->{cylinders} // 0) * $l->{geometry}[1] * $l->{geometry}[2]));
+  my $vol = sub ($letter, $v) {
+    my $p = $v->{params};
+    sprintf '  %s  sectors %9d-%-9d %10s  type %02Xh  FAT%d, %2d KiB clusters', $letter, $v->{start},
+      $v->{start} + $v->{len} - 1, mib($v->{len}), $p->{type}, $p->{bits}, $p->{spc} / 2;
+  };
+  push @o, $vol->('C:', $l->{system});
+  my $letter = 'D';
+  push @o, $vol->($letter++ . ':', $_) for $l->{logical}->@*;
+  return @o;
+}
+
+sub cmd_inspect ($o, $path) {
+  my $t = examine($path, %$o);
+  print describe($t);
+  say "Refused:  $_" for $t->{problems}->@*;
+  my $disk = Disk->open($t, 0);
+  say for show_tables($disk);
+  my $rec = parse_record($disk->read(1));
+  if(!$rec) {
+    say 'GR-DOS:   no layout record: not provisioned by deploy-cf';
+    my $g = default_geometry($t->{sectors});
+    my $l = eval { plan_layout($t->{sectors}, $g, ceil(parse_size($o->{system_size} // '10M') / SECTOR)) };
+    say $l ? ("provision would destroy all data and make:", show_layout($l)) : "provision would fail: $@";
+    return 0;
+  }
+  my($r, $l, $ok, $why) = eval { check_layout($disk) };
+  if(!$r) {
+    print "GR-DOS:   a layout record, but update would refuse: $@";
+    return 1;
+  }
+  say "GR-DOS:   layout of $r->{created}, disk id $r->{disk_id}; partition tables intact";
+  say for show_layout($l);
+  say $ok ? "C:        GR-DOS $r->{installed_version}, installed $r->{installed}"
+          : "C:        not usable: $why (update --recover would replace it)";
+  say 'update would rewrite only C:, sectors ', $l->{system}{start}, '-', $l->{system}{start} + $l->{system}{len} - 1;
+  return 0;
+}
+
+sub cmd_provision ($o, $path) {
+  my $dist = load_dist($o->{dist});
+  my $t = examine($path, %$o);
+  print describe($t);
+  fail "refusing $t->{path}: " . join('; ', $t->{problems}->@*) if $t->{problems}->@*;
+  my $limit = 1024 * 255 * 63;
+  my $geom = defined $o->{geometry} ? parse_geometry($o->{geometry}) : default_geometry($t->{sectors});
+  my $reach = $geom->[0] * $geom->[1] * $geom->[2];
+  if($t->{sectors} > $limit && !$o->{allow_unaddressable}) {
+    fail sprintf 'the disk has %d sectors (%s); DOS 4.00 reaches at most %d (1024/255/63, %s) through the BIOS.'
+      . ' --allow-unaddressable leaves the rest unused', $t->{sectors}, mib($t->{sectors}), $limit, mib($limit);
+  }
+  fail sprintf 'geometry %s needs %d sectors, but the disk has %d', gstr($geom), $reach, $t->{sectors}
+    if defined $o->{geometry} && $reach > $t->{sectors};
+  my $l = plan_layout($t->{sectors}, $geom, ceil(parse_size($o->{system_size} // '10M') / SECTOR));
+  my $now = $ENV{SOURCE_DATE_EPOCH} // time;
+  my $disk_id = sha256_hex(join ':', $t->{real}, $now, $$, rand) =~ s/^(.{16}).*/$1/r;
+  if(open my $ur, '<:raw', '/dev/urandom') { read $ur, my $b, 8; $disk_id = unpack 'H16', $b }
+  my $created = strftime '%Y-%m-%dT%H:%M:%SZ', gmtime $now;
+  my $sys = system_image($dist, $l, $disk_id, $now);
+  say for show_layout($l);
+  my $unused = $t->{sectors} - $l->{cylinders} * $geom->[1] * $geom->[2];
+  say "Unused:   $unused sectors at the end (" . mib($unused) . '), beyond the last whole cylinder the BIOS reaches'
+    if $unused;
+  say sprintf 'C: gets GR-DOS %s: %d files, %d of its %d clusters', $dist->{version}, count_files($sys->{files}),
+    $sys->{used_clusters}, $l->{system}{params}{clusters};
+  if($o->{dry_run}) {
+    say 'Dry run: nothing was written.';
+    return 0;
+  }
+  my $disk = Disk->open($t, 1);
+  confirm($t, $o, "ALL DATA ON $t->{path} WILL BE DESTROYED.");
+  $disk->allow(0, $t->{sectors});
+  my $g = $l->{geometry};
+  # The old tables go first, and the new ones and the record last, so an
+  # interrupted provision leaves a disk that update refuses.
+  $disk->write(0, "\0" x (SECTOR * $g->[2]));
+  $disk->flush;
+  my %written;
+  for my $i (0 .. $l->{logical}->$#*) {
+    my $d = $l->{logical}[$i];
+    my $img = volume_image($d->{params}, $g, $dist->{boot}, serial_of("$disk_id $i"), 'NO NAME');
+    $disk->write($d->{ebr}, ebr_sector($l, $i) . "\0" x (SECTOR * ($d->{start} - $d->{ebr} - 1)));
+    $disk->write($d->{start}, $img->{bytes});
+    $written{$d->{start}} = $img->{bytes};
+  }
+  $disk->write($l->{system}{start}, $sys->{bytes});
+  $disk->flush;
+  $disk->write(0, $dist->{mbr_code} . mbr_table($l) . record_text($l, $disk_id, $created));
+  $disk->flush;
+  # Verify: the record and tables as update will check them, every
+  # volume's metadata, and C:'s files.
+  my($r, undef, $ok, $why) = check_layout($disk);
+  $ok or fail "C: is not usable after provisioning: $why";
+  for my $start (sort { $a <=> $b } keys %written) {
+    $disk->read($start, length($written{$start}) / SECTOR) eq $written{$start}
+      or fail "the logical drive at sector $start reads back differently (a failing card?)";
+  }
+  my $n = verify_system($disk, $l, $sys);
+  $disk->reread_partitions;
+  say "Provisioned $t->{path}: disk id $disk_id; C: has $n files, verified.";
+  return 0;
+}
+
+sub cmd_update ($o, $path) {
+  my $dist = load_dist($o->{dist});
+  my $t = examine($path, %$o);
+  print describe($t);
+  fail "refusing $t->{path}: " . join('; ', $t->{problems}->@*) if $t->{problems}->@*;
+  my $disk = Disk->open($t, !$o->{dry_run});
+  my($r, $l, $ok, $why) = check_layout($disk);
+  say "GR-DOS:   layout of $r->{created}, disk id $r->{disk_id}; partition tables intact";
+  say for show_layout($l);
+  if(!$ok) {
+    fail "$why. C: may hold an interrupted update; if this is the right disk, update --recover replaces C:"
+      unless $o->{recover};
+    say "C:        $why: replacing it (--recover)";
+  } else {
+    say "C:        GR-DOS $r->{installed_version}, installed $r->{installed}";
+  }
+  my $now = $ENV{SOURCE_DATE_EPOCH} // time;
+  my $sys = system_image($dist, $l, $r->{disk_id}, $now);
+  my $s = $l->{system};
+  say sprintf 'update rewrites only C:, sectors %d-%d, with GR-DOS %s: %d files, %d of %d clusters',
+    $s->{start}, $s->{start} + $s->{len} - 1, $dist->{version}, count_files($sys->{files}), $sys->{used_clusters},
+    $s->{params}{clusters};
+  if($o->{dry_run}) {
+    say 'Dry run: nothing was written.';
+    return 0;
+  }
+  confirm($t, $o, "C: on $t->{path} will be erased and reinstalled; D: and the other drives are kept.");
+  my $before = tables_digest($disk, $l);
+  $disk->allow($s->{start}, $s->{len});
+  # The boot sector goes first, as zeros, and last: an interrupted update
+  # leaves a C: that update refuses without --recover.
+  $disk->write($s->{start}, "\0" x SECTOR);
+  $disk->flush;
+  $disk->write($s->{start} + 1, substr $sys->{bytes}, SECTOR);
+  $disk->flush;
+  $disk->write($s->{start}, substr $sys->{bytes}, 0, SECTOR);
+  $disk->flush;
+  my $n = verify_system($disk, $l, $sys);
+  my(undef, undef, $ok2, $why2) = check_layout($disk);
+  $ok2 or fail "C: is not usable after the update: $why2";
+  tables_digest($disk, $l) eq $before or fail 'the partition tables changed during the update';
+  say "Updated C: on $t->{path}: $n files, verified; nothing outside C: was written.";
+  return 0;
+}
+
+sub main (@args) {
+  my $cmd = shift @args // '';
+  my %o = (dist => "$root/build/linux/cf");
+  my %spec = (
+    inspect   => [qw( dist=s system-size=s allow-fixed-disk )],
+    provision => [qw( dist=s system-size=s geometry=s allow-unaddressable allow-fixed-disk dry-run confirm=s )],
+    update    => [qw( dist=s recover allow-fixed-disk dry-run confirm=s )],
+  );
+  my $usage = "usage: $0 inspect|provision|update [options] TARGET (perldoc $0)\n";
+  die $usage unless $spec{$cmd};
+  GetOptionsFromArray(\@args, \my %raw, $spec{$cmd}->@*) or die $usage;
+  $o{s/-/_/gr} = $raw{$_} for keys %raw;
+  $o{allow_fixed} = $o{allow_fixed_disk};
+  die $usage unless @args == 1;
+  return $cmd eq 'inspect' ? cmd_inspect(\%o, $args[0])
+       : $cmd eq 'provision' ? cmd_provision(\%o, $args[0])
+       : cmd_update(\%o, $args[0]);
+}
+
+exit main(@ARGV);
