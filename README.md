@@ -9,7 +9,9 @@ twelve utilities (FORMAT, SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND,
 FC, DEBUG, MEM and MODE), and bootable 1.44 MB, 1.2 MB, 720 KB and 360 KB floppy
 images, which all hold the same files, with the tico16 editor. With FDISK,
 FORMAT and SYS, GR-DOS installs on a hard disk and boots from it
-([`docs/fdisk.md`](docs/fdisk.md)). Apart from the GR-DOS branding of the
+([`docs/fdisk.md`](docs/fdisk.md)), and `scripts/deploy-cf` installs it from
+Linux on a CF card or disk image, then updates C: without touching the data
+drives ([`docs/deploy-cf.md`](docs/deploy-cf.md)). Apart from the GR-DOS branding of the
 banner, `VER` and FDISK's menu (`patches/branding`), the binaries of the
 assembly sources are byte-identical to the original MASM/LINK build; ATTRIB,
 MEM, FDISK and FC, which are C, are built with Open Watcom C and GR-DOS's own C
@@ -22,13 +24,29 @@ You need:
 
 - Perl 5.42 as `perl` on `PATH`;
 - a C compiler, make, git, curl and xz;
-- mtools and `qemu-system-i386`.
+- mtools and `qemu-system-i386`;
+- `fsck.fat` (dosfstools), for `make test-deploy-cf`.
 
 ```sh
 make          # build into build/linux, fetching JWasm, Open Watcom and TICO.EXE into build/tools
 make check    # build without the branding and compare with the MS-DOS 4.00 reference build
 make test     # boot each image in QEMU, and test the utilities on disposable disks
 make dist     # package the release assets in build/linux/release
+```
+
+## CF cards
+
+`scripts/deploy-cf` installs GR-DOS on a CF card in a USB reader, or a disk
+image ([`docs/deploy-cf.md`](docs/deploy-cf.md)). `provision` erases the
+card and makes C: (10 MiB) and FAT16 data drives D:, E:, ... over the
+rest. `update` replaces C: only: it checks that the partition tables are as
+it made them, and never writes a sector outside C:. Your own settings go
+in `D:\AUTOEXEC.BAT`, which C:'s calls.
+
+```sh
+scripts/deploy-cf inspect /dev/sdX          # writes nothing
+sudo scripts/deploy-cf provision /dev/sdX   # first time: erases the card
+sudo scripts/deploy-cf update /dev/sdX      # afterwards: C: only
 ```
 
 ## Floppy images
@@ -86,7 +104,9 @@ one) and tests the utilities (`make test-utils`, `make test-sys-1440` and so
 on), FORMAT, SYS and DISKCOPY on blank, disposable images in drive B:. It
 compares FC's output with Microsoft's FC.EXE's (`make test-fc`), runs FDISK on disposable hard disk images against Microsoft's build of
 it (`make test-fdisk`), and installs GR-DOS on a blank hard disk and boots
-it (`make test-install`).
+it (`make test-install`). It provisions disk images of 512 MB to 8 GB with
+`scripts/deploy-cf`, boots them, and updates them, checking that every
+sector outside C: stays the same (`make test-deploy-cf`).
 
 ## Releases
 
@@ -158,6 +178,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
 - [`docs/fdisk.md`](docs/fdisk.md): FDISK, its tests against Microsoft's
   build, and installing on a hard disk.
 - [`docs/fc.md`](docs/fc.md): FC and its tests against Microsoft's build.
+- [`docs/deploy-cf.md`](docs/deploy-cf.md): installing on a CF card from
+  Linux, and updating C: only.
 
 ## License
 

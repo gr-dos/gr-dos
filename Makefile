@@ -16,7 +16,9 @@
 #                 test-fc compares FC with Microsoft's (tests/fc); make
 #                 test-fdisk runs FDISK on disposable hard disk images
 #                 (tests/fdisk), and make test-install installs GR-DOS on
-#                 one (FDISK, FORMAT and SYS) and boots it
+#                 one (FDISK, FORMAT and SYS) and boots it; make
+#                 test-deploy-cf tests scripts/deploy-cf, the CF card
+#                 installer, on disk images (issue #14)
 #   make fc-expect  write the FC tests' expected output with Microsoft's
 #                 FC.EXE of the M1 reference build
 #   make fdisk-expect  write the FDISK tests' expected screens and disks
@@ -27,7 +29,8 @@
 #   make clean    remove build/linux (fetched tools in build/tools are kept)
 #
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
-# git, curl and xz; mtools for the image and qemu-system-i386 for the test.
+# git, curl and xz; mtools for the image and qemu-system-i386 for the test,
+# and fsck.fat (dosfstools) for test-deploy-cf.
 # JWasm, Open Watcom and TICO.EXE (tico16) are fetched into build/tools,
 # and the C runtime for ATTRIB, MEM, FDISK and FC, the pinned libc16 release,
 # into build/libc16 (scripts/fetch-libc16). make LIBC16_ROOT=../libc16 builds
@@ -43,6 +46,7 @@ BUILD := build/linux
 SRC   := $(BUILD)/SRC
 MSG   := $(SRC)/MESSAGES/USA-MS.MSG
 TOOLS := $(BUILD)/tools.env
+CF    := $(BUILD)/cf
 
 # Patches to v4.0/src, applied in order with patch -p1 (no fuzz).
 PATCHES := $(sort $(wildcard patches/branding/*.patch))
@@ -139,7 +143,7 @@ PROGRAMS := $(patsubst $(SRC)/CMD/FIND/FIND.EXE,$(BUILD)/image/FIND.EXE,\
 	$(addprefix $(SRC)/,$(UTILITIES))) $(TICO)
 FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
 
-all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES) $(BUILD)/manifest.txt
+all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES) $(BUILD)/manifest.txt $(CF)/manifest.txt
 
 # The reference build shares the fetched tools.
 check: $(TOOLS)
@@ -156,7 +160,7 @@ check-tree: $(addprefix $(SRC)/,$(OUTPUTS))
 TEST_FORMATS := $(addprefix test-,$(FORMATS))
 TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 
-test: $(TEST_FORMATS) test-utils $(TEST_SYS) test-fc test-fdisk test-install
+test: $(TEST_FORMATS) test-utils $(TEST_SYS) test-fc test-fdisk test-install test-deploy-cf
 
 $(TEST_FORMATS): test-%: $(TESTS)/smoke-%k.img
 	scripts/smoke-test --expect tests/smoke/expect-$*k $< tests/smoke/expect $(TESTS)/smoke-$*k
@@ -235,6 +239,20 @@ test-install: $(TEST_INSTALL)
 $(TEST_INSTALL): test-install-%: $(DISK_TEST)
 	scripts/disk-test $< tests/install/$* $(TESTS)/install-$*
 
+# The CF card installer's tests (scripts/deploy-cf-test, issue #14): GR-DOS
+# provisioned with scripts/deploy-cf on disposable, sparse disk images of
+# 512 MB, 2 GB, 4 GB and 8 GB, booted from C:, updated three times with
+# every sector outside C: hashed, and booted again; and its refusals and
+# recoveries (failures).
+DEPLOY_CF_TESTS := 512m 2g 4g 8g failures
+TEST_DEPLOY_CF  := $(addprefix test-deploy-cf-,$(DEPLOY_CF_TESTS))
+
+test-deploy-cf: $(TEST_DEPLOY_CF)
+
+$(TEST_DEPLOY_CF): test-deploy-cf-%: $(CF)/manifest.txt scripts/deploy-cf scripts/deploy-cf-test \
+	scripts/hd-boot-test scripts/partition-table
+	scripts/deploy-cf-test $* $(TESTS)/deploy-cf-$*
+
 fdisk-expect: $(DISK_TEST) $(FDISK_REFERENCE)
 	for t in $$(grep -L '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))) \
 	         $$(grep -l '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))); do \
@@ -292,7 +310,7 @@ clean:
 	rm -rf $(BUILD)
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils $(TEST_SYS) test-fc fc-expect test-fdisk \
-	$(TEST_FDISK) test-install $(TEST_INSTALL) fdisk-expect dist clean
+	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -462,6 +480,17 @@ $(BUILD)/manifest.txt: $(IMAGES) scripts/image-manifest
 	printf '%s\n' IO.SYS MSDOS.SYS COMMAND.COM $(notdir $(FILES)) > $@.names
 	awk '{ print $$NF }' $@.tmp | cmp -s - $@.names || { echo "$<: not the files of FILES" >&2; exit 1; }
 	rm $@.names
+	mv $@.tmp $@
+
+# The distribution scripts/deploy-cf installs on a CF card or hard disk
+# (issue #14): the files of the images but AUTOEXEC.BAT, which deploy-cf
+# writes for C:, with their manifest, the boot sector, FDISK's master boot
+# record and VERSION.
+$(CF)/manifest.txt: $(BUILD)/manifest.txt $(CORE) $(FILES) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION
+	rm -rf $(CF)
+	mkdir -p $(CF)
+	cp $(CORE) $(filter-out %/AUTOEXEC.BAT,$(FILES)) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION $(CF)/
+	grep -v '  AUTOEXEC\.BAT$$' $(BUILD)/manifest.txt > $@.tmp
 	mv $@.tmp $@
 
 $(TICO): scripts/fetch-tico

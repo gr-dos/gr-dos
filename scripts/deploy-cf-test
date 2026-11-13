@@ -1,0 +1,378 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use Digest::SHA;
+use File::Basename qw( dirname );
+use File::Copy qw( copy );
+
+# ABSTRACT: Test scripts/deploy-cf on disposable disk images
+
+=head1 SYNOPSIS
+
+ scripts/deploy-cf-test 512m|2g|4g|8g|failures OUTDIR
+
+=head1 DESCRIPTION
+
+Tests F<scripts/deploy-cf> (issue #14) on new, sparse image files in
+C<OUTDIR>, never on a block device.  For a disk size:
+
+=over 4
+
+=item 1.
+
+C<provision> a disk of the size, with the drive geometry a CF card of it
+reports, and check that the tool chose the geometry SeaBIOS gives DOS,
+and the partitions with F<scripts/partition-table --chs>;
+
+=item 2.
+
+put sentinel files on every logical drive with mtools, and a
+F<D:\AUTOEXEC.BAT> that reports to C<AUX>; hash every sector outside C:
+(the master boot record, the layout record, the extended boot records and
+the logical drives);
+
+=item 3.
+
+boot it in QEMU (F<scripts/hd-boot-test>): GR-DOS starts from C:, runs
+F<D:\AUTOEXEC.BAT> exactly once, reads each sentinel through its drive
+letter, and CHKDSK reports for each logical drive the free space mtools
+does; at the prompt D: set, a typed command runs;
+
+=item 4.
+
+put a stray file on C:, C<update> with a distribution in which a file is
+renamed and another removed, then twice with the real one; C: must have
+exactly the distribution's files each time, and the hash must not change;
+
+=item 5.
+
+boot it again.
+
+=back
+
+C<failures> runs the refusals and recoveries on a 512 MB disk: no layout,
+a changed partition table, a missing marker and C<--recover>, an
+interrupted update and C<--recover>, a resized image, a wrong
+confirmation, too small a disk or C:, an unsupported geometry, a disk
+beyond the BIOS's reach, the system disk, and a dry run.
+
+=cut
+
+my $root = dirname(dirname(__FILE__));
+my $tool = "$root/scripts/deploy-cf";
+my $dist = "$root/build/linux/cf";
+my $failed = 0;
+
+# Each size: the drive's geometry (C/H/S, and /lba for SeaBIOS's
+# translation), and the geometry the BIOS gives DOS.
+my %disks = (
+  '512m' => ['993/16/63', '993/16/63'],
+  '2g'   => ['4160/16/63/lba', '520/128/63'],
+  '4g'   => ['8320/16/63/lba', '522/255/63'],
+  '8g'   => ['16644/16/63/lba', '1024/255/63'],
+);
+
+sub ok ($cond, $what) {
+  $cond = !!$cond;
+  say $cond ? "ok - $what" : "NOT OK - $what";
+  $failed++ unless $cond;
+  return $cond;
+}
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "unable to write $path: $!";
+  print $fh $data;
+  close $fh or die "unable to write $path: $!";
+}
+
+# Runs a command; returns its exit status and its output (both streams).
+sub run (@cmd) {
+  say '+ ', join ' ', @cmd;
+  my $pid = open my $fh, '-|' // die "fork: $!";
+  if(!$pid) {
+    open STDERR, '>&', \*STDOUT or die "dup: $!";
+    exec @cmd or die "exec $cmd[0]: $!";
+  }
+  local $/;
+  my $out = <$fh> // '';
+  close $fh;
+  print $out =~ s/^/  | /mgr;
+  return ($? >> 8, $out);
+}
+
+sub must (@cmd) {
+  my($rc, $out) = run(@cmd);
+  die "failed: @cmd\n" if $rc;
+  return $out;
+}
+
+sub refuses ($what, $re, @cmd) {
+  my($rc, $out) = run(@cmd);
+  ok($rc != 0 && scalar($out =~ $re), "refuses $what");
+}
+
+sub new_image ($path, $bytes) {
+  unlink $path;
+  open my $fh, '>', $path or die "unable to create $path: $!";
+  truncate $fh, $bytes or die "unable to size $path: $!";
+  close $fh;
+}
+
+sub chs_bytes ($chs) {
+  my($c, $h, $s) = split m{/}, $chs;
+  return $c * $h * $s * 512;
+}
+
+# The layout record, from the image's sector 1.
+sub record ($img) {
+  open my $fh, '<:raw', $img or die "unable to read $img: $!";
+  sysseek $fh, 512, 0;
+  sysread $fh, my $s, 512;
+  my %r;
+  ($r{geometry}) = $s =~ m{^geometry (\S+)$}m;
+  @r{qw( sys_start sys_len )} = $s =~ /^system (\d+) (\d+)$/m;
+  $r{logical} = [map { [split ' '] } $s =~ /^logical (\d+ \d+ \d+)$/mg];
+  return \%r;
+}
+
+# SHA-256 of every sector outside C:; runs of zero blocks are hashed by
+# position, so a sparse 8 GB image is quick.
+sub hash_outside_c ($img, $r) {
+  my $sha = Digest::SHA->new(256);
+  open my $fh, '<:raw', $img or die "unable to read $img: $!";
+  my($from, $to) = ($r->{sys_start} * 512, ($r->{sys_start} + $r->{sys_len}) * 512);
+  my $size = -s $img;
+  my $pos = 0;
+  my $block = 8 * 1024 * 1024;
+  while($pos < $size) {
+    my $n = $pos < $from && $from - $pos < $block ? $from - $pos : $block;
+    if($pos >= $from && $pos < $to) {
+      $pos = $to;
+      next;
+    }
+    sysseek $fh, $pos, 0;
+    my $buf;
+    my $got = sysread $fh, $buf, $n;
+    die "read $img: $!" unless $got;
+    $sha->add($buf =~ /[^\0]/ ? $buf : "zero $pos $got\n");
+    $pos += $got;
+  }
+  return $sha->hexdigest;
+}
+
+sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
+
+sub c_files ($img, $r) {
+  my $out = must('mdir', '-a', '-b', '-i', at($img, $r->{sys_start}), '::');
+  return join ' ', sort map { m{^::/(.*)} ? $1 : () } split /\n/, $out;
+}
+
+sub dist_files ($dir) {
+  my @n = map { (split ' ')[-1] } split /\n/, slurp("$dir/manifest.txt");
+  return join ' ', sort @n, qw( AUTOEXEC.BAT CONFIG.SYS GRDOS.ID );
+}
+
+sub test_size ($size, $out) {
+  my($drive, $bios) = $disks{$size}->@*;
+  my $img = "$out/disk.img";
+  new_image($img, chs_bytes($drive));
+  my @extra = $size eq '8g' ? ('--allow-unaddressable') : ();
+  if($size eq '8g') {
+    refuses('a disk beyond 1024/255/63 without --allow-unaddressable', qr/reaches at most/,
+      $tool, 'provision', '--confirm', 'disk.img', $img);
+  }
+  must($tool, 'provision', @extra, '--confirm', 'disk.img', $img);
+  my $r = record($img);
+  ok($r->{geometry} eq $bios, "geometry $r->{geometry} is the BIOS's, $bios");
+  my $table = must("$root/scripts/partition-table", '--chs', $bios, $img);
+  spew("$out/table.txt", $table);
+  my $n = $r->{logical}->@*;
+  ok($table =~ /^mbr 1 80 0[146] 0\/1\/1 /m && $table =~ /^mbr 2 00 05 /m
+    && (() = $table =~ /^ebr \d+ 1 00 0[146] /mg) == $n, "partition table: C: active, $n logical drives");
+  my $fsck_c = "$out/c.img";
+  must('dd', "if=$img", "of=$fsck_c", 'bs=512', "skip=$r->{sys_start}", "count=$r->{sys_len}", 'status=none');
+  my($rc) = run('fsck.fat', '-n', $fsck_c);
+  ok($rc == 0, 'fsck.fat finds C: clean');
+  unlink $fsck_c;
+
+  # Sentinels, and the user's D:\AUTOEXEC.BAT.
+  my $letter = 'D';
+  my(@bat, @expect);
+  for my $l ($r->{logical}->@*) {
+    my($ebr, $start) = @$l;
+    spew("$out/VOL$letter.TXT", "sentinel $letter $ebr\r\n");
+    spew("$out/BIG.BIN", join '', map { pack 'N', $_ * 2654435761 % 4294967291 + $start } 1 .. 100_000);
+    must('mcopy', '-i', at($img, $start), "$out/VOL$letter.TXT", "$out/BIG.BIN", '::');
+    push @bat, "TYPE $letter:\\VOL$letter.TXT>AUX", "CHKDSK $letter:>AUX";
+    $letter++;
+  }
+  spew("$out/AUTOEXEC.BAT", join "\r\n", '@ECHO OFF', 'ECHO GRDOS-USER-AUTOEXEC>AUX', 'VER>AUX', 'PATH>AUX',
+    'TYPE C:\GRDOS.ID>AUX', @bat, 'PROMPT GR$G', '');
+  must('mcopy', '-i', at($img, $r->{logical}[0][1]), "$out/AUTOEXEC.BAT", '::');
+  # What DOS must find free on each drive: what mtools finds.
+  $letter = 'D';
+  for my $l ($r->{logical}->@*) {
+    my($free) = must('mdir', '-i', at($img, $l->[1]), '::') =~ /([\d ]+) bytes free/;
+    $free =~ tr/ //d;
+    push @expect, "^sentinel $letter $l->[0]\$", "^ *$free bytes available on disk\$";
+    $letter++;
+  }
+  spew("$out/expect", join "\n", '^GRDOS-USER-AUTOEXEC$', '^GR-DOS Version 4\.00$', '^PATH=C:\\\\$',
+    '^layout 1$', @expect, '^GRDOS-TEST-END$', 'count 1 ^GRDOS-USER-AUTOEXEC$', '');
+  my $hash = hash_outside_c($img, $r);
+  my @boot = ("$root/scripts/hd-boot-test", '--chs', $drive, '--timeout', 120, '--prompt', '^GR>$',
+    '--type', 'ECHO GRDOS-TEST-END>AUX', $img, "$out/expect");
+  ($rc) = run(@boot, "$out/boot-provisioned");
+  ok($rc == 0, 'boots from C:, runs D:\AUTOEXEC.BAT once and returns to the prompt');
+
+  # Updates: a stray file on C:, a distribution with a file renamed and
+  # one removed, then the real one twice.
+  spew("$out/OLD.TXT", "obsolete\r\n");
+  must('mcopy', '-i', at($img, $r->{sys_start}), "$out/OLD.TXT", '::');
+  my $alt = "$out/dist-renamed";
+  system('rm', '-rf', $alt);
+  mkdir $alt or die "mkdir $alt: $!";
+  copy("$dist/$_", "$alt/$_") or die "copy $_: $!" for map { (split ' ')[-1] } split /\n/, slurp("$dist/manifest.txt");
+  copy("$dist/$_", "$alt/$_") or die "copy $_: $!" for qw( MSBOOT.BIN FDBOOT.BIN VERSION );
+  rename "$alt/MORE.COM", "$alt/MORE2.COM" or die "rename: $!";
+  unlink "$alt/DEBUG.COM";
+  spew("$alt/manifest.txt", join '', map { s/  MORE\.COM$/  MORE2.COM/r . "\n" } grep { !/  DEBUG\.COM$/ }
+    split /\n/, slurp("$dist/manifest.txt"));
+  must($tool, 'update', '--dist', $alt, '--confirm', 'disk.img', $img);
+  ok(c_files($img, $r) eq dist_files($alt), 'after an update, C: has exactly the files of the distribution (renamed, removed, stray file gone)');
+  ok(hash_outside_c($img, $r) eq $hash, 'every sector outside C: is unchanged');
+  for my $i (1, 2) {
+    must($tool, 'update', '--confirm', 'disk.img', $img);
+    ok(c_files($img, $r) eq dist_files($dist), "update $i: C: has exactly the distribution's files");
+    ok(hash_outside_c($img, $r) eq $hash, "update $i: every sector outside C: is unchanged");
+  }
+  ($rc) = run(@boot, "$out/boot-updated");
+  ok($rc == 0, 'boots after the updates');
+  unlink $img unless $failed;
+}
+
+sub test_failures ($out) {
+  my $img = "$out/disk.img";
+  my $chs = '993/16/63';
+  my $fresh = sub {
+    new_image($img, chs_bytes($chs));
+    must($tool, 'provision', '--confirm', 'disk.img', $img);
+    return record($img);
+  };
+  my @update = ($tool, 'update', '--confirm', 'disk.img', $img);
+
+  # No layout: blank, and FDISK's.
+  new_image($img, chs_bytes($chs));
+  refuses('to update a blank disk', qr/no GR-DOS layout record/, @update);
+  my $r = $fresh->();
+  open my $fh, '+<:raw', $img or die;
+  sysseek $fh, 512, 0;
+  syswrite $fh, "\0" x 512;
+  close $fh;
+  refuses('to update a disk without the layout record', qr/no GR-DOS layout record/, @update);
+
+  # Changed tables: one byte of the MBR's table, and of the EBR's.
+  for my $where (['master boot record', 0x1CE + 8], ['extended boot record', $r->{logical}[0][0] * 512 + 0x1BE + 12]) {
+    $r = $fresh->();
+    my $h = hash_outside_c($img, $r);
+    open my $fh, '+<:raw', $img or die;
+    sysseek $fh, $where->[1], 0;
+    sysread $fh, my $b, 1;
+    sysseek $fh, $where->[1], 0;
+    syswrite $fh, chr(ord($b) ^ 1);
+    close $fh;
+    $h = hash_outside_c($img, $r);
+    refuses("to update a disk whose $where->[0] was changed", qr/was changed|not a layout/, @update);
+    ok(hash_outside_c($img, $r) eq $h, '... and writes nothing');
+  }
+
+  # Missing marker, then --recover.
+  $r = $fresh->();
+  my $h = hash_outside_c($img, $r);
+  must('mattrib', '-i', at($img, $r->{sys_start}), '-r', '::GRDOS.ID');
+  must('mdel', '-i', at($img, $r->{sys_start}), '::GRDOS.ID');
+  refuses('to update a C: without GRDOS.ID', qr/C: has no GRDOS\.ID.*--recover/s, @update);
+  must(@update[0, 1], '--recover', @update[2 .. $#update]);
+  ok(c_files($img, $r) eq dist_files($dist), 'update --recover reinstalls C:');
+  ok(hash_outside_c($img, $r) eq $h, '... and nothing outside C: changed');
+
+  # An interrupted update (an I/O error after 100 sectors): refused until
+  # --recover, which completes it.
+  {
+    local $ENV{GRDOS_DEPLOY_CF_FAIL_AFTER} = 100;
+    refuses('to report success when a write fails', qr/I\/O error writing sector/, @update);
+  }
+  ok(hash_outside_c($img, $r) eq $h, 'the interrupted update wrote nothing outside C:');
+  refuses('to update after an interrupted update without --recover', qr/no MS-DOS 4\.00 boot sector.*--recover/s,
+    @update);
+  must(@update[0, 1], '--recover', @update[2 .. $#update]);
+  ok(c_files($img, $r) eq dist_files($dist), 'update --recover completes the interrupted update');
+  ok(hash_outside_c($img, $r) eq $h, '... and nothing outside C: changed');
+
+  # Same disk, another size.
+  must('cp', '--sparse=always', $img, "$out/grown.img");
+  must('truncate', '-s', '+1M', "$out/grown.img");
+  refuses('to update a disk of another size than the record', qr/another disk/,
+    $tool, 'update', '--confirm', 'grown.img', "$out/grown.img");
+  unlink "$out/grown.img";
+
+  # Confirmation.
+  my $before = Digest::SHA->new(256)->addfile($img)->hexdigest;
+  refuses('a wrong --confirm', qr/does not name the target/, $tool, 'update', '--confirm', 'sdz', $img);
+  refuses('a wrong --confirm for provision', qr/does not name the target/, $tool, 'provision', '--confirm', 'sdz', $img);
+  my($rc, $o) = run($tool, 'provision', '--dry-run', $img);
+  ok($rc == 0 && scalar($o =~ /Dry run: nothing was written/), 'provision --dry-run shows the plan');
+  ($rc, $o) = run($tool, 'update', '--dry-run', $img);
+  ok($rc == 0 && scalar($o =~ /update rewrites only C:/), 'update --dry-run shows the plan');
+  ($rc, $o) = run($tool, 'inspect', $img);
+  ok($rc == 0 && scalar($o =~ /partition tables intact/), 'inspect recognises the layout');
+  ok(Digest::SHA->new(256)->addfile($img)->hexdigest eq $before, 'refusals, dry runs and inspect write nothing');
+
+  # Capacity and geometry.
+  new_image("$out/small.img", 8 * 1024 * 1024);
+  refuses('a disk too small for C: and D:', qr/insufficient capacity/,
+    $tool, 'provision', '--confirm', 'small.img', "$out/small.img");
+  new_image("$out/small.img", 615 * 4 * 17 * 512);
+  refuses('a C: too small for the distribution', qr/insufficient file system space/,
+    $tool, 'provision', '--geometry', '615/4/17', '--system-size', '100K', '--confirm', 'small.img', "$out/small.img");
+  refuses('more than 1024 cylinders', qr/unsupported geometry/,
+    $tool, 'provision', '--geometry', '1025/16/63', '--confirm', 'disk.img', $img);
+  refuses('more than 63 sectors per track', qr/unsupported geometry/,
+    $tool, 'provision', '--geometry', '900/16/64', '--confirm', 'disk.img', $img);
+  refuses('a geometry larger than the disk', qr/needs \d+ sectors/,
+    $tool, 'provision', '--geometry', '1024/64/63', '--confirm', 'disk.img', $img);
+  unlink "$out/small.img";
+
+  # The system disk, and a partition, refused before anything is opened.
+  my $src = `findmnt -no SOURCE / 2>/dev/null` // '';
+  chomp $src;
+  my $pk = $src =~ m{^/dev/} ? `lsblk -no PKNAME $src 2>/dev/null` : '';
+  ($pk) = split /\n/, $pk // '';
+  if($pk && -b "/dev/$pk") {
+    refuses("the system disk /dev/$pk", qr/system disk|in use/,
+      $tool, 'provision', '--dry-run', '--allow-fixed-disk', '--confirm', $pk, "/dev/$pk");
+    refuses("a partition, $src", qr/is a partition/, $tool, 'provision', '--dry-run', '--confirm', 'x', $src);
+  } else {
+    say "skip - the root file system is not on a disk partition ($src)";
+  }
+  unlink $img unless $failed;
+}
+
+sub main (@args) {
+  my($what, $out) = @args;
+  die "usage: $0 512m|2g|4g|8g|failures OUTDIR\n" unless @args == 2 && ($disks{$what} || $what eq 'failures');
+  -f "$dist/manifest.txt" or die "$dist: no distribution (run make)\n";
+  system('rm', '-rf', $out) == 0 && system('mkdir', '-p', $out) == 0 or die "unable to create $out\n";
+  $what eq 'failures' ? test_failures($out) : test_size($what, $out);
+  say $failed ? "deploy-cf-test $what: $failed FAILED" : "deploy-cf-test $what: passed";
+  return $failed ? 1 : 0;
+}
+
+exit main(@ARGV);

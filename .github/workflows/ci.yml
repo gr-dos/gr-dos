@@ -36,10 +36,10 @@ jobs:
           path: build/tools
           key: tools-ubuntu-24.04-${{ hashFiles('scripts/fetch-jwasm', 'scripts/fetch-watcom', 'scripts/fetch-tico', 'patches/jwasm/*.patch') }}
 
-      - name: Install mtools and QEMU
+      - name: Install mtools, QEMU and dosfstools
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends mtools qemu-system-x86
+          sudo apt-get install -y -q --no-install-recommends mtools qemu-system-x86 dosfstools
 
       - name: Fetch tools
         run: |
@@ -90,6 +90,7 @@ jobs:
             build/linux/tests/*/qemu.log
             build/linux/tests/*/*.screen
             build/linux/tests/*/table.txt
+            build/linux/tests/deploy-cf-*/*/serial.txt
           if-no-files-found: warn
 
   release:
