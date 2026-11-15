@@ -1,4 +1,7 @@
 .XLIST
+IFDEF __JWASM__
+	OPTION NOKEYWORD:<MASK,OPTION,GOTO> ; macros and a parameter below
+ENDIF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DOS - NLS Support - Keyboard Definition File
 ;; (C) Copyright 1988 Microsoft

@@ -37,7 +37,8 @@ the logical drives);
 boot it in QEMU (F<scripts/hd-boot-test>): GR-DOS starts from C:, runs
 F<D:\AUTOEXEC.BAT> exactly once, reads each sentinel through its drive
 letter, and CHKDSK reports for each logical drive the free space mtools
-does; at the prompt D: set, a typed command runs;
+does; FASTOPEN, TREE and GRAPHICS run from C:\DOS, and FASTOPEN and
+GRAPHICS stay resident; at the prompt D: set, a typed command runs;
 
 =item 4.
 
@@ -216,8 +217,12 @@ sub test_size ($size, $out) {
     push @bat, "TYPE $letter:\\VOL$letter.TXT>AUX", "CHKDSK $letter:>AUX";
     $letter++;
   }
+  # Some of issue #17's utilities from C:\DOS, which only read the disks:
+  # FASTOPEN, for hard disks only; TREE of C:; GRAPHICS, with its profile
+  # in C:\DOS; and MEM to show the first and last resident.
+  my @extras = ('FASTOPEN C:>AUX', 'TREE C:\>AUX', 'GRAPHICS>AUX', 'MEM /PROGRAM>AUX');
   spew("$out/AUTOEXEC.BAT", join "\r\n", '@ECHO OFF', 'ECHO GRDOS-USER-AUTOEXEC>AUX', 'VER>AUX', 'PATH>AUX',
-    'TYPE C:\GRDOS.ID>AUX', @bat, 'PROMPT GR$G', '');
+    'TYPE C:\GRDOS.ID>AUX', @bat, @extras, 'PROMPT GR$G', '');
   must('mcopy', '-i', at($img, $r->{logical}[0][1]), "$out/AUTOEXEC.BAT", '::');
   # What DOS must find free on each drive: what mtools finds.
   $letter = 'D';
@@ -228,7 +233,10 @@ sub test_size ($size, $out) {
     $letter++;
   }
   spew("$out/expect", join "\n", '^GRDOS-USER-AUTOEXEC$', '^GR-DOS Version 4\.00$', '^PATH=C:\\\\DOS$',
-    '^layout 1$', @expect, '^GRDOS-TEST-END$', 'count 1 ^GRDOS-USER-AUTOEXEC$', '');
+    '^layout 1$', @expect, '^FASTOPEN installed$', '^\\xC0\\xC4{3}DOS$',
+    '^  [0-9A-F]{6}      FASTOPEN     [0-9A-F]{6}     Program +$',
+    '^  [0-9A-F]{6}      GRAPHICS     [0-9A-F]{6}     Program +$',
+    '^GRDOS-TEST-END$', 'count 1 ^GRDOS-USER-AUTOEXEC$', '');
   my $hash = hash_outside_c($img, $r);
   my @boot = ("$root/scripts/hd-boot-test", '--chs', $drive, '--timeout', 120, '--prompt', '^GR>$',
     '--type', 'ECHO GRDOS-TEST-END>AUX', $img, "$out/expect");

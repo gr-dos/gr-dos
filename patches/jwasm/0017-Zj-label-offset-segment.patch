@@ -1,0 +1,28 @@
+JWasm: -Zj takes a label in data as segment-relative
+
+Under OPTION OFFSET:SEGMENT (set by -Zm with no .MODEL), JWasm gives
+OFFSET and SEG in data their segment as the fixup frame, but a label alone
+(DW label) still gets its group's.  MASM 5 treats the two alike: without a
+group override (DW OFFSET DG:label, DW DG:label) the offset is relative to
+the label's segment.  Under -Zj, a label alone is OFFSET:SEGMENT too.
+
+Needed for RECOVER's RECOVER.ASM, whose DW int_24_back is in CODE, which
+is not the first segment of its group DG.  Where a segment is the first of
+its group, as in the sources built before, both frames give the same
+offset.
+
+diff --git a/src/data.c b/src/data.c
+index 79317d6..1e22240 100644
+--- a/src/data.c
++++ b/src/data.c
+@@ -1106,7 +1106,9 @@ next_item:  /* <--- continue scan if a comma has been detected */
+             /* set global vars Frame and Frame_Datum */
+             /* opndx.sym may be NULL, then SegOverride is set. */
+             if ( ModuleInfo.offsettype == OT_SEGMENT &&
+-                ( opndx.instr == T_OFFSET || opndx.instr == T_SEG ))
++                ( opndx.instr == T_OFFSET || opndx.instr == T_SEG ||
++                 /* -Zj: as for MASM 5, a label alone is OFFSET:SEGMENT too */
++                 ( Options.masm5_compat && opndx.instr == EMPTY ) ))
+                 set_frame2( opndx.sym );
+             else
+                 set_frame( opndx.sym );

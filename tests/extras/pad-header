@@ -1,0 +1,29 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Give a DOS executable the 512-byte header Microsoft LINK writes
+
+# usage: tests/extras/pad-header IN.EXE OUT.EXE
+#
+# EXE2BIN takes an executable's header to be a multiple of 512 bytes, as
+# LINK writes it (E2BINIT.ASM rounds the header size up), so the 32-byte
+# header wlink writes is padded with zeros to 512 bytes for its test.
+
+die "usage: $0 IN.EXE OUT.EXE\n" unless @ARGV == 2;
+my($in, $out) = @ARGV;
+open my $fh, '<:raw', $in or die "unable to read $in: $!";
+my $exe = do { local $/; <$fh> };
+substr($exe, 0, 2) eq 'MZ' or die "$in: not an MZ executable\n";
+my($relocs, $paras) = unpack 'x6 v v', $exe;
+die "$in: has relocations\n" if $relocs;
+my $image = substr $exe, 16 * $paras;
+my $len = 512 + length $image;
+my $header = substr $exe, 0, 0x1c;
+substr($header, 2, 6) = pack 'v3', $len % 512, int(($len + 511) / 512), 0;
+substr($header, 8, 2) = pack 'v', 32;
+substr($header, 0x18, 2) = pack 'v', 0x1c;
+open my $oh, '>:raw', $out or die "unable to write $out: $!";
+print $oh $header, "\0" x (512 - length $header), $image;
+close $oh or die "unable to write $out: $!";

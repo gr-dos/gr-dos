@@ -3,7 +3,8 @@
 GR-DOS builds a system disk for machines with one or two floppy drives and
 no hard disk: the kernel files, ten external commands from the MS-DOS 4.00
 source, the tico16 editor and an AUTOEXEC.BAT. Every image, from 1.44 MB to
-360 KB, holds the same files.
+360 KB, held the same files until [M5](m5-utilities.md) added commands
+to the larger ones; these are still the 360 KB disk's.
 
 ## The disk
 
@@ -61,7 +62,8 @@ byte-identical. But LINK's EXEPACK unpacker fails with "Packed file is
 corrupt" when the program is loaded in the first 64 KB of memory, and
 GR-DOS loads programs at segment 0FDDh. The images therefore carry
 `build/linux/image/FIND.EXE`, the same objects linked without EXEPACK
-(11,288 bytes rather than 5,941). `make check` still compares the EXEPACKed
+(10,094 bytes rather than 5,941; 11,288 before [M5](m5-utilities.md#linking)
+left its uninitialised stack out of the file). `make check` still compares the EXEPACKed
 `CMD/FIND/FIND.EXE`.
 
 ### ATTRIB and MEM
@@ -224,20 +226,12 @@ and the release README includes its MIT license.
 
 `make` builds `build/linux/gr-dos-{1440,1200,720,360}k.img` with
 `scripts/mkimage --format`. `scripts/image-manifest` lists each image's
-files with their size, attributes, time and SHA-256; `make` requires the
-four lists to be identical and to be exactly IO.SYS, MSDOS.SYS, COMMAND.COM
-and the files above, in that order, and keeps the list in
-`build/linux/manifest.txt`.
+files with their size, attributes, time and SHA-256. At M4, `make`
+required the four lists to be identical. Since [M5](m5-utilities.md#floppies)
+each format has its own files, listed in `image/files-360k.txt` and so on,
+and its own manifest, `build/linux/manifest-360k.txt` and so on.
 
-The files take 297 of the 354 clusters of a 360 KB disk (1 KB clusters),
-leaving 58,368 bytes free. Free space on each image:
-
-| Image | Bytes free |
-|---|---:|
-| 1.44 MB | 1,159,168 |
-| 1.2 MB | 915,456 |
-| 720 KB | 425,984 |
-| 360 KB | 58,368 |
+Their free space is in [M5](m5-utilities.md#floppies).
 
 ## Tests
 

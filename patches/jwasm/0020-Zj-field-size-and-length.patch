@@ -1,0 +1,33 @@
+JWasm: -Zj gives a field's global symbol its SIZE and LENGTH
+
+With -Zm, JWasm also defines each structure field as a global symbol, as
+MASM 5 does, but without the size and length of its first initializer, so
+SIZE and LENGTH of the bare name are those of its type.  In MASM 5, SIZE
+FIELD of a DB 1024 DUP (?) field is 1024.  Under -Zj, the global symbol
+gets the field's.
+
+Needed for GRAFTABL's GRTAB.ASM, TABSIZE EQU SIZE LANCHAR + SIZE LANID +
+SIZE LANNAME (0410h).
+
+diff --git a/src/data.c b/src/data.c
+index 1e22240..e5a6c32 100644
+--- a/src/data.c
++++ b/src/data.c
+@@ -1422,6 +1422,17 @@ ret_code data_dir( int i, struct asm_tok tokenarray[], struct asym *type_sym )
+     /* v2.06: update struct size after ALL items have been processed */
+     if ( CurrStruct )
+         UpdateStructSize( sym );
++    /* -Zj: the global symbol of a field (-Zm) has its SIZE and LENGTH, as in
++     * Masm 5 (GRAFTABL's SIZE LANCHAR, a DB 1024 DUP (?) field) */
++    if ( CurrStruct && sym && Options.masm5_compat && ModuleInfo.oldstructs &&
++        Parse_Pass == PASS_1 && *sym->name ) {
++        struct asym *gsym = SymSearch( sym->name );
++        if ( gsym && gsym != sym && gsym->state == SYM_STRUCT_FIELD ) {
++            gsym->isdata = TRUE;
++            gsym->first_size = sym->first_size;
++            gsym->first_length = sym->first_length;
++        }
++    }
+ 
+     if ( ModuleInfo.list )
+         //LstWrite( CurrStruct ? LSTTYPE_STRUCT : LSTTYPE_DATA, currofs, sym ); /* v2.18: sym not used by LSTTYPE _STRUCT/_DATA */

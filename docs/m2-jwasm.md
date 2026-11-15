@@ -145,6 +145,30 @@ says which source needs it.
 - **`0011-Zj-no-far-call-optimisation.patch`**: a `CALL` to a `FAR`
   procedure in the current segment is a far `CALL`, not `PUSH CS` and a
   near one (the message retriever of ATTRIB and MEM).
+- **`0012-Zj-forward-macro-use.patch`**: a line that uses a macro defined
+  later is skipped in pass one rather than an error (`HEADER`, `BREAK`).
+- **`0013-Zj-self-referencing-variable.patch`**: `?x = ?x + 2` may come
+  before `?x` is defined (the message services' `?stackdepth`).
+- **`0014-Zj-16-bit-constants.patch`**: `0FFFFh` and `-1` are the same
+  16-bit constant, and a byte operand takes `0FF00h`–`0FFFFh` (IFSFUNC,
+  EDLIN).
+- **`0015-Zj-rep-prefixes.patch`**: `REPE` and `REPNE` before `MOVS` are
+  `REP` (KEYB).
+- **`0016-Zj-no-comma-continuation.patch`**: a line ending with a comma
+  does not continue, and `PUBLIC` ignores a final comma (RECOVER).
+- **`0017-Zj-label-offset-segment.patch`**: `DW label` is relative to the
+  label's segment, not its group, as `DW OFFSET label` is (RECOVER).
+- **`0018-Zj-forward-constant-word-immediate.patch`**: a forward-referenced
+  constant after a 16-bit register stays a 16-bit immediate in later
+  passes (GRAPHICS).
+- **`0019-Zj-forward-equ-variable-word.patch`**: a variable named by an
+  `EQU` with a forward reference is a `WORD` in pass one (KEYB).
+- **`0020-Zj-field-size-and-length.patch`**: the global name of a
+  structure field (`-Zm`) has the field's `SIZE` and `LENGTH` (GRAFTABL).
+- **`0021-Zj-question-mark-zeros.patch`**: `?` outside `DUP` is written as
+  zeros, so that the segment has data records (EXE2BIN).
+
+0012 to 0021 came with the utilities of [M5](m5-utilities.md).
 
 ## Linking
 
@@ -156,7 +180,9 @@ matters. `scripts/mslink-layout` reads the objects and prints a `wlink`
 (`SEGADDR`, which is also its relocation frame) and offset. It also prints
 the image size: the end of the last non-empty segment. Microsoft LINK
 includes trailing uninitialised data in the image, because MASM wrote it as
-zeros.
+zeros. `scripts/msexe` ends an `.EXE`'s image at the last segment with
+data records instead, which leaves out a final stack of `DUP (?)`
+([M5](m5-utilities.md#linking)).
 
 `scripts/exe2bin` replaces EXE2BIN. Open Watcom's `exe2bin` loses the carry
 when adding the base segment to a relocated word: IO.SYS is converted with

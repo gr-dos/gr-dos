@@ -17,6 +17,9 @@ BREAK			<Transient Messages>
 ;
 
 
+IFDEF __JWASM__
+			OPTION NOKEYWORD:<ADDR,NAME> ; the macro and its parameter
+ENDIF
 addr			macro sym,name
 			public name
 			ifidn <name>,<>

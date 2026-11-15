@@ -1,0 +1,26 @@
+JWasm: -Zj accepts REPE and REPNE for MOVS, LODS and STOS
+
+MASM 5 accepts REPE, REPZ, REPNE and REPNZ before an instruction that
+takes REP, and writes the prefix given (F3h, F2h). JWasm reports
+"instruction prefix not allowed". Under -Zj, they are accepted.
+
+Needed for KEYB's KEYBCMD.ASM: REPE MOVSB.
+
+diff --git a/src/codegen.c b/src/codegen.c
+index 58696bd..aad58ee 100644
+--- a/src/codegen.c
++++ b/src/codegen.c
+@@ -153,6 +153,13 @@ static void output_opc( struct code_info *CodeInfo )
+             tmp == AP_REP &&
+             ins->allowed_prefix == AP_REPxx )
+             tmp = AP_REPxx;
++        /* -Zj: and Masm 5 accepts REPE, REPNE and the like for
++         * instructions that take REP, writing the prefix given (KEYB's
++         * REPE MOVSB) */
++        if ( Options.masm5_compat &&
++            tmp == AP_REPxx &&
++            ins->allowed_prefix == AP_REP )
++            tmp = AP_REP;
+ 
+         if( ins->allowed_prefix != tmp ) {
+             EmitError( INSTRUCTION_PREFIX_NOT_ALLOWED );

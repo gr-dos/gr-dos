@@ -1,0 +1,47 @@
+JWasm: -Zj compares and sizes constants in 16 bits, as MASM 5 does
+
+MASM 5's arithmetic is 16 bits: 0FFFFh and -1 are the same value. JWasm's
+is 32 or 64 bits. Under -Zj, an EQU constant may be redefined with a
+value that is the same in 16 bits, and a 16-bit immediate whose value is
+-256 to -1 in 16 bits (0FF00h to 0FFFFh) is accepted for a byte operand,
+as its low byte.
+
+Needed for IFSFUNC's IFSFSYM.INC and FASTOPEN, which define TRUE EQU
+0FFFFh before DOSMAC.INC's TRUE EQU -1, and EDLIN's EDLPARSE.ASM, which
+compares a byte with TRUE EQU 0FFFFh.
+
+diff --git a/src/equate.c b/src/equate.c
+index b247b77..ec20915 100644
+--- a/src/equate.c
++++ b/src/equate.c
+@@ -488,7 +488,10 @@ struct asym *CreateConstant( struct asm_tok tokenarray[] )
+                 /* for 64bit, it may be necessary to check 64bit value! */
+                 /* v2.08: always compare 64-bit values */
+                 //if ( sym->value != opnd.value ) {
+-                if ( sym->value != opnd.value || sym->value3264 != opnd.hvalue ) {
++                /* -Zj: Masm 5's values are 16 bits, so 0FFFFh and -1 are
++                 * the same (IFSFSYM.INC's TRUE and DOSMAC.INC's) */
++                if ( Options.masm5_compat ? ( ( sym->value ^ opnd.value ) & 0xFFFF ) != 0 :
++                    ( sym->value != opnd.value || sym->value3264 != opnd.hvalue ) ) {
+                     DebugMsg(("CreateConstant(%s), CONST value changed: old=%X, new=%X\n", name, sym->offset, opnd.value ));
+                     EmitErr( SYMBOL_REDEFINITION, name );
+                     return( NULL );
+diff --git a/src/parser.c b/src/parser.c
+index eccb51e..d7e9a11 100644
+--- a/src/parser.c
++++ b/src/parser.c
+@@ -2943,6 +2943,14 @@ static ret_code check_size( struct code_info *CodeInfo, const struct expr opndx[
+             ( CodeInfo->opnd[OPND2].data32l >= -255 ) ) {
+             return( rc ); /* OK cause no sign extension */
+         }
++        /* -Zj: Masm 5's constants are 16 bits, so 0FFFFh is -1 and fits a
++         * byte (EDLIN's CMP parse_switch_b,TRUE with TRUE EQU 0FFFFh) */
++        if( Options.masm5_compat && ( op1_size == 1 ) && ( op2 == OP_I16 ) &&
++            ( CodeInfo->opnd[OPND2].data32l & 0xFFFF0000 ) == 0 &&
++            ( CodeInfo->opnd[OPND2].data32l & 0xFF00 ) == 0xFF00 ) {
++            CodeInfo->opnd[OPND2].data32l = (int_16)CodeInfo->opnd[OPND2].data32l;
++            return( rc );
++        }
+ #endif
+ #if 0
+         /* v2.03: this "if" made JWasm accept any 32-bit constant

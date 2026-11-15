@@ -1,0 +1,38 @@
+JWasm: -Zj does not continue a line that ends with a comma
+
+JWasm joins a line ending with a comma to the next, as MASM 6 does for
+lists. MASM 5 does not, and ignores a comma at the end of a PUBLIC list.
+Under -Zj, a line is never continued, and PUBLIC takes a final comma.
+
+Needed for RECOVER's RECDATA.INC and RECPARSE.INC, whose PUBLIC lines end
+with commas, the next line being another PUBLIC or a label.
+
+diff --git a/src/extern.c b/src/extern.c
+index fb69ca3..b9a855b 100644
+--- a/src/extern.c
++++ b/src/extern.c
+@@ -1108,6 +1108,9 @@ ret_code PublicDirective( int i, struct asm_tok tokenarray[] )
+             if ( tokenarray[i].token == T_COMMA ) {
+                 if ( (i + 1) < Token_Count )
+                     i++;
++                /* -Zj: Masm 5 ignores a comma at the end (RECOVER) */
++                else if ( Options.masm5_compat )
++                    break;
+             } else {
+                 return( EmitErr( SYNTAX_ERROR_EX, tokenarray[i].tokpos ) );
+             }
+diff --git a/src/tokenize.c b/src/tokenize.c
+index f5db4a4..49ea20a 100644
+--- a/src/tokenize.c
++++ b/src/tokenize.c
+@@ -1000,7 +1000,9 @@ int Tokenize( char *line, unsigned int start, struct asm_tok tokenarray[], unsig
+              * v2.05: moved from PreprocessLine(). Moved because the
+              * concatenation may be triggered by a comma AFTER expansion.
+              */
+-            if ( p.index > 1 &&
++            /* -Zj: Masm 5 does not continue a line that ends with a comma
++             * (RECOVER's PUBLIC lists, each line its own PUBLIC) */
++            if ( p.index > 1 && Options.masm5_compat == FALSE &&
+                 tokenarray[p.index-1].token == T_COMMA
+ #if FASTPASS
+                 && ( UseSavedState == FALSE ) /* is it an already preprocessed line? */

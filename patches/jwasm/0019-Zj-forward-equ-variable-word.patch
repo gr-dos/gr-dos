@@ -1,0 +1,28 @@
+JWasm: -Zj takes a variable named by a forward EQU as a WORD
+
+0002 makes a forward-referenced variable a WORD in pass one, as MASM 5
+does, so that a TEST or MOV of it with a byte immediate is as long as the
+word form and padded with a NOP in pass two.  An EQU whose expression had
+a forward reference in pass one is a forward reference too (0009), even if
+the variable it names is declared by then.  Under -Zj, the first operand
+is a WORD in pass one in that case too.
+
+Needed for KEYB's KEYBI9.ASM: KEYBEQU.INC's SD EQU SHARED_DATA comes before
+KEYBCPSD.INC's EXTRN SHARED_DATA:BYTE, so TEST CS:SD.TABLE_OK,1 is
+2E F6 06 xx xx 01 90.
+
+diff --git a/src/parser.c b/src/parser.c
+index efed8b8..8dde709 100644
+--- a/src/parser.c
++++ b/src/parser.c
+@@ -3619,7 +3619,9 @@ ret_code ParseLine( struct asm_tok tokenarray[] )
+                 ( CodeInfo.opnd[OPND1].type & OP_M_ANY ) &&
+                 ( CodeInfo.opnd[OPND2].type & OP_I ) &&
+                 opndx[OPND1].explicit == FALSE && opndx[OPND1].sym &&
+-                opndx[OPND1].sym->state == SYM_UNDEFINED &&
++                ( opndx[OPND1].sym->state == SYM_UNDEFINED ||
++                 /* or an EQU that had one (KEYB's SD EQU SHARED_DATA) */
++                 ( Masm5OpndFwd & ( 1 << OPND1 ) ) ) &&
+                 !( IS_ARITH( CodeInfo.token ) &&
+                   CodeInfo.opnd[OPND2].data32l >= SCHAR_MIN &&
+                   CodeInfo.opnd[OPND2].data32l <= UCHAR_MAX ) ) {

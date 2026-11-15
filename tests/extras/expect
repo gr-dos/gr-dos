@@ -1,0 +1,193 @@
+# Lines the tests of issue #17's utilities (extras.bat) must write to
+# COM1, in order: one Perl regular expression per line (scripts/smoke-test).
+# The programs are Microsoft's, byte for byte (make check), so this is what
+# MS-DOS 4.00 does.
+
+^GRDOS-TEST-BEGIN$
+
+# SORT: ascending, ignoring case; descending; from column 2; a bad switch
+^== SORT$
+^Alpha$
+^alpha$
+^beta$
+^beta$
+^Gamma$
+^zeta$
+^zeta$
+^Gamma$
+^beta$
+^beta$
+^alpha$
+^Alpha$
+^Gamma$
+^zeta$
+^beta$
+^beta$
+^Alpha$
+^alpha$
+^SORT: Invalid switch$
+
+# COMP: equal files, a difference at offset A (a for A), a missing file;
+# COMP asks for more files each time
+^== COMP$
+^A:SAME1\.TXT and A:SAME2\.TXT$
+^Files compare OK$
+^Compare more files \(Y/N\) \?N$
+^A:SAME1\.TXT and A:DIFF\.TXT$
+^Compare error at OFFSET A$
+^File 1 = 61$
+^File 2 = 41$
+^Compare more files \(Y/N\) \?N$
+^A:SAME1\.TXT and A:NOFILE\.TXT$
+^File not found - A:NOFILE\.TXT$
+
+# TREE of the directories made on B:, with /F their files; a bad switch.
+# TREE draws with code page 437 lines (C0h, C4h), and ends the root with
+# a NUL.
+^== TREE$
+^Directory PATH listing for Volume GRDATA$
+^B:\.\x00$
+^\xC0\xC4{3}ONE$
+^    \xC0\xC4{3}TWO$
+^Directory PATH listing for Volume GRDATA$
+^    \xC0\xC4{3}TWO$
+^            SAME1\.TXT$
+^Invalid switch - /X$
+
+# XCOPY of A:'s text files to a new directory, and of a tree with /S;
+# a missing file and a bad switch
+^== XCOPY$
+^Reading source file\(s\)\.\.\.$
+^A:\\SORT\.TXT$
+^A:\\LINES\.TXT$
+^ +5 File\(s\) copied$
+^ Directory of  B:\\X$
+^LINES +TXT +41
+^Reading source file\(s\)\.\.\.$
+^B:\\ONE\\TWO\\SAME1\.TXT$
+^ +1 File\(s\) copied$
+^ Directory of  B:\\COPY\\TWO$
+^SAME1 +TXT +13
+^File not found - NOFILE\.TXT$
+^ +0 File\(s\) copied$
+^Invalid switch -  /Z$
+
+# LABEL from the command line, then at its prompt, then one too long,
+# which it cuts to 11 characters; VOL shows each
+^== LABEL$
+^ Volume in drive B is GRLABEL +$
+^Volume label \(11 characters, ENTER for none\)\? $
+^ Volume in drive B is GRLABEL2 +$
+^ Volume in drive B is TOO-LONG-LA$
+
+# EDLIN: a new file, lines inserted at the end and before line 1, listed
+# and saved; then no file name
+^== EDLIN$
+^New file$
+^       1:\*first line$
+^       1:\*zeroth line$
+^       1: zeroth line$
+^       2:\*first line$
+^       3: second line$
+^\*E$
+^zeroth line$
+^first line$
+^second line$
+^File name must be specified$
+
+# EXE2BIN: HELLOX.EXE (CS:IP 0000:0100) to a .COM, which runs; a missing
+# file
+^== EXE2BIN$
+^GRDOS-HELLO DOS 4\.00$
+^GRDOS-EXE2BIN-OK$
+^File not found - NOFILE\.EXE$
+
+# RECOVER of a file on B: (all of it readable); no drive or file
+^== RECOVER$
+^Press any key to begin recovery of the$
+^file\(s\) on drive B:$
+^39 of 39 bytes recovered$
+^zeta$
+^Invalid drive or file name$
+
+# APPEND: a file in B:\X is found from A: only while APPEND names B:\X
+^== APPEND$
+^File not found - ONLYB\.TXT$
+^alpha$
+^beta$
+^APPEND=B:\\X$
+^No Append$
+^File not found - ONLYB\.TXT$
+^Invalid switch -  /Y$
+
+# ASSIGN B=A: B: is A:, until ASSIGN alone undoes it; D: is not a drive;
+# a bad switch
+^== ASSIGN$
+^ Volume in drive B is TOO-LONG-LA$
+^File not found$
+^ Volume in drive B has no label$
+^LINES +TXT +41
+^ Volume in drive B is TOO-LONG-LA$
+^File not found$
+^Invalid parameter -  D=$
+^Invalid switch -  /X$
+
+# SHARE, GRAFTABL, GRAPHICS, PRINT, NLSFUNC and IFSFUNC stay resident (see
+# MEM below), and say so when run again
+^== SHARE$
+^SHARE already installed$
+^== GRAFTABL$
+^Active Code Page: None$
+^Previous Code Page: None$
+^Active Code Page: 437$
+^Active Code Page: 437$
+^Parameter value not allowed -  999$
+^    437  - USA Graphic Character Set$
+^== GRAPHICS$
+^Printer type not in GRAPHICS profile$
+^== PRINT$
+^Resident part of PRINT installed$
+^  A:\\SORT\.TXT is currently being printed$
+^Invalid switch -  /X $
+
+# KEYB and NLSFUNC: GR-DOS has no KEYBOARD.SYS or COUNTRY.SYS
+^== KEYB$
+^KEYB has not been installed$
+^Bad or missing Keyboard Definition File$
+^== NLSFUNC$
+^NLSFUNC already installed$
+
+# FASTOPEN is for hard disks; IFSFUNC finds no IFS driver (its message 4)
+# but stays resident
+^== FASTOPEN$
+^Cannot use FASTOPEN for drive A:$
+^Required parameter missing$
+^== IFSFUNC$
+^Invalid configuration$
+^IFSFUNC already installed$
+
+^== RESIDENT$
+^  [0-9A-F]{6}      APPEND       [0-9A-F]{6}     Program +$
+^  [0-9A-F]{6}      ASSIGN       [0-9A-F]{6}     Program +$
+^  [0-9A-F]{6}      SHARE        [0-9A-F]{6}     Program +$
+^  [0-9A-F]{6}      GRAFTABL     [0-9A-F]{6}     Program +$
+^  [0-9A-F]{6}      GRAPHICS     [0-9A-F]{6}     Program +$
+^  [0-9A-F]{6}      PRINT        [0-9A-F]{6}     Program +$
+^  [0-9A-F]{6}      NLSFUNC      [0-9A-F]{6}     Program +$
+^  [0-9A-F]{6}      IFSFUNC      [0-9A-F]{6}     Program +$
+
+# DISKCOMP of A: and a DISKCOPY of it in B:, then after LABEL changes B:'s
+# first track; a bad switch
+^== DISKCOMP$
+^Copying 80 tracks$
+^Comparing 80 tracks$
+^18 sectors per track, 2 side\(s\)$
+^Compare OK$
+^GRDOS-DISKCOMP-OK$
+^Comparing 80 tracks$
+^Compare error on$
+^side 0, track 0$
+^Compare another diskette \(Y/N\) \?N$
+^Invalid switch - /X$
+
+^GRDOS-TEST-END$
