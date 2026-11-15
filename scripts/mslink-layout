@@ -42,16 +42,18 @@ nothing to it (the DOS sources declare every segment of their group in every
 module).  This prints a wlink C<ORDER> directive that places every segment
 where Microsoft LINK would have: at the paragraph containing its start
 (C<SEGADDR>, which is also the frame of segment relocations) and the offset
-within that paragraph. If there is a stack segment, it also prints its size
+within that paragraph. If there is a stack segment (the one with combine type C<STACK>, or failing
+that the first of class C<STACK>, as LINK and C<wlink> take it), it also prints its size
 as C<option stack>, since C<wlink> otherwise makes the stack at least 4 KB.  The linked image is then byte-identical.  Absolute
 (C<AT>) segments are not part of the image and are left out.
 
 With C<--segments>, prints the layout instead, one segment per line: its
-start and length in hex, C<stack> for the stack segment (C<-> otherwise)
-and its name.  F<scripts/msexe> reads this.
+start and length in hex, C<stack> for the stack segment (C<-> otherwise),
+C<data> if an object has data records (C<LEDATA> or C<LIDATA>) for it
+(C<-> otherwise) and its name.  F<scripts/msexe> reads this.
 
-With C<--stack>, prints the paragraph (C<SEGADDR>) of the segment with
-combine type C<STACK> instead, the initial C<SS> Microsoft LINK writes.
+With C<--stack>, prints the paragraph (C<SEGADDR>) of the stack segment
+instead, the initial C<SS> Microsoft LINK writes.
 
 With C<--size>, prints the image size in bytes instead: the end of the last
 segment that is not empty, after the alignment of its last contribution.  Microsoft
@@ -106,6 +108,9 @@ sub segdefs ($path) {
       };
     } elsif($type == 0x99) {
       die "$path: 32-bit segment definitions are not supported\n";
+    } elsif($type == 0xa0 || $type == 0xa2) {
+      # LEDATA or LIDATA: the segment has initialised data.
+      $segs[index_field(\$rec, \$p) - 1]{data} = 1;
     }
   }
   return @segs;
@@ -148,24 +153,33 @@ sub layout (@objs) {
         $cur += $part->{size};
       }
       my $length = $cur - $start;
-      push @image, { $seg->%*, start => $start, length => $length };
+      my $data = grep { $_->{data} } $seg->{parts}->@*;
+      push @image, { $seg->%*, start => $start, length => $length, data => $data ? 1 : 0 };
       $addr = $start + $length;
     }
   }
   return @image;
 }
 
+# The stack segment: the one with combine type STACK, or failing that, as
+# for LINK and wlink, the first of class STACK (EXE2BIN's is PUBLIC).
+sub stack_segment (@image) {
+  my($stack) = grep { $_->{parts}[0]{combine} == 5 } @image;
+  ($stack) = grep { $_->{class} eq 'STACK' } @image unless $stack;
+  return $stack;
+}
+
 sub main (@args) {
   my $mode = @args && $args[0] =~ /^--(size|stack|segments)$/ ? (shift @args) =~ s/^--//r : '';
   die "usage: $0 [--size|--stack|--segments] OBJ...\n" unless @args;
   my @image = layout(@args);
+  my $stack = stack_segment(@image);
   if($mode eq 'segments') {
-    printf "%05X %05X %s %s\n", $_->{start}, $_->{length},
-      $_->{parts}[0]{combine} == 5 ? 'stack' : '-', $_->{name} for @image;
+    printf "%05X %05X %s %s %s\n", $_->{start}, $_->{length},
+      $stack && $_ == $stack ? 'stack' : '-', $_->{data} ? 'data' : '-', $_->{name} for @image;
     return 0;
   }
   if($mode eq 'stack') {
-    my($stack) = grep { $_->{parts}[0]{combine} == 5 } @image;
     die "no STACK segment\n" unless $stack;
     printf "0x%04X\n", $stack->{start} >> 4;
     return 0;
@@ -180,7 +194,6 @@ sub main (@args) {
   }
   # wlink makes the stack at least 4 KB unless told its size, before the
   # order directive (after it, a stack segment with no class keeps 4 KB).
-  my($stack) = grep { $_->{parts}[0]{combine} == 5 } @image;
   printf "option stack=0x%X\n", $stack->{length} if $stack && $stack->{length};
   my @order;
   my $class;

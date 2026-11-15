@@ -3,8 +3,9 @@
 #   make          build the boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM and
 #                 the utilities, and the bootable floppy images
 #                 build/linux/gr-dos-{1440,1200,720,360}k.img (3.5" 1.44 MB,
-#                 5.25" 1.2 MB, 3.5" 720 KB, 5.25" 360 KB), which all hold the
-#                 same files (build/linux/manifest.txt)
+#                 5.25" 1.2 MB, 3.5" 720 KB, 5.25" 360 KB), each with the
+#                 files of image/files-FORMATk.txt (build/linux/manifest-*k.txt),
+#                 and the CF/hard disk distribution in build/linux/cf
 #   make check    build without the branding patches, in build/linux/reference,
 #                 and compare the binaries and generated message files with
 #                 the M1 reference build (docs/m1/reference-build.sha256)
@@ -13,6 +14,9 @@
 #                 and test the utilities (tests/utils); make test-1440 (or
 #                 test-1200, test-720, test-360) boots just one image, and
 #                 make test-utils runs just the utility tests; make
+#                 test-extras tests the utilities of issue #17
+#                 (tests/extras), and make test-floppy-360 (and so on)
+#                 each format's files with a data disk in B: (tests/floppy); make
 #                 test-fc compares FC with Microsoft's (tests/fc); make
 #                 test-fdisk runs FDISK on disposable hard disk images
 #                 (tests/fdisk), and make test-install installs GR-DOS on
@@ -101,8 +105,24 @@ FC_OBJS   := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src CMD/FC/FC.
 FC_C_OBJS := $(addprefix $(SRC)/,$(addsuffix .OBJ,CMD/FC/FC CMD/FC/ERROR CMD/FC/FGETL CMD/FC/NTOI \
 	CMD/FC/UPDATE INC/KSTRING))
 
+# The rest of MS-DOS 4.00's assembly utilities (issue #17, docs/m5-utilities.md),
+# in CMD's order. Each CMD/X directory has its X.SKL but LABEL (LABL.SKL),
+# and its X.LNK but APPEND, ASSIGN and NLSFUNC, whose makefiles name the
+# objects. SHARE and IFSFUNC link the kernel's objects from INC and DOS.
+EXTRA_UTILITIES := CMD/APPEND/APPEND.EXE CMD/ASSIGN/ASSIGN.COM CMD/COMP/COMP.COM \
+	CMD/DISKCOMP/DISKCOMP.COM CMD/EDLIN/EDLIN.COM CMD/EXE2BIN/EXE2BIN.EXE CMD/FASTOPEN/FASTOPEN.EXE \
+	CMD/GRAFTABL/GRAFTABL.COM CMD/GRAPHICS/GRAPHICS.COM CMD/IFSFUNC/IFSFUNC.EXE CMD/KEYB/KEYB.COM \
+	CMD/LABEL/LABEL.COM CMD/NLSFUNC/NLSFUNC.EXE CMD/PRINT/PRINT.COM CMD/RECOVER/RECOVER.COM \
+	CMD/SHARE/SHARE.EXE CMD/SORT/SORT.EXE CMD/TREE/TREE.COM CMD/XCOPY/XCOPY.EXE
+EXTRA_DIRS := $(patsubst CMD/%/,%,$(dir $(EXTRA_UTILITIES)))
+$(foreach u,$(filter-out APPEND ASSIGN NLSFUNC,$(EXTRA_DIRS)),\
+  $(eval $(u)_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src CMD/$(u)/$(u).LNK))))
+APPEND_OBJS  := $(SRC)/CMD/APPEND/APPEND.OBJ
+ASSIGN_OBJS  := $(addprefix $(SRC)/CMD/ASSIGN/,ASSGMAIN.OBJ ASSGPARM.OBJ)
+NLSFUNC_OBJS := $(addprefix $(SRC)/CMD/NLSFUNC/,NLSFUNC.OBJ NLSPARM.OBJ)
+
 OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM \
-	$(UTILITIES)
+	$(UTILITIES) $(EXTRA_UTILITIES)
 
 # The message files of utility $(1): X.CL$(c) for each c of $(2), and X.CTL.
 utility_messages = $(foreach c,$(2),CMD/$(1)/$(1).CL$(c)) CMD/$(1)/$(1).CTL
@@ -118,32 +138,75 @@ MESSAGES := BOOT/BOOT.CL1 \
 	CMD/FORMAT/BOOT.CL1 $(call utility_messages,MEM,1 2 A B) \
 	$(call utility_messages,MODE,1 2 A B) $(call utility_messages,MORE,1 2 A) \
 	$(call utility_messages,SYS,1 2 A B C D) \
-	$(call utility_messages,FDISK,1 2 A B) CMD/FDISK/FDISK5.CL1 CMD/FDISK/FDISKM.C
+	$(call utility_messages,FDISK,1 2 A B) CMD/FDISK/FDISK5.CL1 CMD/FDISK/FDISKM.C \
+	$(call utility_messages,APPEND,1 2 A B) $(call utility_messages,ASSIGN,1 2 A) \
+	$(call utility_messages,COMP,1 2 A) $(call utility_messages,DISKCOMP,1 2 A) \
+	$(call utility_messages,EDLIN,1 2 A B C) $(call utility_messages,EXE2BIN,1 2 A B) \
+	$(call utility_messages,FASTOPEN,1 2 A) $(call utility_messages,GRAFTABL,1 2 A) \
+	$(call utility_messages,GRAPHICS,1 2 A B C) $(call utility_messages,IFSFUNC,1 2 A) \
+	$(call utility_messages,KEYB,1 2 A) $(foreach c,1 2 A,CMD/LABEL/LABL.CL$(c)) CMD/LABEL/LABL.CTL \
+	$(call utility_messages,NLSFUNC,1 2 A) $(call utility_messages,PRINT,1 2 A B C D) \
+	$(call utility_messages,RECOVER,1 2 A) $(call utility_messages,SHARE,1 2 A) \
+	$(call utility_messages,SORT,1 2 A) $(call utility_messages,TREE,1 2 A) \
+	$(call utility_messages,XCOPY,1 2 A)
 
 # ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are built with Open Watcom C,
-# not Microsoft C 5.1, so they are not compared. CONVERT makes CHKDSK.EXE into CHKDSK.COM.
+# not Microsoft C 5.1, so they are not compared. CONVERT makes CHKDSK.EXE
+# into CHKDSK.COM, and RECOVER.EXE into RECOVER.COM.
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
 	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE %/FDISK.EXE %/FC.EXE,$(UTILITIES)) \
-	CMD/CHKDSK/CHKDSK.EXE CMD/FDISK/FDBOOT.BIN CMD/FDISK/FDBOOT.INC
+	CMD/CHKDSK/CHKDSK.EXE CMD/FDISK/FDBOOT.BIN CMD/FDISK/FDBOOT.INC \
+	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE
 
 # Floppy formats, by size in KB (scripts/mkimage --format); 1440 is the
 # default.
 FORMATS := 1440 1200 720 360
 IMAGES  := $(foreach f,$(FORMATS),$(BUILD)/gr-dos-$(f)k.img)
+MANIFESTS := $(foreach f,$(FORMATS),$(BUILD)/manifest-$(f)k.txt)
 TESTS   := $(BUILD)/tests
 
 # TICO.EXE, from the pinned tico16 release, and its license.
 TICO := $(BUILD)/tico/TICO.EXE
 
+# The programs LINK packed (/EXEPACK) are linked again without it for the
+# distribution, in $(BUILD)/image: LINK's EXEPACK loader fails ("Packed file
+# is corrupt") when DOS loads the program in the first 64 KB of memory, as
+# GR-DOS does. dist maps the build's outputs to the distributed files.
+UNPACKED := FIND EXE2BIN IFSFUNC
+dist = $(foreach p,$(1),$(if $(filter $(foreach u,$(UNPACKED),$(SRC)/CMD/$(u)/$(u).EXE),$(p)),\
+	$(BUILD)/image/$(notdir $(p)),$(p)))
+
 # The programs after IO.SYS, MSDOS.SYS and COMMAND.COM on every image, and
-# all the files. FIND.EXE is linked again without EXEPACK for the images:
-# LINK's EXEPACK loader fails ("Packed file is corrupt") when DOS loads the
-# program in the first 64 KB of memory, as GR-DOS does.
-PROGRAMS := $(patsubst $(SRC)/CMD/FIND/FIND.EXE,$(BUILD)/image/FIND.EXE,\
-	$(addprefix $(SRC)/,$(UTILITIES))) $(TICO)
+# the files of the 360 KB image, which issue #17 freezes
+# (image/files-360k.txt).
+PROGRAMS := $(call dist,$(addprefix $(SRC)/,$(UTILITIES))) $(TICO)
 FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
 
-all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES) $(BUILD)/manifest.txt $(CF)/manifest.txt
+# The utilities of issue #17 that each larger floppy adds, before
+# AUTOEXEC.BAT, for a two-drive machine with the boot disk in A: and data
+# in B: (docs/m5-utilities.md, image/files-*k.txt). The 720 KB disk gets
+# the everyday file and disk commands; 1.2 MB and 1.44 MB add the rest that
+# work from a floppy. KEYB and NLSFUNC need KEYBOARD.SYS and COUNTRY.SYS,
+# which GR-DOS does not build, FASTOPEN works on hard disks only and IFSFUNC
+# only with an installable file system, so they are on C: alone.
+extra = $(call dist,$(foreach u,$(1),$(filter $(SRC)/CMD/$(u)/%,$(addprefix $(SRC)/,$(EXTRA_UTILITIES)))))
+FLOPPY_720  := XCOPY COMP DISKCOMP LABEL TREE SORT EDLIN PRINT ASSIGN RECOVER
+FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS
+FLOPPY_1440 := $(FLOPPY_1200)
+# GRAPHICS reads its printer profile, GRAPHICS.PRO, from its own directory.
+GRAPHICS_PRO := $(SRC)/CMD/GRAPHICS/GRAPHICS.PRO
+extra_files = $(call extra,$(1)) $(if $(filter GRAPHICS,$(1)),$(GRAPHICS_PRO))
+FILES_360  := $(FILES)
+FILES_720  := $(PROGRAMS) $(call extra_files,$(FLOPPY_720)) $(BUILD)/image/AUTOEXEC.BAT
+FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(BUILD)/image/AUTOEXEC.BAT
+FILES_1440 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1440)) $(BUILD)/image/AUTOEXEC.BAT
+
+# Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
+# programs, then all of issue #17's in CMD's order, and GRAPHICS.PRO.
+ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(GRAPHICS_PRO) \
+	$(BUILD)/image/AUTOEXEC.BAT
+
+all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES) $(MANIFESTS) $(CF)/manifest.txt
 
 # The reference build shares the fetched tools.
 check: $(TOOLS)
@@ -159,8 +222,9 @@ check-tree: $(addprefix $(SRC)/,$(OUTPUTS))
 
 TEST_FORMATS := $(addprefix test-,$(FORMATS))
 TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
+TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
-test: $(TEST_FORMATS) test-utils $(TEST_SYS) test-fc test-fdisk test-install test-deploy-cf
+test: $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-fdisk test-install test-deploy-cf
 
 $(TEST_FORMATS): test-%: $(TESTS)/smoke-%k.img
 	scripts/smoke-test --expect tests/smoke/expect-$*k $< tests/smoke/expect $(TESTS)/smoke-$*k
@@ -184,6 +248,19 @@ test-utils: $(TESTS)/utils.img
 	truncate -s $$((1440 * 1024)) $(TESTS)/utils-b.img
 	scripts/smoke-test --timeout 300 --drive-b $(TESTS)/utils-b.img $< tests/utils/expect $(TESTS)/utils
 	scripts/smoke-test $(TESTS)/utils-b.img tests/utils/expect-boot $(TESTS)/utils-boot
+
+# issue #17's utilities, with a blank 1.44 MB disk in B: (tests/extras).
+test-extras: $(TESTS)/extras.img
+	rm -f $(TESTS)/extras-b.img
+	mformat -C -i $(TESTS)/extras-b.img -f 1440 -v GRDATA ::
+	scripts/smoke-test --timeout 300 --drive-b $(TESTS)/extras-b.img $< tests/extras/expect $(TESTS)/extras
+
+# Each format's files, booted with a blank data disk in B: (tests/floppy).
+$(TEST_FLOPPY): test-floppy-%: $(TESTS)/floppy-%k.img
+	rm -f $(TESTS)/floppy-$*k-b.img
+	mformat -C -i $(TESTS)/floppy-$*k-b.img -f 1440 -v GRDATA ::
+	scripts/smoke-test --timeout 120 --drive-b $(TESTS)/floppy-$*k-b.img $< tests/floppy/expect-$*k \
+	  $(TESTS)/floppy-$*k
 
 $(TEST_SYS): test-sys-%: $(TESTS)/sys-%k.img
 	rm -f $(TESTS)/sys-$*k-b.img
@@ -278,7 +355,7 @@ DIST_INFO ?=
 dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.stamp
 	rm -rf $(DIST) $(RELEASE)
 	mkdir -p $(DIST)/$(NAME)/BIN $(RELEASE)
-	cp $(CORE) $(FILES) $(DIST)/$(NAME)/BIN/
+	cp $(CORE) $(ALL_FILES) $(DIST)/$(NAME)/BIN/
 	{ \
 	  sed 's/@VERSION@/$(VERSION)/g' release/README.txt; \
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
@@ -309,7 +386,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all check check-tree test $(TEST_FORMATS) test-utils $(TEST_SYS) test-fc fc-expect test-fdisk \
+.PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean
 .DELETE_ON_ERROR:
 
@@ -332,6 +409,9 @@ $(BUILD)/tree.stamp: $(shell find v4.0/src -type f) $(PATCHES) scripts/prepare-d
 	rm -rf $(BUILD)/upstream
 	touch $@
 
+# GRAPHICS's printer profile is a source file, copied as is into the tree.
+$(GRAPHICS_PRO): $(BUILD)/tree.stamp
+
 # Message files (BUILDMSG/NOSRVBLD); the case aliases cover their references too.
 # FDISK's menus are C (MENUBLD), and FDISK5.CL1 the messages of its boot record.
 $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/menubld scripts/case-alias
@@ -339,7 +419,13 @@ $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/menubld sc
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/BIOS/MSBIO.SKL
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/DOS/MSDOS.SKL
 	scripts/buildmsg $(MSG) $(SRC)/CMD/COMMAND/COMMAND.SKL
-	for u in $(filter-out FC,$(UTILITY_DIRS)); do scripts/buildmsg $(MSG) $(SRC)/CMD/$$u/$$u.SKL || exit 1; done
+	for u in $(filter-out FC,$(UTILITY_DIRS)) $(filter-out LABEL,$(EXTRA_DIRS)); do \
+	  scripts/buildmsg $(MSG) $(SRC)/CMD/$$u/$$u.SKL || exit 1; \
+	done
+	scripts/buildmsg $(MSG) $(SRC)/CMD/LABEL/LABL.SKL
+	for u in SHARE IFSFUNC; do \
+	  cp $(SRC)/DOS/MSDOS.SKL $(SRC)/CMD/$$u/ && scripts/buildmsg --nosrvbld $(MSG) $(SRC)/CMD/$$u/MSDOS.SKL || exit 1; \
+	done
 	cp $(SRC)/BOOT/BOOT.CL1 $(SRC)/CMD/FORMAT/
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/CMD/FDISK/FDISK5.SKL
 	scripts/menubld $(SRC)/CMD/FDISK/FDISK.MSG $(MSG) $(SRC)/CMD/FDISK/FDISKM.C
@@ -366,22 +452,31 @@ $(SRC)/BIOS/MSLOAD.EXE:         $(MSLOAD_OBJS)
 $(SRC)/BIOS/MSBIO.EXE:          $(MSBIO_OBJS)
 $(SRC)/DOS/MSDOS.EXE:           $(MSDOS_OBJS)
 $(SRC)/CMD/COMMAND/COMMAND.EXE: $(COMMAND_OBJS)
-$(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)),$(eval $(SRC)/CMD/$(u)/$(u).EXE: $($(u)_OBJS)))
+$(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)) $(EXTRA_DIRS),\
+  $(eval $(SRC)/CMD/$(u)/$(u).EXE: $($(u)_OBJS)))
 
 $(SRC)/CMD/FDISK/FDBOOT.EXE:    $(SRC)/CMD/FDISK/FDBOOT.OBJ
 
 EXES := $(addprefix $(SRC)/,BOOT/MSBOOT.EXE BIOS/MSLOAD.EXE BIOS/MSBIO.EXE DOS/MSDOS.EXE \
 	CMD/COMMAND/COMMAND.EXE CMD/FDISK/FDBOOT.EXE) \
-	$(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)),$(SRC)/CMD/$(u)/$(u).EXE)
+	$(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)) $(EXTRA_DIRS),$(SRC)/CMD/$(u)/$(u).EXE)
 
 # The programs CONVERT makes into .COM files are linked as Microsoft LINK
 # writes them, and FIND as LINK /EXEPACK writes it.
-CONVERTED := FORMAT CHKDSK DEBUG
+CONVERTED := FORMAT CHKDSK DEBUG EDLIN PRINT RECOVER
 $(foreach u,$(CONVERTED),$(SRC)/CMD/$(u)/$(u).EXE): MSLINK := --exe
 $(SRC)/CMD/FIND/FIND.EXE: MSLINK := --exepack
+# The .EXE utilities of issue #17; EXE2BIN and IFSFUNC are linked /EXEPACK.
+EXE_EXTRAS := APPEND FASTOPEN NLSFUNC SHARE SORT XCOPY
+$(foreach u,$(EXE_EXTRAS),$(SRC)/CMD/$(u)/$(u).EXE): MSLINK := --exe
+$(SRC)/CMD/EXE2BIN/EXE2BIN.EXE $(SRC)/CMD/IFSFUNC/IFSFUNC.EXE: MSLINK := --exepack
 
-$(EXES): %.EXE: $(TOOLS) scripts/mslink scripts/mslink-layout scripts/msexe
+# SORT's makefile then runs EXEFIX, which scripts/exefix replaces.
+$(SRC)/CMD/SORT/SORT.EXE: EXEFIX := 1 1
+
+$(EXES): %.EXE: $(TOOLS) scripts/mslink scripts/mslink-layout scripts/msexe scripts/exefix
 	. ./$(TOOLS) && scripts/mslink $(MSLINK) $@ $(filter %.OBJ,$^)
+	$(if $(EXEFIX),scripts/exefix $@ $(EXEFIX))
 
 # The pinned libc16 release (scripts/fetch-libc16). A LIBC16_ROOT given on
 # the command line must already be built.
@@ -440,7 +535,7 @@ $(SRC)/DOS/MSDOS.SYS: $(SRC)/DOS/MSDOS.EXE $(MSDOS_OBJS)
 $(SRC)/CMD/COMMAND/COMMAND.COM: $(SRC)/CMD/COMMAND/COMMAND.EXE $(COMMAND_OBJS)
 	scripts/exe2bin --size $(size) $< $@
 
-EXE2BIN := SYS MORE DISKCOPY MODE
+EXE2BIN := SYS MORE DISKCOPY MODE ASSIGN COMP DISKCOMP GRAFTABL GRAPHICS KEYB LABEL TREE
 $(foreach u,$(EXE2BIN),$(eval $(SRC)/CMD/$(u)/$(u).COM: $($(u)_OBJS)))
 
 $(foreach u,$(EXE2BIN),$(SRC)/CMD/$(u)/$(u).COM): %.COM: %.EXE scripts/exe2bin scripts/mslink-layout
@@ -467,30 +562,37 @@ $(SRC)/CMD/FDISK/FDBOOT.INC: $(SRC)/CMD/FDISK/FDBOOT.BIN scripts/dbof
 # The bootable floppy images (decisions 5 and 12).
 CORE := $(addprefix $(SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM)
 
-$(BUILD)/gr-dos-%k.img: $(CORE) $(FILES) scripts/mkimage scripts/check-image
-	scripts/mkimage --format $* $@ $(SRC) $(FILES)
+# Each image holds the files of its format, FILES_360 and so on. The list
+# of names each must have, in order, is image/files-FORMATk.txt: make
+# checks the image against it, so a change to a format's files is a change
+# to that list too (issue #17), and the 360 KB image's stays as it was.
+define image_rules
+$(BUILD)/gr-dos-$(1)k.img: $(CORE) $(FILES_$(1)) scripts/mkimage scripts/check-image
+	scripts/mkimage --format $(1) $$@ $(SRC) $(FILES_$(1))
 
-# Every image must hold the same files, with the same contents (issue #4):
-# exactly IO.SYS, MSDOS.SYS, COMMAND.COM and FILES.
-$(BUILD)/manifest.txt: $(IMAGES) scripts/image-manifest
-	scripts/image-manifest $< > $@.tmp
-	for i in $(IMAGES); do \
-	  scripts/image-manifest $$i | cmp -s - $@.tmp || { echo "$$i: files differ from $<" >&2; exit 1; }; \
-	done
-	printf '%s\n' IO.SYS MSDOS.SYS COMMAND.COM $(notdir $(FILES)) > $@.names
-	awk '{ print $$NF }' $@.tmp | cmp -s - $@.names || { echo "$<: not the files of FILES" >&2; exit 1; }
-	rm $@.names
-	mv $@.tmp $@
+$(BUILD)/manifest-$(1)k.txt: $(BUILD)/gr-dos-$(1)k.img image/files-$(1)k.txt scripts/image-manifest
+	scripts/image-manifest $$< > $$@.tmp
+	printf '%s\n' IO.SYS MSDOS.SYS COMMAND.COM $(notdir $(FILES_$(1))) | cmp -s - image/files-$(1)k.txt \
+	  || { echo "FILES_$(1) is not image/files-$(1)k.txt" >&2; exit 1; }
+	awk '{ print $$$$NF }' $$@.tmp | cmp -s - image/files-$(1)k.txt \
+	  || { echo "$$<: not the files of image/files-$(1)k.txt" >&2; exit 1; }
+	mv $$@.tmp $$@
+endef
+$(foreach f,$(FORMATS),$(eval $(call image_rules,$(f))))
 
 # The distribution scripts/deploy-cf installs on a CF card or hard disk
-# (issue #14): the files of the images but AUTOEXEC.BAT, which deploy-cf
-# writes for C:, with their manifest, the boot sector, FDISK's master boot
-# record and VERSION.
-$(CF)/manifest.txt: $(BUILD)/manifest.txt $(CORE) $(FILES) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION
+# (issue #14): ALL_FILES but AUTOEXEC.BAT, which deploy-cf writes for C:,
+# with their manifest, the boot sector, FDISK's master boot record and
+# VERSION. The manifest is that of a 1.44 MB image of them, so that the
+# files are stamped as on the floppies.
+$(CF)/manifest.txt: $(CORE) $(ALL_FILES) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION scripts/mkimage \
+	scripts/check-image scripts/image-manifest
 	rm -rf $(CF)
 	mkdir -p $(CF)
-	cp $(CORE) $(filter-out %/AUTOEXEC.BAT,$(FILES)) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION $(CF)/
-	grep -v '  AUTOEXEC\.BAT$$' $(BUILD)/manifest.txt > $@.tmp
+	scripts/mkimage --format 1440 $(BUILD)/all-files.img $(SRC) $(ALL_FILES)
+	cp $(CORE) $(filter-out %/AUTOEXEC.BAT,$(ALL_FILES)) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION $(CF)/
+	scripts/image-manifest $(BUILD)/all-files.img | grep -v '  AUTOEXEC\.BAT$$' > $@.tmp
+	rm $(BUILD)/all-files.img
 	mv $@.tmp $@
 
 $(TICO): scripts/fetch-tico
@@ -501,7 +603,8 @@ $(BUILD)/image/AUTOEXEC.BAT: image/autoexec.bat
 	mkdir -p $(@D)
 	sed 's/$$/\r/' $< > $@
 
-$(BUILD)/image/FIND.EXE: $(FIND_OBJS) $(TOOLS) scripts/mslink scripts/mslink-layout scripts/msexe
+$(foreach u,$(UNPACKED),$(eval $(BUILD)/image/$(u).EXE: $($(u)_OBJS)))
+$(foreach u,$(UNPACKED),$(BUILD)/image/$(u).EXE): $(TOOLS) scripts/mslink scripts/mslink-layout scripts/msexe
 	mkdir -p $(@D)
 	. ./$(TOOLS) && scripts/mslink --exe $@ $(filter %.OBJ,$^)
 
@@ -553,6 +656,47 @@ $(TESTS)/fc-files/%: tests/fc/%
 $(TESTS)/autoexec-fc/AUTOEXEC.BAT: tests/fc/fc.bat
 	mkdir -p $(@D)
 	sed 's/$$/\r/' $< > $@
+
+# The tests of issue #17's utilities (tests/extras): ALL_FILES, the test
+# AUTOEXEC.BAT and input files, and HELLOX.EXE, the smoke test program
+# linked as an .EXE for EXE2BIN, with the 512-byte header LINK writes
+# (tests/extras/pad-header).
+EXTRAS_FILES := $(addprefix $(TESTS)/extras-files/,sort.txt comp.in edlin.in label.in recover.in \
+	diskcomp.in print.in same1.txt same2.txt diff.txt) \
+	$(addprefix $(TESTS)/files/,lines.txt diskcopy.in) $(TESTS)/HELLOX.EXE
+
+$(TESTS)/extras-files/%: tests/extras/%
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/autoexec-extras/AUTOEXEC.BAT: tests/extras/extras.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/HELLOX.EXE: $(TESTS)/HELLO.COM tests/extras/pad-header
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
+	  && wlink option quiet format dos name $@.tmp file $(@D)/HELLO.OBJ
+	tests/extras/pad-header $@.tmp $@
+	rm $@.tmp
+
+$(TESTS)/extras.img: $(CORE) $(ALL_FILES) $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES) \
+	scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(filter-out %/AUTOEXEC.BAT,$(ALL_FILES)) \
+	  $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES)
+
+# The distribution tests' disks (tests/floppy): the files of one format,
+# with the test AUTOEXEC.BAT for the image's, and COMP's answer.
+$(TESTS)/autoexec-floppy/AUTOEXEC.BAT: tests/floppy/floppy.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+define floppy_test_image
+$(TESTS)/floppy-$(1)k.img: $(CORE) $(FILES_$(1)) $(TESTS)/autoexec-floppy/AUTOEXEC.BAT \
+	$(TESTS)/extras-files/comp.in scripts/mkimage scripts/check-image
+	scripts/mkimage --format $(1) $$@ $(SRC) $(filter-out %/AUTOEXEC.BAT,$(FILES_$(1))) \
+	  $(TESTS)/autoexec-floppy/AUTOEXEC.BAT $(TESTS)/extras-files/comp.in
+endef
+$(foreach f,$(FORMATS),$(eval $(call floppy_test_image,$(f))))
 
 $(TESTS)/fc.img: $(CORE) $(PROGRAMS) $(TESTS)/autoexec-fc/AUTOEXEC.BAT $(FC_FILES) scripts/mkimage \
 	scripts/check-image

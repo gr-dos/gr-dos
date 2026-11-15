@@ -35,13 +35,15 @@ in, where C<wlink> uses the paragraph of the segment's group;
 
 =item *
 
-the load image ends where the last segment that is not empty ends,
-including the uninitialised data C<wlink> leaves out;
+the load image ends where the last segment with data records ends,
+including the uninitialised data C<wlink> leaves out within it.  A segment
+with no data at all, such as a stack of C<DUP (?)> (NLSFUNC's and SHARE's),
+is left out at the end, as LINK leaves it;
 
 =item *
 
 the minimum allocation is the memory the segments need beyond the load
-image, in paragraphs;
+image, in paragraphs, rounded up;
 
 =item *
 
@@ -54,8 +56,8 @@ With C<--exepack>, the program is packed the way LINK's C</EXEPACK> option
 packs it instead.  The load image, up to the stack segment, is compressed
 from the end: each run of 8 or more equal bytes becomes a fill command, the
 bytes between runs a copy command, and the bytes before the first run are
-left in place.  The paragraph padding at the end is a fill of the image's
-last byte.  The unpacker stub, with LINK's message and the relocations in
+left in place, as is a run at the very start.  The paragraph padding at the end is a fill of the image's
+last byte, which takes in a run of 8 or more equal bytes before it.  The unpacker stub, with LINK's message and the relocations in
 its table format, follows, and the header has no relocations and no
 checksum.
 
@@ -126,12 +128,13 @@ sub checksum ($file) {
   return ~$sum & 0xffff;
 }
 
-# The segments of a layout file: [start, length], and the stack segment's.
+# The segments of a layout file: [start, length, has data], and the stack
+# segment's.
 sub read_layout ($path) {
   my(@segs, $stack);
   for my $line (split /\n/, slurp($path)) {
-    my($start, $length, $kind) = split ' ', $line;
-    push @segs, [ hex $start, hex $length ];
+    my($start, $length, $kind, $data) = split ' ', $line;
+    push @segs, [ hex $start, hex $length, $data eq 'data' ];
     $stack = $segs[-1] if $kind eq 'stack';
   }
   return \@segs, $stack;
@@ -145,14 +148,15 @@ sub relocation ($segs, $linear) {
   return [ $linear - $para * 16, $para ];
 }
 
-sub plain ($exe, $segs, $stack) {
+sub plain ($exe, $segs, $stack_seg) {
+  my $stack = $stack_seg->[0] >> 4;
   my $linear = $exe->{ss} * 16 + $exe->{sp};
   my $relocs = [ map { relocation($segs, $_->[1] * 16 + $_->[0]) } $exe->{relocs}->@* ];
   my $hdr_bytes = 512 * int((0x1e + 4 * @$relocs + 511) / 512);
   my($image_end, $end) = (0, 0);
   for my $seg (@$segs) {
     my $seg_end = $seg->[0] + $seg->[1];
-    $image_end = $seg_end if $seg->[1];
+    $image_end = $seg_end if $seg->[1] && $seg->[2];
     $end = $seg_end if $seg_end > $end;
   }
   my $image = substr $exe->{image}, 0, $image_end;
@@ -160,7 +164,7 @@ sub plain ($exe, $segs, $stack) {
   my %f = (
     $exe->%*,
     relocs => $relocs,
-    min => paragraphs($end) - paragraphs($image_end),
+    min => paragraphs($end - $image_end),
     ss => $stack,
     sp => $linear - $stack * 16,
   );
@@ -174,7 +178,15 @@ sub plain ($exe, $segs, $stack) {
 sub compress ($image, $pad) {
   my @cmds;   # [start, length, fill value or undef for a copy]
   my $end = length($image) - $pad;
-  push @cmds, [ $end, $pad, ord substr($image, -1) ] if $pad;
+  if($pad) {
+    # The padding's fill takes in a run of 8 or more equal bytes before it
+    # (EXE2BIN's stack and ZLOAD, zeros), though not fewer (FIND's CR).
+    my $byte = substr $image, -1;
+    my $start = $end;
+    $start-- while $start > 0 && substr($image, $start - 1, 1) eq $byte;
+    $end = $start if $end - $start >= 8;
+    push @cmds, [ $end, length($image) - $end, ord $byte ];
+  }
 
   # Runs of 8 or more equal bytes, from the end.
   my $pos = $end;
@@ -183,7 +195,8 @@ sub compress ($image, $pad) {
     my $byte = substr $image, $pos - 1, 1;
     my $start = $pos - 1;
     $start-- while $start > 0 && substr($image, $start - 1, 1) eq $byte;
-    if($pos - $start >= 8) {
+    # A run at the start of the image stays there (IFSFUNC's 8 FFh bytes).
+    if($pos - $start >= 8 && $start > 0) {
       push @cmds, [ $pos, $copy_end - $pos ] if $copy_end > $pos;
       push @cmds, [ $start, $pos - $start, ord $byte ];
       $copy_end = $start;
@@ -224,7 +237,10 @@ sub reloc_table (@relocs) {
 sub exepack ($exe, $stack) {
   my $linear = $exe->{ss} * 16 + $exe->{sp};
   my $real_sp = $linear - $stack * 16;
+  # LINK unpacks the image up to the stack segment, or to its end when
+  # segments follow the stack (EXE2BIN's ZLOAD).
   my $dest_len = $stack;
+  $dest_len = paragraphs(length $exe->{image}) if paragraphs(length $exe->{image}) > $dest_len;
   my $image = substr $exe->{image}, 0, $dest_len * 16;
   my $pad = $dest_len * 16 - length $image;
   $image .= substr($image, -1) x $pad;
@@ -275,8 +291,7 @@ sub main (@args) {
   my $exe = read_exe($in);
   my($segs, $stack_seg) = read_layout($layout);
   die "$layout: no stack segment\n" unless $stack_seg;
-  my $stack = $stack_seg->[0] >> 4;
-  my $file = $pack ? exepack($exe, $stack) : plain($exe, $segs, $stack);
+  my $file = $pack ? exepack($exe, $stack_seg->[0] >> 4) : plain($exe, $segs, $stack_seg);
   open my $fh, '>:raw', $out or die "unable to write $out: $!";
   print $fh $file;
   close $fh or die "unable to write $out: $!";

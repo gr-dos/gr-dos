@@ -1,0 +1,50 @@
+JWasm: -Zj keeps a forward-referenced constant a 16-bit immediate
+
+In pass one MASM 5 sizes a second operand with a forward reference, after
+a 16-bit register, as a word (0009).  When the value turns out to be a
+constant that fits in a byte, it still encodes the 16-bit immediate in pass
+two: CMP BX,8 is 81 FB 08 00, not 83 FB 08 and a NOP.  JWasm chose the
+sign-extended form.  Under -Zj, each instruction's pass one entry records
+the operands that had forward references, and in later passes a byte
+immediate for such a second operand after a 16-bit register is a word.
+
+Needed for GRAPHICS' GRLOAD3.ASM, whose .IF <BX EQ MAX_BANDS> comes before
+MAX_BANDS EQU 8.
+
+diff --git a/src/parser.c b/src/parser.c
+index d7e9a11..efed8b8 100644
+--- a/src/parser.c
++++ b/src/parser.c
+@@ -80,6 +80,7 @@ static struct {
+     struct masm5_pos pos;
+     enum instr_token token;
+     uint_8  dispmask;   /* operands with a 16-bit displacement */
++    uint_8  fwdmask;    /* operands with a forward reference */
+     uint_32 size;
+ } *Masm5Sizes;
+ static unsigned Masm5Count;
+@@ -966,6 +967,16 @@ static ret_code idata_nofixup( struct code_info *CodeInfo, unsigned CurrOpnd, co
+             op_type = OP_I16;
+             CodeInfo->const_size_fixed = TRUE;
+         }
++        /* -Zj: nor a constant that was a forward reference in pass one,
++         * which it sized as a word (GRAPHICS' CMP BX,MAX_BANDS) */
++        if ( Options.masm5_compat && Parse_Pass > PASS_1 && Masm5Cur >= 0 &&
++            Masm5Sizes[Masm5Cur].token == CodeInfo->token &&
++            ( Masm5Sizes[Masm5Cur].fwdmask & ( 1 << OPND2 ) ) &&
++            op_type == OP_I8 && CurrOpnd == OPND2 &&
++            ( CodeInfo->opnd[OPND1].type & OP_R16 ) ) {
++            op_type = OP_I16;
++            CodeInfo->const_size_fixed = TRUE;
++        }
+     }
+ 
+     switch ( CodeInfo->token ) {
+@@ -3777,6 +3788,7 @@ void Masm5Pad( enum instr_token token, uint_32 size )
+         Masm5Sizes[Masm5Count].pos = Masm5Pos;
+         Masm5Sizes[Masm5Count].token = token;
+         Masm5Sizes[Masm5Count].dispmask = Masm5DispMask;
++        Masm5Sizes[Masm5Count].fwdmask = Masm5OpndFwd;
+         Masm5Sizes[Masm5Count].size = size;
+         Masm5Count++;
+         return;

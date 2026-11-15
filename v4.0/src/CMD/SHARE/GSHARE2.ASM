@@ -950,7 +950,9 @@ cps3:
 
 cps31:
 
+IFNDEF __JWASM__	; an unterminated list, which MASM 5 takes as none
    RestoreReg <
+ENDIF
 
    RestoreReg <CX,BX,AX,DI,ES,SI,DS>
 

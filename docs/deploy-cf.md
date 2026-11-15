@@ -125,7 +125,9 @@ following, in this order:
    time.
 6. The directory `DOS`, with the other files of the distribution: FORMAT,
    SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND, FC, DEBUG, MEM, MODE
-   and TICO. The floppy images keep them in the root directory.
+   and TICO, and all of [M5](m5-utilities.md)'s commands (APPEND to XCOPY)
+   with GRAPHICS.PRO. The floppy images keep those they carry in the root
+   directory.
 
 If `D:\AUTOEXEC.BAT` sets its own `PATH`, include `C:\DOS` in it, for
 example `PATH C:\DOS;D:\BIN`.

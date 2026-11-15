@@ -1,0 +1,65 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Set the allocation fields of a DOS MZ executable, as EXEFIX does
+
+=head1 SYNOPSIS
+
+ scripts/exefix FILE.EXE MAX MIN
+
+=head1 DESCRIPTION
+
+Replacement for the binary-only DOS C<EXEFIX> tool (C<v4.0/src/TOOLS>), which
+the MS-DOS 4.00 build runs on SORT.EXE (C<exefix sort.exe 1 1>).  Rewrites
+the header of C<FILE.EXE> in place, as C<EXEFIX> was observed to under
+DOSBox-X:
+
+=over 4
+
+=item *
+
+C<MAX> and C<MIN>, in hexadecimal, become the maximum and minimum paragraphs
+allocated beyond the load image (header words at 0Ch and 0Ah);
+
+=item *
+
+the count of bytes in the last page (the word at 02h) is increased by 11, a
+quirk of C<EXEFIX> that the DOS loader tolerates: it loads at most 11 bytes
+beyond the end of the file.  It is not wrapped into the page count, which
+C<EXEFIX> leaves unchanged.
+
+=back
+
+The header checksum is left as it was.  C<EXEFIX> refuses a minimum below the
+stack the image needs and a minimum above the maximum; only the second is
+checked here, since SORT's minimum of 1 is enough for its stack.
+
+=cut
+
+sub main (@args) {
+  die "usage: $0 FILE.EXE MAX MIN\n" unless @args == 3;
+  my($path, $max, $min) = @args;
+  for ($max, $min) {
+    die "$0: invalid hex number $_\n" unless /^[0-9a-f]{1,4}$/i;
+    $_ = hex;
+  }
+  die "$0: min > max\n" if $min > $max;
+
+  open my $fh, '+<:raw', $path or die "$0: cannot open $path: $!\n";
+  read($fh, my $header, 14) == 14 or die "$0: $path: short header\n";
+  my($magic, $last, undef, undef, undef, undef, undef) = unpack 'a2 v6', $header;
+  die "$0: $path: not an MZ executable\n" unless $magic eq 'MZ';
+  $last += 11;
+  die "$0: $path: last page count overflows\n" if $last > 0x1ff;
+
+  seek $fh, 2, 0 or die;
+  print $fh pack 'v', $last;
+  seek $fh, 10, 0 or die;
+  print $fh pack 'v v', $min, $max;
+  close $fh or die "$0: $path: $!\n";
+  return 0;
+}
+
+exit main(@ARGV);

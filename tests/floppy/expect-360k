@@ -1,0 +1,37 @@
+# Lines the distribution test (floppy.bat) must write to COM1 for the
+# 360 KB files, in order (scripts/smoke-test).
+
+^GRDOS-TEST-BEGIN$
+
+# The baseline utilities, run from B: by name: FIND, ATTRIB, MORE, MEM and
+# CHKDSK of the data disk
+^== BASE$
+^---------- DATA\.TXT: 3$
+^  A    R     B:\\DATA\.TXT$
+^zeta$
+^ +655360 bytes total memory$
+^ +1457664 bytes total disk space$
+
+# SORT, XCOPY, TREE, COMP and LABEL are not on this disk (SORT's output
+# file is then not there for TYPE)
+^== FLOPPY-720$
+^Bad command or file name$
+^File not found - SORTED\.TXT$
+^Bad command or file name$
+^Bad command or file name$
+^Bad command or file name$
+^Bad command or file name$
+^ Volume in drive B is GRDATA +$
+
+# SHARE, GRAFTABL, GRAPHICS and APPEND (twice) are not on this disk
+^== FLOPPY-1200$
+^Bad command or file name$
+^Bad command or file name$
+^Bad command or file name$
+^Bad command or file name$
+^Bad command or file name$
+^== FILES$
+
+# The files of A:, the format's with COMP.IN, and the free space
+^ +16 File\(s\) +16384 bytes free$
+^GRDOS-TEST-END$

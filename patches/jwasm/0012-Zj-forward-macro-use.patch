@@ -1,0 +1,33 @@
+JWasm: -Zj uses a macro before its definition, as MASM 5 does
+
+MASM 5 reports most errors in pass two only. A line that starts with a
+name not yet defined, such as a macro used before the MACRO that
+defines it, is no error in pass one, and in pass two the macro defined in
+pass one is expanded. JWasm reports a syntax error in pass one. Under
+-Zj, in pass one, such a line is skipped; pass two reports it if the name
+is still not defined.
+
+Needed for TREE's and the GRAFTABL, LABEL, DISKCOMP, FASTOPEN, NLSFUNC
+and ASSIGN parsers' HEADER, defined after its first use, and ASSIGN's
+BREAK, which CURDIR.INC uses before ASSGMAIN.ASM defines it.
+
+diff --git a/src/parser.c b/src/parser.c
+index b9aab25..eccb51e 100644
+--- a/src/parser.c
++++ b/src/parser.c
+@@ -3225,6 +3225,15 @@ ret_code ParseLine( struct asm_tok tokenarray[] )
+         } /* end switch (tokenarray[i].token) */
+         if ( i && tokenarray[i-1].token == T_ID )
+             i--;
++        /* -Zj: MASM 5 reports such errors in pass two only, so a macro may
++         * be used before its definition (TREE's HEADER, ASSIGN's BREAK):
++         * in pass one the line is skipped, and in pass two the macro
++         * defined in pass one is expanded. */
++        if ( Options.masm5_compat && Parse_Pass == PASS_1 && tokenarray[i].token == T_ID ) {
++            sym = SymSearch( tokenarray[i].string_ptr );
++            if ( sym == NULL || sym->state == SYM_UNDEFINED )
++                return( NOT_ERROR );
++        }
+         DebugMsg(("ParseLine: unexpected token=%u, i=%u, string=%s\n", tokenarray[i].token, i, tokenarray[i].string_ptr));
+         return( EmitErr( SYNTAX_ERROR_EX, tokenarray[i].string_ptr ) );
+     }

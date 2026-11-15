@@ -13,10 +13,23 @@ separate downloads from the same release:
   gr-dos-@VERSION@-720k.img    3.5" 720 KB disk (DD, 80 tracks of 9 sectors)
   gr-dos-@VERSION@-360k.img    5.25" 360 KB disk (DD, 40 tracks of 9 sectors)
 
-All four are double sided, with 512-byte sectors, and hold the same files,
-the files in BIN below except MSBOOT.BIN, so any of them is a complete system
-disk for a machine with one or two floppy drives, and installs GR-DOS on a
-hard disk (see below).
+All four are double sided, with 512-byte sectors, and each is a complete
+system disk for a machine with one or two floppy drives: leave it in A:
+and use B: for programs and data. Each also installs GR-DOS on a hard disk
+(see below). The larger disks carry more of the utilities in BIN below:
+
+  360 KB   IO.SYS, MSDOS.SYS, COMMAND.COM, FORMAT, SYS, CHKDSK, DISKCOPY,
+           FDISK, ATTRIB, MORE, FIND, FC, DEBUG, MEM, MODE, TICO and
+           AUTOEXEC.BAT
+  720 KB   those, and XCOPY, COMP, DISKCOMP, LABEL, TREE, SORT, EDLIN,
+           PRINT, ASSIGN and RECOVER
+  1.2 MB,  those, and APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and
+  1.44 MB  GRAPHICS.PRO
+
+KEYB, NLSFUNC, FASTOPEN and IFSFUNC are on no floppy: KEYB and NLSFUNC
+need KEYBOARD.SYS and COUNTRY.SYS, which GR-DOS does not include yet,
+FASTOPEN works on hard disks only, and IFSFUNC needs an installable file
+system driver.
 
 Contents
 --------
@@ -39,7 +52,27 @@ Contents
   BIN\DEBUG.COM    the debugger
   BIN\MEM.EXE      shows the memory in use
   BIN\MODE.COM     sets up the screen, serial and parallel ports
-  BIN\TICO.EXE     a text editor, from tico16 (it replaces EDLIN)
+  BIN\TICO.EXE     a text editor, from tico16
+  BIN\APPEND.EXE   lets programs open files in other directories
+  BIN\ASSIGN.COM   sends a drive's requests to another drive
+  BIN\COMP.COM     compares files, byte by byte
+  BIN\DISKCOMP.COM compares two disks of the same format
+  BIN\EDLIN.COM    the line editor
+  BIN\EXE2BIN.EXE  converts an .EXE file to a .COM or binary file
+  BIN\FASTOPEN.EXE remembers where files are on a hard disk
+  BIN\GRAFTABL.COM loads the graphics characters of a code page
+  BIN\GRAPHICS.COM prints the graphics screen with Print Screen
+  BIN\IFSFUNC.EXE  installable file system support
+  BIN\KEYB.COM     loads a keyboard layout (needs KEYBOARD.SYS)
+  BIN\LABEL.COM    sets a disk's volume label
+  BIN\NLSFUNC.EXE  national language support (needs COUNTRY.SYS)
+  BIN\PRINT.COM    prints files in the background
+  BIN\RECOVER.COM  recovers the readable part of files with bad sectors
+  BIN\SHARE.EXE    file sharing and locking
+  BIN\SORT.EXE     sorts its input
+  BIN\TREE.COM     shows the directory tree
+  BIN\XCOPY.EXE    copies files and directory trees
+  BIN\GRAPHICS.PRO GRAPHICS's printer profile
   BIN\AUTOEXEC.BAT sets the prompt and PATH A:\
   BUILDINFO        the commit and the tool versions it was built with
   SHA256SUMS       SHA-256 checksums of the other files in this archive
@@ -49,9 +82,10 @@ Contents
 The utilities are built from the MS-DOS 4.00 source. ATTRIB.EXE, MEM.EXE,
 FDISK.EXE and FC.EXE are compiled with Open Watcom C, where Microsoft's were
 compiled with Microsoft C 5.1, and linked with libc16, a C runtime for DOS
-programs. FIND.EXE is not EXEPACKed, as Microsoft's was: the EXEPACK
-loader fails with "Packed file is corrupt" when it is loaded in the first
-64 KB of memory, as it is on GR-DOS. TICO.EXE is tico16's release v0.02,
+programs. FIND.EXE, EXE2BIN.EXE and IFSFUNC.EXE are not EXEPACKed, as
+Microsoft's were: the EXEPACK loader fails with "Packed file is corrupt"
+when a program is loaded in the first 64 KB of memory, as it is on
+GR-DOS. TICO.EXE is tico16's release v0.02,
 unchanged (https://github.com/tico-edit/tico16).
 
 Booting

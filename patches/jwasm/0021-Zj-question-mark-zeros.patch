@@ -1,0 +1,55 @@
+JWasm: -Zj writes zeros for a ? outside DUP
+
+JWasm writes no data for a ? initializer, only advancing the location
+counter.  MASM 5 writes zeros for a ? that is not in a DUP operand, and
+nothing for DUP (?).  The bytes are the same, but which segments have data
+records differs, and Microsoft LINK ends an executable's load image at the
+last of those (scripts/msexe).  Under -Zj, a ? outside DUP is written as
+zeros, except in a BSS or AT segment.
+
+Needed for EXE2BIN's E2BINIT.ASM, whose last segment, ZLOAD, is a DB ?
+after a stack of DUP (?): LINK /EXEPACK unpacks up to its end.
+
+diff --git a/src/data.c b/src/data.c
+index e5a6c32..68581bf 100644
+--- a/src/data.c
++++ b/src/data.c
+@@ -59,6 +59,8 @@ extern const char szNull[];
+ 
+ static ret_code data_item( int *, struct asm_tok[], struct asym *, uint_32, const struct asym *, uint_32, bool inside_struct, bool, bool, int );
+ 
++static unsigned Masm5DupLevel; /* -Zj: nesting of DUP operands */
++
+ #define OutputDataBytes( x, y ) OutputBytes( x, y, NULL )
+ 
+ /* initialize an array inside a structure
+@@ -628,10 +630,13 @@ next_item:  /* <--- continue scan if a comma has been detected */
+             }
+         } else {
+             DebugMsg1(("data_item(%s): op DUP, count=%" I32_SPEC "Xh, calling data_item()\n", sym ? sym->name : "NULL", opndx.uvalue ));
++            Masm5DupLevel++;
+             if ( data_item( &i, tokenarray, sym, no_of_bytes, type_sym, opndx.uvalue, inside_struct, is_float, first, end ) == ERROR ) {
++                Masm5DupLevel--;
+                 DebugMsg(("data_item(%s): op DUP, count=%" I32_SPEC "Xh, returned with error\n", sym ? sym->name : "NULL", opndx.uvalue ));
+                 return( ERROR );
+             }
++            Masm5DupLevel--;
+         }
+         if( tokenarray[i].token != T_CL_BRACKET ) {
+             DebugMsg(("data_item: error 'missing ')', exit\n"));
+@@ -679,7 +684,14 @@ next_item:  /* <--- continue scan if a comma has been detected */
+             total++;
+         }
+         if( !inside_struct ) {
+-            SetCurrOffset( CurrSeg, opndx.uvalue, TRUE, TRUE );
++            /* -Zj: Masm 5 writes zeros for a ? that is not in a DUP (EXE2BIN's
++             * ZLOAD), which ends the load image no earlier than it */
++            if ( Options.masm5_compat && Masm5DupLevel == 0 &&
++                CurrSeg->e.seginfo->segtype != SEGTYPE_BSS &&
++                CurrSeg->e.seginfo->segtype != SEGTYPE_ABS )
++                FillDataBytes( 0, opndx.uvalue );
++            else
++                SetCurrOffset( CurrSeg, opndx.uvalue, TRUE, TRUE );
+         }
+         i++;
+         goto item_done;

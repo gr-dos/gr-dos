@@ -5,9 +5,11 @@ the MIT license. It is built on Linux with open tools, booted in QEMU, and
 tested in GitHub Actions.
 
 Today the build produces the boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM and
-twelve utilities (FORMAT, SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND,
-FC, DEBUG, MEM and MODE), and bootable 1.44 MB, 1.2 MB, 720 KB and 360 KB floppy
-images, which all hold the same files, with the tico16 editor. With FDISK,
+31 utilities: FORMAT, SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND, FC,
+DEBUG, MEM and MODE, and every other MS-DOS 4.00 command written in
+assembly ([`docs/m5-utilities.md`](docs/m5-utilities.md)). It also makes
+bootable 1.44 MB, 1.2 MB, 720 KB and 360 KB floppy images with the tico16
+editor; the larger ones carry more of the utilities. With FDISK,
 FORMAT and SYS, GR-DOS installs on a hard disk and boots from it
 ([`docs/fdisk.md`](docs/fdisk.md)), and `scripts/deploy-cf` installs it from
 Linux on a CF card or disk image, then updates C: without touching the data
@@ -53,24 +55,29 @@ sudo scripts/deploy-cf update /dev/sdX      # afterwards: C: only
 
 | Format | Image | Bytes | Geometry | Free |
 |---|---|---:|---|---:|
-| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 1,125,376 |
-| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 881,664 |
-| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 392,192 |
-| 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 24,576 |
+| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 947,200 |
+| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 703,488 |
+| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 282,624 |
+| 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 17,408 |
 
-`make` builds all four, with the same files in each, in this order:
+`make` builds all four. Each is a boot disk for a machine with two floppy
+drives, the GR-DOS disk in A: and programs and data in B:; the larger ones
+carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 
-| File | |
-|---|---|
-| `IO.SYS`, `MSDOS.SYS` | the DOS BIOS and kernel (hidden, system, read-only) |
-| `COMMAND.COM` | the command interpreter |
-| `FORMAT.COM`, `SYS.COM`, `CHKDSK.COM`, `DISKCOPY.COM`, `FDISK.EXE` | disk utilities |
-| `ATTRIB.EXE`, `MORE.COM`, `FIND.EXE`, `FC.EXE`, `DEBUG.COM`, `MEM.EXE`, `MODE.COM` | other utilities |
-| `TICO.EXE` | the tico16 text editor, v0.02 (instead of EDLIN) |
-| `AUTOEXEC.BAT` | `PROMPT $P$G` and `PATH A:\` |
+| File | 360 KB | 720 KB | 1.2 MB, 1.44 MB |
+|---|:-:|:-:|:-:|
+| `IO.SYS`, `MSDOS.SYS` (hidden, system, read-only), `COMMAND.COM` | ✓ | ✓ | ✓ |
+| `FORMAT.COM`, `SYS.COM`, `CHKDSK.COM`, `DISKCOPY.COM`, `FDISK.EXE` | ✓ | ✓ | ✓ |
+| `ATTRIB.EXE`, `MORE.COM`, `FIND.EXE`, `FC.EXE`, `DEBUG.COM`, `MEM.EXE`, `MODE.COM` | ✓ | ✓ | ✓ |
+| `TICO.EXE`, the tico16 text editor, v0.02 | ✓ | ✓ | ✓ |
+| `XCOPY.EXE`, `COMP.COM`, `DISKCOMP.COM`, `LABEL.COM`, `TREE.COM`, `SORT.EXE`, `EDLIN.COM`, `PRINT.COM`, `ASSIGN.COM`, `RECOVER.COM` | | ✓ | ✓ |
+| `APPEND.EXE`, `SHARE.EXE`, `EXE2BIN.EXE`, `GRAFTABL.COM`, `GRAPHICS.COM`, `GRAPHICS.PRO` | | | ✓ |
+| `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
 
-`build/linux/manifest.txt` lists them with their checksums; `make` checks
-that the four images have exactly these files, with the same contents. To
+The 360 KB disk's files are frozen. KEYB, NLSFUNC, FASTOPEN and IFSFUNC
+are on C: only. `image/files-360k.txt` (and so on) lists each image's
+files in order, and `make` checks the image against it.
+`build/linux/manifest-360k.txt` (and so on) lists them with their checksums. To
 build one image from a built tree, choose the format with `--format` (1440
 if omitted); further arguments are files to copy to it:
 
@@ -102,6 +109,9 @@ from `SOURCE_DATE_EPOCH`, by default the time of the last commit. `make test`
 boots each one (`make test-1440`, `test-1200`, `test-720` or `test-360` for
 one) and tests the utilities (`make test-utils`, `make test-sys-1440` and so
 on), FORMAT, SYS and DISKCOPY on blank, disposable images in drive B:. It
+tests the commands of [`docs/m5-utilities.md`](docs/m5-utilities.md)
+(`make test-extras`), and boots each format's files with a data disk in B:
+(`make test-floppy-360` and so on). It
 compares FC's output with Microsoft's FC.EXE's (`make test-fc`), runs FDISK on disposable hard disk images against Microsoft's build of
 it (`make test-fdisk`), and installs GR-DOS on a blank hard disk and boots
 it (`make test-install`). It provisions disk images of 512 MB to 8 GB with
@@ -136,6 +146,11 @@ gr-dos-VERSION/
 │   │   ATTRIB.EXE, MORE.COM, FIND.EXE, FC.EXE, DEBUG.COM, MEM.EXE,
 │   │   MODE.COM
 │   ├── TICO.EXE
+│   ├── APPEND.EXE, ASSIGN.COM, COMP.COM, DISKCOMP.COM, EDLIN.COM,
+│   │   EXE2BIN.EXE, FASTOPEN.EXE, GRAFTABL.COM, GRAPHICS.COM,
+│   │   IFSFUNC.EXE, KEYB.COM, LABEL.COM, NLSFUNC.EXE, PRINT.COM,
+│   │   RECOVER.COM, SHARE.EXE, SORT.EXE, TREE.COM, XCOPY.EXE,
+│   │   GRAPHICS.PRO
 │   └── AUTOEXEC.BAT
 ├── BUILDINFO         the commit and tool versions
 ├── SHA256SUMS        checksums of the files in the ZIP
@@ -180,6 +195,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
 - [`docs/fc.md`](docs/fc.md): FC and its tests against Microsoft's build.
 - [`docs/deploy-cf.md`](docs/deploy-cf.md): installing on a CF card from
   Linux, and updating C: only.
+- [`docs/m5-utilities.md`](docs/m5-utilities.md): the other assembly
+  utilities, each format's files, and their tests.
 
 ## License
 
