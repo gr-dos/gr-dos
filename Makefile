@@ -409,6 +409,9 @@ $(BUILD)/tree.stamp: $(shell find v4.0/src -type f) $(PATCHES) scripts/prepare-d
 	rm -rf $(BUILD)/upstream
 	touch $@
 
+# GRAPHICS's printer profile is a source file, copied as is into the tree.
+$(GRAPHICS_PRO): $(BUILD)/tree.stamp
+
 # Message files (BUILDMSG/NOSRVBLD); the case aliases cover their references too.
 # FDISK's menus are C (MENUBLD), and FDISK5.CL1 the messages of its boot record.
 $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/menubld scripts/case-alias
