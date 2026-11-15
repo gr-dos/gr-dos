@@ -15,7 +15,10 @@ drives ([`docs/deploy-cf.md`](docs/deploy-cf.md)). Apart from the GR-DOS brandin
 banner, `VER` and FDISK's menu (`patches/branding`), the binaries of the
 assembly sources are byte-identical to the original MASM/LINK build; ATTRIB,
 MEM, FDISK and FC, which are C, are built with Open Watcom C and GR-DOS's own C
-runtime ([`docs/m4-utilities.md`](docs/m4-utilities.md)). See
+runtime ([`docs/m4-utilities.md`](docs/m4-utilities.md)). MORE is GR-DOS's
+own, in C, in place of MS-DOS 4.00's assembly one
+([`docs/more.md`](docs/more.md)), the first of the assembly utilities to
+be ported (issue #16). See
 [`docs/00-mvp.md`](docs/00-mvp.md) for the plan and its status.
 
 ## Building
@@ -53,10 +56,10 @@ sudo scripts/deploy-cf update /dev/sdX      # afterwards: C: only
 
 | Format | Image | Bytes | Geometry | Free |
 |---|---|---:|---|---:|
-| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 1,125,376 |
-| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 881,664 |
-| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 392,192 |
-| 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 24,576 |
+| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 1,117,696 |
+| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 873,984 |
+| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 384,000 |
+| 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 16,384 |
 
 `make` builds all four, with the same files in each, in this order:
 
@@ -102,7 +105,8 @@ from `SOURCE_DATE_EPOCH`, by default the time of the last commit. `make test`
 boots each one (`make test-1440`, `test-1200`, `test-720` or `test-360` for
 one) and tests the utilities (`make test-utils`, `make test-sys-1440` and so
 on), FORMAT, SYS and DISKCOPY on blank, disposable images in drive B:. It
-compares FC's output with Microsoft's FC.EXE's (`make test-fc`), runs FDISK on disposable hard disk images against Microsoft's build of
+compares MORE's output, prompts and screens with MS-DOS 4.00's MORE.COM's
+(`make test-more`, `make test-more-keys`), and FC's with Microsoft's FC.EXE's (`make test-fc`), runs FDISK on disposable hard disk images against Microsoft's build of
 it (`make test-fdisk`), and installs GR-DOS on a blank hard disk and boots
 it (`make test-install`). It provisions disk images of 512 MB to 8 GB with
 `scripts/deploy-cf`, boots them, and updates them, checking that every
@@ -178,6 +182,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
 - [`docs/fdisk.md`](docs/fdisk.md): FDISK, its tests against Microsoft's
   build, and installing on a hard disk.
 - [`docs/fc.md`](docs/fc.md): FC and its tests against Microsoft's build.
+- [`docs/more.md`](docs/more.md): MORE, GR-DOS's own in C, and its tests
+  against MS-DOS 4.00's.
 - [`docs/deploy-cf.md`](docs/deploy-cf.md): installing on a CF card from
   Linux, and updating C: only.
 
@@ -187,7 +193,7 @@ GR-DOS's own scripts, patches and documentation are MIT, see
 [`LICENSE`](LICENSE). The MS-DOS 4.00 source in `v4.0` keeps its own MIT
 license, [`v4.0/LICENSE`](v4.0/LICENSE). TICO.EXE is
 [tico16](https://github.com/tico-edit/tico16)'s, under its MIT license.
-ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are compiled with Open Watcom C but linked with
+ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE and MORE.COM are compiled with Open Watcom C but linked with
 [libc16](https://github.com/gr-dos/libc16), an MIT C runtime, and contain
 no Open Watcom code ([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes
 these notices. MS-DOS is a trademark of

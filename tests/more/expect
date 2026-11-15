@@ -1,0 +1,12 @@
+# The MORE tests (make test-more) must get to the end; their output, up to
+# GRDOS-TEST-END, must be expect.log, MS-DOS 4.00's MORE's
+# (scripts/smoke-test).
+
+^GRDOS-TEST-BEGIN$
+^== pages$
+^-- More --$
+^line 100$
+^errorlevel 0$
+^== no input file$
+^File not found$
+^GRDOS-TEST-END$

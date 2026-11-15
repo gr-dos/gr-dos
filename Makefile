@@ -13,12 +13,16 @@
 #                 and test the utilities (tests/utils); make test-1440 (or
 #                 test-1200, test-720, test-360) boots just one image, and
 #                 make test-utils runs just the utility tests; make
+#                 test-more and test-more-keys compare GR-DOS's MORE with
+#                 MS-DOS 4.00's (tests/more); make
 #                 test-fc compares FC with Microsoft's (tests/fc); make
 #                 test-fdisk runs FDISK on disposable hard disk images
 #                 (tests/fdisk), and make test-install installs GR-DOS on
 #                 one (FDISK, FORMAT and SYS) and boots it; make
 #                 test-deploy-cf tests scripts/deploy-cf, the CF card
 #                 installer, on disk images (issue #14)
+#   make more-expect  write the MORE tests' expected output and screens
+#                 with the MORE.COM assembled from MORE.ASM
 #   make fc-expect  write the FC tests' expected output with Microsoft's
 #                 FC.EXE of the M1 reference build
 #   make fdisk-expect  write the FDISK tests' expected screens and disks
@@ -67,6 +71,19 @@ LIBC16_DIR  := $(if $(wildcard $(LIBC16_ROOT)/build/stage/VERSION),$(LIBC16_ROOT
 LIBC16      := $(LIBC16_DIR)/lib/LIBC16.LIB
 WCFLAGS := -q -w0 -zld -zl -x -ms -0 -os -zp1 -s -j -ei -bt=dos \
 	-I$(abspath $(LIBC16_DIR))/include -I. -I$(CURDIR)/$(SRC)/H
+
+# GR-DOS's own C utilities, which take the place of MS-DOS 4.00's assembly
+# ones on the images (issue #16; docs/more.md): their sources are in src,
+# and they are built in GRDOS. The assembly ones are still built in SRC,
+# for make check and for the tests that compare the two. They are compiled
+# with the flags of the C utilities above, without those for Microsoft
+# C's sources, and with warnings as errors. A .COM program is linked with
+# format dos com, src/lib/comstart.asm first.
+GRDOS    := $(BUILD)/grdos
+GRCFLAGS := -q -w4 -we -zld -zl -x -ms -0 -os -zp1 -s -bt=dos -I$(abspath $(LIBC16_DIR))/include -I.
+COMSTART := $(GRDOS)/lib/COMSTART.OBJ
+GR_COMS  := MORE
+MORE_COM := $(GRDOS)/MORE/MORE.COM
 
 BOOT_OBJS    := $(SRC)/BOOT/MSBOOT.OBJ
 MSLOAD_OBJS  := $(SRC)/BIOS/MSLOAD.OBJ
@@ -138,9 +155,11 @@ TICO := $(BUILD)/tico/TICO.EXE
 # The programs after IO.SYS, MSDOS.SYS and COMMAND.COM on every image, and
 # all the files. FIND.EXE is linked again without EXEPACK for the images:
 # LINK's EXEPACK loader fails ("Packed file is corrupt") when DOS loads the
-# program in the first 64 KB of memory, as GR-DOS does.
-PROGRAMS := $(patsubst $(SRC)/CMD/FIND/FIND.EXE,$(BUILD)/image/FIND.EXE,\
-	$(addprefix $(SRC)/,$(UTILITIES))) $(TICO)
+# program in the first 64 KB of memory, as GR-DOS does. MORE.COM is
+# GR-DOS's.
+PROGRAMS := $(patsubst $(SRC)/CMD/MORE/MORE.COM,$(MORE_COM),\
+	$(patsubst $(SRC)/CMD/FIND/FIND.EXE,$(BUILD)/image/FIND.EXE,\
+	$(addprefix $(SRC)/,$(UTILITIES)))) $(TICO)
 FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
 
 all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES) $(BUILD)/manifest.txt $(CF)/manifest.txt
@@ -160,7 +179,8 @@ check-tree: $(addprefix $(SRC)/,$(OUTPUTS))
 TEST_FORMATS := $(addprefix test-,$(FORMATS))
 TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 
-test: $(TEST_FORMATS) test-utils $(TEST_SYS) test-fc test-fdisk test-install test-deploy-cf
+test: $(TEST_FORMATS) test-utils $(TEST_SYS) test-more test-more-keys test-fc test-fdisk test-install \
+	test-deploy-cf
 
 $(TEST_FORMATS): test-%: $(TESTS)/smoke-%k.img
 	scripts/smoke-test --expect tests/smoke/expect-$*k $< tests/smoke/expect $(TESTS)/smoke-$*k
@@ -192,6 +212,30 @@ $(TEST_SYS): test-sys-%: $(TESTS)/sys-%k.img
 	scripts/smoke-test --timeout 300 --drive-b $(TESTS)/sys-$*k-b.img --expect tests/utils/expect-sys-$*k \
 	  $< tests/utils/expect-sys $(TESTS)/sys-$*k
 	scripts/smoke-test $(TESTS)/sys-$*k-b.img tests/utils/expect-boot $(TESTS)/sys-$*k-boot
+
+# The MORE tests (tests/more, issue #16): GR-DOS's MORE.COM's output, its
+# prompts and the errorlevels for each command of more.bat, which must be
+# exactly, CRs too, MS-DOS 4.00's (expect.log), written by make more-expect
+# with the MORE.COM assembled in SRC in place of GR-DOS's; and the screens
+# of MORE at the console, paged with the keyboard (tests/more/keys,
+# scripts/disk-test), Microsoft's too.
+MORE_REFERENCE := $(SRC)/CMD/MORE/MORE.COM
+more_output = sed -n '/^GRDOS-TEST-BEGIN\r$$/,/^GRDOS-TEST-END\r$$/p' $(1)/serial.log
+
+test-more: $(TESTS)/more.img
+	scripts/smoke-test --timeout 300 --keys tests/more/answers $< tests/more/expect $(TESTS)/more
+	$(call more_output,$(TESTS)/more) | cmp - tests/more/expect.log \
+	  || { $(call more_output,$(TESTS)/more) | diff -au tests/more/expect.log - | tr -d '\r'; exit 1; }
+
+test-more-keys: $(TESTS)/more-keys.img scripts/disk-test scripts/disk-sectors
+	scripts/disk-test $< tests/more/keys $(TESTS)/more-keys
+
+more-expect: $(TESTS)/more-reference.img $(TESTS)/more-keys.img $(MORE_REFERENCE) scripts/disk-test \
+	scripts/disk-sectors
+	scripts/smoke-test --timeout 300 --keys tests/more/answers $< tests/more/expect $(TESTS)/more-reference
+	$(call more_output,$(TESTS)/more-reference) > tests/more/expect.log
+	scripts/disk-test --update --program $(MORE_REFERENCE) $(TESTS)/more-keys.img tests/more/keys \
+	  $(TESTS)/more-keys-reference
 
 # The FC tests (tests/fc): FC's output and errorlevels for each command of
 # fc.bat up to GRDOS-AB-END, which must be exactly, CRs too, Microsoft's
@@ -257,7 +301,7 @@ fdisk-expect: $(DISK_TEST) $(FDISK_REFERENCE)
 	for t in $$(grep -L '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))) \
 	         $$(grep -l '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))); do \
 	  t=$$(basename $$(dirname $$t)); \
-	  scripts/disk-test --update --fdisk $(FDISK_REFERENCE) $< tests/fdisk/$$t $(TESTS)/fdisk-reference-$$t \
+	  scripts/disk-test --update --program $(FDISK_REFERENCE) $< tests/fdisk/$$t $(TESTS)/fdisk-reference-$$t \
 	    || exit 1; \
 	  sed -i 's/MS-DOS Version 4\.00/GR-DOS Version 4.00/' tests/fdisk/$$t/*.screen; \
 	done
@@ -284,7 +328,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
 	  printf '\ntico16 (TICO.EXE)\n-----------------\n\n'; cat $(dir $(TICO))LICENSE; \
-	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE)\n----------------------------------------------------\n\n'; \
+	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE and MORE.COM)\n---------------------------------------------------------------\n\n'; \
 	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	. ./$(TOOLS) && { \
@@ -309,7 +353,8 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all check check-tree test $(TEST_FORMATS) test-utils $(TEST_SYS) test-fc fc-expect test-fdisk \
+.PHONY: all check check-tree test $(TEST_FORMATS) test-utils $(TEST_SYS) test-more test-more-keys more-expect \
+	test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean
 .DELETE_ON_ERROR:
 
@@ -414,6 +459,32 @@ $(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE $(SRC)/CMD/FDISK/FDISK.EXE $
 	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
 	  name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) library $(LIBC16)
 	scripts/check-runtime $(@:.EXE=.MAP) $(LIBC16) $(filter %.OBJ,$^)
+
+# GR-DOS's C utilities (GRDOS). Each has its messages from its .SKL as a C
+# header (scripts/msgh): the classes of its own, A, B and so on.
+$(COMSTART): src/lib/comstart.asm $(TOOLS)
+	mkdir -p $(@D)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wasm -q -fo=$@ $<
+
+$(GRDOS)/MORE/MORE.H: $(BUILD)/messages.stamp scripts/msgh
+	mkdir -p $(@D)
+	scripts/msgh $@ $(SRC)/CMD/MORE/MORE.CLA
+
+$(GRDOS)/MORE/MORE.OBJ: src/more/more.c $(GRDOS)/MORE/MORE.H
+
+$(foreach u,$(GR_COMS),$(GRDOS)/$(u)/$(u).OBJ): $(TOOLS) $(BUILD)/libc16.stamp
+	. ./$(TOOLS) && cd $(@D) && PATH=$$WATCOM/binl64:$$PATH \
+	  wcc $(GRCFLAGS) -fo=$(@F) $(abspath $(filter %.c,$^))
+
+# As for the .EXE utilities, the map must show only the objects and
+# LIBC16.LIB; and there must be no cstart in it.
+$(foreach u,$(GR_COMS),$(GRDOS)/$(u)/$(u).COM): %.COM: $(COMSTART) %.OBJ $(TOOLS) $(BUILD)/libc16.stamp \
+	scripts/check-runtime
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos com \
+	  option nocaseexact option nodefaultlibs option map=$*.MAP \
+	  name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) library $(LIBC16)
+	scripts/check-runtime $*.MAP $(LIBC16) $(filter %.OBJ,$^)
+	! grep -q cstart $*.MAP
 
 # EXE2BIN; the image is padded to the size Microsoft LINK gives it.
 size = $$(scripts/mslink-layout --size $(filter %.OBJ,$^))
@@ -541,6 +612,40 @@ $(TESTS)/autoexec-sys-%k/AUTOEXEC.BAT: tests/utils/sys.bat
 $(TESTS)/utils.img: $(CORE) $(PROGRAMS) $(TESTS)/autoexec-utils/AUTOEXEC.BAT $(UTILS_FILES) scripts/mkimage \
 	scripts/check-image
 	scripts/mkimage $@ $(SRC) $(PROGRAMS) $(TESTS)/autoexec-utils/AUTOEXEC.BAT $(UTILS_FILES)
+
+# The MORE tests' disks: GR-DOS's MORE.COM, or Microsoft's, with the files
+# of tests/more/mkfiles; more-keys.img boots to the prompt.
+MORE_FILES := $(addprefix $(TESTS)/more-files/,EMPTY.TXT SHORT.TXT L23.TXT L24.TXT L25.TXT LONG.TXT \
+	NOEOL.TXT LF.TXT WIDE.TXT TABS.TXT CTRL.TXT BYTES.BIN EOF.TXT BIG.TXT BIGEOF.TXT EDGE.TXT)
+
+$(TESTS)/more-files/stamp: tests/more/mkfiles
+	rm -rf $(@D)
+	tests/more/mkfiles $(@D)
+	test $$(ls $(@D) | wc -l) -eq $(words $(MORE_FILES))
+	touch $@
+
+$(MORE_FILES): $(TESTS)/more-files/stamp
+
+$(TESTS)/more-el/EL.BAT: tests/fc/el.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/autoexec-more/AUTOEXEC.BAT: tests/more/more.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/more.img: $(CORE) $(PROGRAMS) $(TESTS)/autoexec-more/AUTOEXEC.BAT $(TESTS)/more-el/EL.BAT $(MORE_FILES) \
+	scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(PROGRAMS) $(TESTS)/autoexec-more/AUTOEXEC.BAT $(TESTS)/more-el/EL.BAT $(MORE_FILES)
+
+$(TESTS)/more-reference.img: $(CORE) $(PROGRAMS) $(MORE_REFERENCE) $(TESTS)/autoexec-more/AUTOEXEC.BAT \
+	$(TESTS)/more-el/EL.BAT $(MORE_FILES) scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(filter-out $(MORE_COM),$(PROGRAMS)) $(MORE_REFERENCE) \
+	  $(TESTS)/autoexec-more/AUTOEXEC.BAT $(TESTS)/more-el/EL.BAT $(MORE_FILES)
+
+$(TESTS)/more-keys.img: $(CORE) $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT $(MORE_FILES) scripts/mkimage \
+	scripts/check-image
+	scripts/mkimage $@ $(SRC) $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT $(MORE_FILES)
 
 # The FC tests' disks: GR-DOS's FC.EXE, or Microsoft's.
 FC_FILES := $(addprefix $(TESTS)/fc-files/,a.txt b.txt case.txt space.txt long.txt many.txt tabs.txt \

@@ -1,0 +1,98 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Write a utility's messages as a C header
+
+=head1 SYNOPSIS
+
+ scripts/msgh OUT.H X.CLA [X.CLB ...]
+
+=head1 DESCRIPTION
+
+Reads the message files that F<scripts/buildmsg> wrote for a utility from
+its F<.SKL> and F<USA-MS.MSG> (F<X.CLA>, F<X.CLB>, ...: the utility's own
+classes) and writes them to C<OUT.H> as C string literals, one C<#define>
+for each message: C<MSG_A_2> is message 2 of class A.  So the GR-DOS C
+utilities that take the place of the assembly ones (issue #16) have the
+same texts as Microsoft's, from the same message source, without the
+message retriever.
+
+Each message is the concatenation of the items of its C<DB> lines, after
+its length byte: strings (in double or single quotes, a doubled quote
+standing for one), C<CR>, C<LF> and numbers (decimal, or hexadecimal with
+C<H>).  Bytes other than printable ASCII are written as octal escapes, so
+code page 437 text is kept as it is.  Replaceable parameters (C<%1>) are
+left in the text.
+
+=cut
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+# The bytes of the items of a DB statement.
+sub db_bytes ($file, $items) {
+  my $bytes = '';
+  pos($items) = 0;
+  while(pos($items) < length $items) {
+    if($items =~ /\G\s*"((?:[^"]|"")*)"\s*(?:,|\z)/gc) {
+      $bytes .= $1 =~ s/""/"/gr;
+    } elsif($items =~ /\G\s*'((?:[^']|'')*)'\s*(?:,|\z)/gc) {
+      $bytes .= $1 =~ s/''/'/gr;
+    } elsif($items =~ /\G\s*(CR|LF)\s*(?:,|\z)/gci) {
+      $bytes .= uc $1 eq 'CR' ? "\r" : "\n";
+    } elsif($items =~ /\G\s*([0-9][0-9A-F]*)H\s*(?:,|\z)/gci) {
+      $bytes .= chr hex $1;
+    } elsif($items =~ /\G\s*([0-9]+)\s*(?:,|\z)/gc) {
+      $bytes .= chr $1;
+    } else {
+      die "$file: cannot read DB $items\n";
+    }
+  }
+  return $bytes;
+}
+
+sub c_string ($bytes) {
+  my %esc = ( "\r" => '\r', "\n" => '\n', "\t" => '\t', '"' => '\"', '\\' => '\\\\' );
+  my $s = join '', map {
+    $esc{$_} // (/[\x20-\x7E]/ ? $_ : sprintf '\\%03o', ord)
+  } split //, $bytes;
+  # A ? before another could make a trigraph.
+  $s =~ s/\?(?=\?)/?\\/g;
+  return qq{"$s"};
+}
+
+sub main (@args) {
+  die "usage: $0 OUT.H X.CLA [X.CLB ...]\n" unless @args >= 2;
+  my($out, @files) = @args;
+
+  my @defines;
+  for my $file (@files) {
+    my($msg, $bytes, $first);
+    for my $line (split /\r?\n/, slurp($file)) {
+      if($line =~ /^\$M_([0-9A-Z])_([0-9A-F]+)H_MSG\s+LABEL\s+BYTE/i) {
+        ($msg, $bytes, $first) = ("MSG_\U$1\E_" . hex($2), '', 1);
+      } elsif(defined $msg && $line =~ /^\$M_[0-9A-Z]_[0-9A-F]+H_END\s+LABEL\s+BYTE/i) {
+        push @defines, "#define $msg " . c_string($bytes);
+        undef $msg;
+      } elsif(defined $msg && $line =~ /^\s+DB\s+(.*?)\s*\z/i) {
+        if($first) { $first = 0; next }   # the length
+        $bytes .= db_bytes($file, $1);
+      }
+    }
+    die "$file: message not ended\n" if defined $msg;
+  }
+  die "@files: no messages\n" unless @defines;
+
+  open my $fh, '>:raw', $out or die "unable to write $out: $!";
+  print $fh "/* Written by scripts/msgh from @{[ map { s{.*/}{}r } @files ]}. */\n\n";
+  print $fh "$_\n" for @defines;
+  close $fh or die "unable to write $out: $!";
+  return 0;
+}
+
+exit main(@ARGV);

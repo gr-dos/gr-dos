@@ -4,3 +4,5 @@
 /patches/** -text
 # Expected FC output, with its CRs, kept byte-for-byte.
 /tests/fc/expect.log -text
+# Expected MORE output: CRs, control characters and every byte value.
+/tests/more/expect.log -text

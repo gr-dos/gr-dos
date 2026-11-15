@@ -15,7 +15,7 @@ source, the tico16 editor and an AUTOEXEC.BAT. Every image, from 1.44 MB to
 | `CHKDSK.COM` | `CMD/CHKDSK` | `.EXE` as LINK writes it, then CONVERT | yes (and `CHKDSK.EXE`) |
 | `DISKCOPY.COM` | `CMD/DISKCOPY` | EXE2BIN | yes |
 | `ATTRIB.EXE` | `CMD/ATTRIB` (C) | Open Watcom C, `wlink` and libc16 | no |
-| `MORE.COM` | `CMD/MORE` | EXE2BIN | yes |
+| `MORE.COM` | `src/more` (C), GR-DOS's own ([MORE](more.md)); `CMD/MORE`'s for `make check` | Open Watcom C, `wlink format dos com` and libc16 | `CMD/MORE`'s is |
 | `FIND.EXE` | `CMD/FIND` | `.EXE` as LINK writes it, not EXEPACKed | the EXEPACKed one is |
 | `FC.EXE` | `CMD/FC` (C) | Open Watcom C, `wlink` and libc16 ([FC](fc.md)) | no |
 | `DEBUG.COM` | `CMD/DEBUG` | `.EXE` as LINK writes it, then CONVERT | yes |

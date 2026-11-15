@@ -1,0 +1,28 @@
+# MORE at the console (make test-more-keys): a page of LONG.TXT at a time,
+# then the rest after a key: a letter; an extended key (F1, 0 then its scan
+# code), of which MORE reads both bytes, so the next page waits for a key
+# too; Enter and the space bar. The same from a pipe; then ^C at the
+# prompt, which ends MORE. The screens are MS-DOS 4.00's MORE's (make
+# more-expect). The hard disk is not used.
+disk 10M
+unchanged
+wait A:\\>
+type MORE <LONG.TXT
+key ret
+screen page1
+key a
+screen page2
+key f1
+screen page3
+key ret
+screen page4
+key spc
+screen end
+type TYPE LONG.TXT | MORE
+key ret
+screen pipe1
+key shift-a
+screen pipe2
+key ctrl-c
+screen break
+quit

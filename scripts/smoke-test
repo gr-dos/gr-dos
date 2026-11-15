@@ -8,7 +8,8 @@ use Time::HiRes qw( sleep time );
 
 =head1 SYNOPSIS
 
- scripts/smoke-test [--timeout SECONDS] [--expect FILE]... [--drive-b IMAGE] IMAGE EXPECT OUTDIR
+ scripts/smoke-test [--timeout SECONDS] [--expect FILE]... [--drive-b IMAGE] [--keys FILE]
+   IMAGE EXPECT OUTDIR
 
 =head1 DESCRIPTION
 
@@ -30,6 +31,16 @@ way, on its own: F<tests/smoke/expect-1200k>, for example, holds the free
 space C<DIR> reports on a 1.2 MB disk.  Exits non-zero if any pattern is
 not found.
 
+With C<--keys>, COM1 has input too, for a program that reads its keys
+from C<AUX> under C<CTTY AUX>, as MORE does (F<tests/more>).  C<FILE>'s
+first line is the prompt, and each further line is the bytes to send, as
+the contents of a Perl double-quoted string (C<\x00;> is an extended key,
+C<\r> Enter).  When the output ends with the nth prompt, the nth line is
+sent, the list starting again after its last.  A key can be lost, if DOS
+reads it (its ^C check does) before the program flushes its input, as
+MORE does with INT 21h function 0Ch; so if the program writes nothing in
+the next two seconds, the key is sent again.
+
 =cut
 
 my $end_marker = 'GRDOS-TEST-END';
@@ -40,9 +51,17 @@ sub slurp ($path) {
   return scalar <$fh>;
 }
 
-sub boot ($image, $drive_b, $outdir, $timeout) {
+sub boot ($image, $drive_b, $outdir, $timeout, $keys) {
   my $serial = "$outdir/serial.log";
-  unlink $serial;
+  my $input  = "$outdir/serial.in";
+  unlink $serial, $input;
+  my @serial = (-serial => "file:$serial");
+  my $in;
+  if($keys) {
+    require POSIX;
+    POSIX::mkfifo($input, 0600) or die "mkfifo $input: $!";
+    @serial = (-chardev => "file,id=com1,path=$serial,input-path=$input", -serial => 'chardev:com1');
+  }
   my @cmd = (
     'qemu-system-i386',
     -display => 'none',
@@ -51,7 +70,7 @@ sub boot ($image, $drive_b, $outdir, $timeout) {
     -drive   => "file=$image,if=floppy,index=0,format=raw,snapshot=on",
     (defined $drive_b ? (-drive => "file=$drive_b,if=floppy,index=1,format=raw") : ()),
     -boot    => 'a',
-    -serial  => "file:$serial",
+    @serial,
     -monitor => 'none',
   );
 
@@ -62,18 +81,43 @@ sub boot ($image, $drive_b, $outdir, $timeout) {
     exec @cmd or die "exec qemu-system-i386: $!";
   }
 
+  # Read and write, so that the open does not wait for QEMU's.
+  if($keys) {
+    open $in, '+<:raw', $input or die "unable to open $input: $!";
+    $in->autoflush(1);
+  }
+
   my $deadline = time + $timeout;
   my $finished = 0;
+  my($sent_for, $sent_at, $sent_length) = (0);
   while(time < $deadline) {
-    if(slurp($serial) =~ /^\Q$end_marker\E\r?$/m) {
+    my $out = slurp($serial);
+    if($out =~ /^\Q$end_marker\E\r?$/m) {
       $finished = 1;
       last;
     }
+    # The nth prompt, waiting for its key, gets the nth.
+    if($keys && $out =~ /\Q$keys->{prompt}\E\z/) {
+      my $prompts = () = $out =~ /\Q$keys->{prompt}\E/g;
+      my $key = $keys->{keys}[($prompts - 1) % $keys->{keys}->@*];
+      if($sent_for != $prompts) {
+        sleep 0.25;
+        print $in $key;
+        ($sent_for, $sent_at, $sent_length) = ($prompts, time, length $out);
+      } elsif(length $out == $sent_length && time - $sent_at > 2) {
+        print $in $key;
+        $sent_at = time;
+      }
+    }
     last if waitpid($pid, 1) == $pid;   # QEMU exited early
-    sleep 0.25;
+    sleep 0.1;
   }
   kill 'TERM', $pid;
   waitpid $pid, 0;
+  if($keys) {
+    close $in;
+    unlink $input;
+  }
   warn "smoke-test: no $end_marker within $timeout seconds\n" unless $finished;
   return slurp($serial) =~ s/\r//gr;
 }
@@ -104,19 +148,24 @@ sub check ($lines, $expect) {
 
 sub main (@args) {
   my $timeout = 60;
-  my(@also, $drive_b);
-  while(@args && $args[0] =~ /^--(timeout|expect|drive-b)$/) {
+  my(@also, $drive_b, $keys);
+  while(@args && $args[0] =~ /^--(timeout|expect|drive-b|keys)$/) {
     shift @args;
     die "$0: --$1 needs a value\n" unless @args;
     if($1 eq 'timeout') {
       $timeout = shift @args;
     } elsif($1 eq 'drive-b') {
       $drive_b = shift @args;
+    } elsif($1 eq 'keys') {
+      my $file = shift @args;
+      my($prompt, @keys) = grep { length } split /\n/, slurp($file);
+      die "$file: no prompt, or no keys\n" unless defined $prompt && @keys;
+      $keys = { prompt => $prompt, keys => [ map { eval qq{"$_"} // die "$file: $@" } @keys ] };
     } else {
       push @also, shift @args;
     }
   }
-  die "usage: $0 [--timeout SECONDS] [--expect FILE]... [--drive-b IMAGE] IMAGE EXPECT OUTDIR\n"
+  die "usage: $0 [--timeout SECONDS] [--expect FILE]... [--drive-b IMAGE] [--keys FILE] IMAGE EXPECT OUTDIR\n"
     unless @args == 3;
   my($image, $expect, $outdir) = @args;
   -r $_ or die "unable to read $_\n" for $expect, @also;
@@ -131,7 +180,7 @@ sub main (@args) {
   print $version =~ /^(.*)$/m;
   print "\n";
 
-  my $output = boot($image, $drive_b, $outdir, $timeout);
+  my $output = boot($image, $drive_b, $outdir, $timeout, $keys);
   open $fh, '>', "$outdir/serial.txt" or die "unable to write $outdir/serial.txt: $!";
   print $fh $output;
   close $fh;

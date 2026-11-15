@@ -1,0 +1,89 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Write the MORE tests' input files, byte for byte
+
+=head1 SYNOPSIS
+
+ tests/more/mkfiles DIR
+
+=head1 DESCRIPTION
+
+Writes the files that F<tests/more/more.bat> and F<tests/more/keys> give
+MORE to F<DIR>, as the exact bytes MORE is to read: CR LF lines unless the
+test is of something else, control characters, every byte value, ^Z, and
+files larger than MORE's 4096-byte buffer.  They are made here rather than
+committed, as most are not text.
+
+=cut
+
+sub spew ($dir, $name, $data) {
+  die "$name: empty\n" unless length $data || $name eq 'EMPTY.TXT';
+  open my $fh, '>:raw', "$dir/$name" or die "unable to write $dir/$name: $!";
+  print $fh $data;
+  close $fh or die "unable to write $dir/$name: $!";
+}
+
+sub lines (@lines) { join '', map { "$_\r\n" } @lines }
+
+sub numbered ($n, $text = 'line') { lines(map { sprintf '%s %03d', $text, $_ } 1 .. $n) }
+
+sub main (@args) {
+  die "usage: $0 DIR\n" unless @args == 1;
+  my($dir) = @args;
+  mkdir $dir unless -d $dir;
+
+  spew($dir, 'EMPTY.TXT', '');
+  spew($dir, 'SHORT.TXT', lines('alpha', 'beta', 'gamma'));
+  # MORE prompts after the 24th line feed of a page: 23 lines fit, the 24th
+  # fills the page, and the 25th is on the next.
+  spew($dir, 'L23.TXT', numbered(23));
+  spew($dir, 'L24.TXT', numbered(24));
+  spew($dir, 'L25.TXT', numbered(25));
+  spew($dir, 'LONG.TXT', numbered(100));
+  # No line feed at the end; and lines ended by LF alone, whose columns
+  # add up, as no CR takes MORE back to column 1.
+  spew($dir, 'NOEOL.TXT', "first\r\nlast, no end of line");
+  spew($dir, 'LF.TXT', join '', map { sprintf "unix line %02d\n", $_ } 1 .. 30);
+  # The tests of columns are repeated over several pages, so that each
+  # line that wraps, or does not, moves the prompts after it.
+  #
+  # Lines of 79, 80 and 81 columns, two and a half screens wide, and
+  # blank lines.
+  spew($dir, 'WIDE.TXT', lines(map({ ('w' x ($_ - 4)) . sprintf '%04d', $_ } 79, 80, 81, 160, 200), '', '',
+    ('x' x 80) . ('y' x 80), 'end') x 4);
+  # Tab stops, a tab from the last columns (past the last one), enough
+  # tabs to wrap, and so many that the column, a byte, goes past 255 to 1.
+  spew($dir, 'TABS.TXT', lines("a\tb\tc", "\t\tindented", "1234567\tx", "12345678\tx",
+    ('t' x 78) . "\tafter", ('t' x 79) . "\tafter", ('t' x 80) . "\tafter",
+    join("\t", ('z') x 12), ("\t" x 10) . 'ten', ("\t" x 20) . 'twenty', ("\t" x 40) . 'forty') x 4);
+  # Backspace (also at column 1), CR without LF, BEL, and the other
+  # control characters, which MORE counts as a column each; then the lines
+  # that make them wrap.
+  spew($dir, 'CTRL.TXT', lines("\bstart", "abc\b\bd", "over\rOVER", "bell\a\a\aend",
+      join('', map { chr } 1 .. 6, 11, 12, 14 .. 25, 27 .. 31), ('c' x 70) . ("\a" x 20) . 'bells',
+      ('d' x 70) . ("\b" x 20) . 'backspaces', ('e' x 70) . ("\x01" x 20) . 'controls',
+      ("\b" x 300) . 'many') x 4);
+  # Every byte, ^Z last, which ends MORE's input: what is after it is not
+  # written.
+  spew($dir, 'BYTES.BIN', join('', map { chr } grep { $_ != 0x1A } 0 .. 255) . "\x1Aafter");
+  spew($dir, 'EOF.TXT', lines('before') . "\x1A" . lines('after'));
+  # Larger than the buffer, three times over: lines of every length up to
+  # 99 columns; and the same with ^Z in the third buffer.
+  my $big = '';
+  my $i = 0;
+  while(length $big < 12000) {
+    $big .= sprintf("%04d ", $i) . ('b' x ($i % 95)) . "\r\n";
+    $i++;
+  }
+  spew($dir, 'BIG.TXT', $big);
+  substr($big, 9000, 0, "\x1A");
+  spew($dir, 'BIGEOF.TXT', $big);
+  # A line across the buffers' boundary, whose CR is the 4096th byte.
+  spew($dir, 'EDGE.TXT', ('e' x 4095) . "\r\n" . lines('next'));
+  return 0;
+}
+
+exit main(@ARGV);
