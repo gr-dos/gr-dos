@@ -38,6 +38,7 @@ make check    # build without the branding and compare with the MS-DOS 4.00 refe
 make test     # boot each image in QEMU, and test the utilities on disposable disks
 make dist     # package the release assets in build/linux/release
 make run-dosbox  # try the tools in DOSBox-X, with C:\DOS as a CF install has it
+make help     # list every target, including each single test, and the variables
 ```
 
 `make run-dosbox` needs `dosbox-x`. It runs the tools on DOSBox-X's own DOS
