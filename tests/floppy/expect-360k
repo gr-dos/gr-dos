@@ -36,5 +36,5 @@
 ^== FILES$
 
 # The files of A:, the format's with COMP.IN, and the free space
-^ +16 File\(s\) +16384 bytes free$
+^ +16 File\(s\) +15360 bytes free$
 ^GRDOS-TEST-END$

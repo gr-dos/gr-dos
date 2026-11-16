@@ -1,0 +1,316 @@
+GR-DOS: CONFIG.SYS's INCLUDE= (issue #49, docs/config-include.md), a
+prototype. INCLUDE=D:\CONFIG.SYS in C:\CONFIG.SYS puts that file's lines
+in place of the INCLUDE= line, before ORGANIZE, so every pass of the
+configuration sees them. Only one file, and only from CONFIG.SYS; a file
+that cannot be included is reported, and the boot goes on without it.
+
+It is SYSINIT code (BIOS/GRINCL.INC), with its buffer in SYSINIT's
+temporary memory: nothing of it stays resident.
+
+Applied to a copy of v4.0/src before it is converted to CRLF (Makefile,
+PATCHES). `make check` builds without it.
+
+--- a/BIOS/SYSCONF.ASM
++++ b/BIOS/SYSCONF.ASM
+@@ -761,6 +761,7 @@
+ 	call	GetChr			;AN018;
+ 	jmp	Conflp			;AN018;
+ GETCOM:
++	call	GR_Include		;GR-DOS: INCLUDE= (GRINCL.INC)
+ 	invoke	ORGANIZE		;ORGANIZE THE FILE
+ 	CALL	GETCHR
+ 
+@@ -3391,6 +3392,8 @@
+ EMS_Stub_Handler	endp			;AN030;
+ 
+ 
++	include GRINCL.INC		;GR-DOS: INCLUDE= (issue #49)
++
+ SYSINITSEG	ENDS
+ 	END
+ 
+\ No newline at end of file
+--- /dev/null
++++ b/BIOS/GRINCL.INC
+@@ -0,0 +1,281 @@
++;
++; GR-DOS: CONFIG.SYS's INCLUDE= (issue #49, docs/config-include.md).
++;
++; GR_Include is called by DOCONF with CONFIG.SYS read into the buffer at
++; CONFBOT:0, COUNT bytes ending in CR LF, before ORGANIZE. If a line of it
++; is INCLUDE=d:\path\file (the first such line; the keyword in any case,
++; then '=', a space or a tab), it makes a new buffer below the old one:
++; the lines before INCLUDE=, then the file's (to a ^Z, and a CR LF), then
++; the lines after. CONFBOT and COUNT then describe the new buffer, and
++; TEMPCDS moves the CDSs below it, as NOPROB does after reading CONFIG.SYS.
++; Every pass of the configuration reads that one buffer, so each sees the
++; same lines in the same order. Both buffers are in SYSINIT's temporary
++; memory, freed at the end of SYSINIT, like this code: nothing stays
++; resident.
++;
++; Only one file, and only from CONFIG.SYS: an INCLUDE= in the included file
++; (nested, or a cycle), or a second INCLUDE= line, is left alone, and
++; ORGANIZE reports it as an unrecognized command. If the file cannot be
++; included (no such drive or file, a read error, more than GRI_MAX bytes,
++; or more than a segment with CONFIG.SYS), GR_Include prints "Cannot
++; include FILE", makes the line a REM, and the boot goes on with
++; CONFIG.SYS's lines alone.
++;
++; In:  DS = SYSINITSEG, ES = CONFBOT
++; Out: DS = SYSINITSEG, ES = CONFBOT (new or not); AX, BX, CX, DX, SI, DI
++;      changed.
++;
++GRI_MAX 	equ	8000h		; the largest file included, in bytes
++
++GRI_Keyword	db	"INCLUDE"
++GRI_Rem 	db	"REM    "
++GRI_Msg 	db	"Cannot include $"
++GRI_Name	db	64 dup (0)
++GRI_Key 	dw	0		; the keyword's offset in the buffer
++GRI_Start	dw	0		; the INCLUDE= line's offset
++GRI_End 	dw	0		; the offset after its LF
++GRI_Size	dw	0		; the file's size
++GRI_Bot 	dw	0		; the new buffer's segment
++GRI_Handle	dw	0
++
++GR_Include	proc	near
++	ASSUME	DS:SYSINITSEG
++	mov	es, [CONFBOT]
++	xor	si, si
++	mov	cx, [COUNT]
++GRI_Line:				; ES:SI -> a line, CX bytes left
++	mov	[GRI_Start], si
++GRI_Blank:
++	jcxz	GRI_Ret_Near
++	mov	al, es:[si]
++	cmp	al, ' '
++	je	GRI_Next_Blank
++	cmp	al, 9
++	jne	GRI_Word
++GRI_Next_Blank:
++	inc	si
++	dec	cx
++	jmp	GRI_Blank
++GRI_Ret_Near:
++	jmp	GRI_Ret
++
++GRI_Word:				; INCLUDE, then '=', ' ' or tab?
++	cmp	cx, 8
++	jb	GRI_Skip_Line
++	xor	bx, bx
++GRI_Cmp:
++	mov	al, es:[si+bx]
++	cmp	al, 'a'
++	jb	GRI_Upper
++	cmp	al, 'z'
++	ja	GRI_Upper
++	and	al, 0DFh
++GRI_Upper:
++	cmp	al, GRI_Keyword[bx]
++	jne	GRI_Skip_Line
++	inc	bx
++	cmp	bx, 7
++	jb	GRI_Cmp
++	mov	al, es:[si+7]
++	cmp	al, '='
++	je	GRI_Found
++	cmp	al, ' '
++	je	GRI_Found
++	cmp	al, 9
++	je	GRI_Found
++
++GRI_Skip_Line:				; to the next line
++	jcxz	GRI_Ret_Near
++	mov	al, es:[si]
++	inc	si
++	dec	cx
++	cmp	al, LF
++	jne	GRI_Skip_Line
++	jmp	GRI_Line
++
++GRI_Found:
++	mov	[GRI_Key], si
++	add	si, 7
++	sub	cx, 7
++GRI_Delim:				; skip '=', spaces and tabs
++	jcxz	GRI_Name_Copy
++	mov	al, es:[si]
++	cmp	al, '='
++	je	GRI_Next_Delim
++	cmp	al, ' '
++	je	GRI_Next_Delim
++	cmp	al, 9
++	jne	GRI_Name_Copy
++GRI_Next_Delim:
++	inc	si
++	dec	cx
++	jmp	GRI_Delim
++
++GRI_Name_Copy:				; the file name, to a control
++	mov	di, offset GRI_Name	; character or space
++	mov	dx, 64
++GRI_Name_Char:
++	jcxz	GRI_Name_End
++	mov	al, es:[si]
++	cmp	al, ' '
++	jbe	GRI_Name_End
++	dec	dx
++	jz	GRI_Too_Long
++	mov	[di], al
++	inc	di
++	inc	si
++	dec	cx
++	jmp	GRI_Name_Char
++GRI_Name_End:
++	mov	byte ptr [di], 0
++	jmp	short GRI_EOL
++GRI_Too_Long:
++	mov	byte ptr [di], 0
++	jmp	GRI_Fail
++GRI_EOL:				; the rest of the line
++	jcxz	GRI_EOL_Done
++	mov	al, es:[si]
++	inc	si
++	dec	cx
++	cmp	al, LF
++	jne	GRI_EOL
++GRI_EOL_Done:
++	mov	[GRI_End], si
++	cmp	di, offset GRI_Name
++	je	GRI_Fail		; no file name
++
++	mov	dx, offset GRI_Name	; open it, and get its size
++	mov	ax, OPEN SHL 8
++	stc
++	int	21h
++	jc	GRI_Fail
++	mov	[GRI_Handle], ax
++	mov	bx, ax
++	xor	cx, cx
++	xor	dx, dx
++	mov	ax, (LSEEK SHL 8) OR 2
++	int	21h
++	jc	GRI_Close_Fail
++	or	dx, dx
++	jnz	GRI_Close_Fail
++	cmp	ax, GRI_MAX
++	ja	GRI_Close_Fail
++	mov	[GRI_Size], ax
++	xor	cx, cx
++	xor	dx, dx
++	mov	ax, LSEEK SHL 8
++	int	21h
++	jc	GRI_Close_Fail
++
++	mov	ax, [COUNT]		; the new buffer: CONFIG.SYS, less
++	sub	ax, [GRI_End]		; the INCLUDE= line, with the file
++	add	ax, [GRI_Start] 	; and a CR LF: within one segment
++	add	ax, [GRI_Size]
++	jc	GRI_Close_Fail
++	add	ax, 2
++	jc	GRI_Close_Fail
++	cmp	ax, 0FFF0h
++	ja	GRI_Close_Fail
++	call	ParaRound
++	mov	dx, [CONFBOT]
++	sub	dx, ax
++	jc	GRI_Close_Fail
++	sub	dx, 11h
++	jc	GRI_Close_Fail
++	mov	ax, [MEMHI]		; well clear of the memory in use
++	add	ax, 1000h
++	jc	GRI_Close_Fail
++	cmp	dx, ax
++	jb	GRI_Close_Fail
++	mov	[GRI_Bot], dx
++
++	mov	es, dx			; the lines before INCLUDE=
++	xor	di, di
++	xor	si, si
++	mov	cx, [GRI_Start]
++	push	ds
++	mov	ds, [CONFBOT]
++	ASSUME	DS:NOTHING
++	rep	movsb
++	pop	ds
++	ASSUME	DS:SYSINITSEG
++
++	mov	cx, [GRI_Size]		; the file
++	mov	bx, [GRI_Handle]
++	push	ds
++	push	es
++	pop	ds
++	ASSUME	DS:NOTHING
++	mov	dx, di
++	mov	ah, READ
++	stc
++	int	21h
++	pop	ds
++	ASSUME	DS:SYSINITSEG
++	jc	GRI_Close_Fail
++	cmp	ax, cx
++	jne	GRI_Close_Fail
++	mov	al, 1Ah 		; to its ^Z, if any
++	jcxz	GRI_Put_EOL
++	repnz	scasb
++	jnz	GRI_Put_EOL
++	dec	di
++GRI_Put_EOL:
++	mov	al, CR
++	stosb
++	mov	al, LF
++	stosb
++
++	mov	si, [GRI_End]		; the lines after INCLUDE=
++	mov	cx, [COUNT]
++	sub	cx, si
++	push	ds
++	mov	ds, [CONFBOT]
++	ASSUME	DS:NOTHING
++	rep	movsb
++	pop	ds
++	ASSUME	DS:SYSINITSEG
++
++	mov	[COUNT], di		; use the new buffer
++	mov	[Config_Size], di
++	mov	ax, [GRI_Bot]
++	mov	[CONFBOT], ax
++	mov	bx, [GRI_Handle]
++	mov	ah, CLOSE
++	int	21h
++	call	TEMPCDS 		; (DS changed)
++	push	cs
++	pop	ds
++	jmp	short GRI_Ret
++
++GRI_Close_Fail:
++	mov	bx, [GRI_Handle]
++	mov	ah, CLOSE
++	int	21h
++GRI_Fail:				; "Cannot include FILE"
++	mov	dx, offset GRI_Msg
++	mov	ah, STD_CON_STRING_OUTPUT
++	int	21h
++	mov	si, offset GRI_Name
++GRI_Msg_Char:
++	lodsb
++	or	al, al
++	jz	GRI_Msg_End
++	mov	dl, al
++	mov	ah, STD_CON_OUTPUT
++	int	21h
++	jmp	GRI_Msg_Char
++GRI_Msg_End:
++	mov	dx, offset CRLFM
++	mov	ah, STD_CON_STRING_OUTPUT
++	int	21h
++GRI_Fail_Line:				; INCLUDE becomes REM
++	mov	es, [CONFBOT]
++	mov	di, [GRI_Key]
++	mov	si, offset GRI_Rem
++	mov	cx, 7
++	rep	movsb
++GRI_Ret:
++	mov	es, [CONFBOT]
++	ret
++GR_Include	endp
