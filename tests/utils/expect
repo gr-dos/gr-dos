@@ -50,9 +50,9 @@
 # FORMAT /S of B:, then CHKDSK B: (IO.SYS, MSDOS.SYS and the label hidden)
 ^System transferred$
 ^ +1457664 bytes total disk space$
-^ +109568 bytes used by system$
+^ +110080 bytes used by system$
 GRDOS-FORMAT-OK$
 ^ +1 File\(s\) copied$
 ^Volume GRTEST +created
-^ +71680 bytes in 3 hidden files$
+^ +72192 bytes in 3 hidden files$
 ^GRDOS-TEST-END$

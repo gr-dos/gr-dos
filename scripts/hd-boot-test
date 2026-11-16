@@ -11,7 +11,7 @@ use Time::HiRes qw( sleep time );
 =head1 SYNOPSIS
 
  scripts/hd-boot-test [--chs C/H/S[/lba]] [--timeout SECONDS] [--prompt REGEX --type TEXT]
-                      IMAGE EXPECT OUTDIR
+                      [--blkdebug CONFIG] IMAGE EXPECT OUTDIR
 
 =head1 DESCRIPTION
 
@@ -21,13 +21,19 @@ F<OUTDIR/serial.log>.  QEMU writes to a snapshot: the image is not changed.
 C<--chs> gives the drive's geometry, which the BIOS reports untranslated,
 or, with C</lba>, translated as SeaBIOS does (see F<scripts/disk-test>).
 
+With C<--blkdebug>, QEMU reads the image through its C<blkdebug> driver
+with the configuration file given, which can fail reads of chosen sectors:
+the disk errors of F<scripts/config-include-test>.
+
 With C<--prompt> and C<--type>, it waits until the last non-blank line of
 the screen matches C<REGEX> (read from video memory through QEMU's monitor),
 then types C<TEXT> and Enter: so the test shows that the AUTOEXEC.BATs have
 finished and DOS is at its prompt.  The run ends at the serial line
 C<GRDOS-TEST-END>, or after C<--timeout> seconds (default 60).
 
-The output, without carriage returns, is saved as F<OUTDIR/serial.txt>.
+The output, without carriage returns, is saved as F<OUTDIR/serial.txt>,
+and the text screen as the run ends as F<OUTDIR/screen.txt>: CONFIG.SYS's
+messages are only there.
 Each line of C<EXPECT> is a Perl regular expression that must match a line
 of the output, in order; a line C<count N REGEX> requires exactly C<N>
 matching lines anywhere.  Blank lines and lines starting with C<#> are
@@ -74,17 +80,21 @@ package Monitor {
   }
 }
 
-# The last non-blank line of the 80x25 text screen.
-sub last_line ($mon) {
+# The 80x25 text screen's rows, without trailing blanks.
+sub screen_rows ($mon) {
   my $out = $mon->cmd('xp /2000hx 0xb8000');
   my @cells;
   for my $line (split /\r?\n/, $out) {
     next unless $line =~ /^[0-9a-f]+:((?:\s+0x[0-9a-f]{4})+)\s*$/;
     push @cells, map { hex } $1 =~ /0x([0-9a-f]{4})/g;
   }
-  my @rows = map { join('', map { my $c = $_ & 0x7F; $c >= 32 ? chr $c : ' ' } @cells[$_ * 80 .. $_ * 80 + 79]) =~ s/ +\z//r }
+  return map { join('', map { my $c = ($_ // 0) & 0x7F; $c >= 32 ? chr $c : ' ' } @cells[$_ * 80 .. $_ * 80 + 79]) =~ s/ +\z//r }
     0 .. 24;
-  my($last) = grep { /\S/ } reverse @rows;
+}
+
+# The last non-blank line of the screen.
+sub last_line ($mon) {
+  my($last) = grep { /\S/ } reverse screen_rows($mon);
   return $last // '';
 }
 
@@ -109,14 +119,14 @@ sub bios_chs ($c, $h, $s) {
 }
 
 sub main (@args) {
-  my($chs, $timeout, $prompt, $type) = (undef, 60);
-  while(@args && $args[0] =~ /^--(chs|timeout|prompt|type)\z/) {
+  my($chs, $timeout, $prompt, $type, $blkdebug) = (undef, 60);
+  while(@args && $args[0] =~ /^--(chs|timeout|prompt|type|blkdebug)\z/) {
     shift @args;
     my $v = shift @args // die "--$1 needs a value\n";
     if($1 eq 'chs') { $chs = $v } elsif($1 eq 'timeout') { $timeout = $v }
-    elsif($1 eq 'prompt') { $prompt = qr/$v/ } else { $type = $v }
+    elsif($1 eq 'prompt') { $prompt = qr/$v/ } elsif($1 eq 'blkdebug') { $blkdebug = $v } else { $type = $v }
   }
-  die "usage: $0 [--chs C/H/S[/lba]] [--timeout S] [--prompt REGEX --type TEXT] IMAGE EXPECT OUTDIR\n"
+  die "usage: $0 [--chs C/H/S[/lba]] [--timeout S] [--prompt REGEX --type TEXT] [--blkdebug CONFIG] IMAGE EXPECT OUTDIR\n"
     unless @args == 3 && !defined($prompt) == !defined($type);
   my($image, $expect, $outdir) = @args;
   system('mkdir', '-p', $outdir) == 0 or die "unable to create $outdir\n";
@@ -135,7 +145,7 @@ sub main (@args) {
     -display => 'none',
     -m       => 4,
     '-no-reboot',
-    -drive   => "file=$image,if=none,id=hd0,format=raw,snapshot=on",
+    -drive   => 'file=' . (defined $blkdebug ? "blkdebug:$blkdebug:" : '') . "$image,if=none,id=hd0,format=raw,snapshot=on",
     -device  => $device,
     -boot    => 'c',
     -serial  => "file:$serial",
@@ -166,6 +176,14 @@ sub main (@args) {
       }
     }
     sleep 0.25;
+  }
+  # The screen as the run ended: CONFIG.SYS's messages are only there.
+  if(waitpid($pid, 1) != $pid) {
+    my @rows = eval { screen_rows($mon) };
+    if(open my $sfh, '>', "$outdir/screen.txt") {
+      print $sfh map { "$_\n" } @rows;
+      close $sfh;
+    }
   }
   kill 'TERM', $pid;
   waitpid $pid, 0;
