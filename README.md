@@ -37,7 +37,12 @@ make          # build into build/linux, fetching JWasm, Open Watcom and the *16 
 make check    # build without the branding and compare with the MS-DOS 4.00 reference build
 make test     # boot each image in QEMU, and test the utilities on disposable disks
 make dist     # package the release assets in build/linux/release
+make run-dosbox  # try the tools in DOSBox-X, with C:\DOS as a CF install has it
 ```
+
+`make run-dosbox` needs `dosbox-x`. It runs the tools on DOSBox-X's own DOS
+kernel and shell, not GR-DOS's, and DOSBox-X runs its own ATTRIB and MORE
+([`docs/run-dosbox.md`](docs/run-dosbox.md)).
 
 ## CF cards
 
@@ -205,6 +210,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   utilities, each format's files, and their tests.
 - [`docs/dist16.md`](docs/dist16.md): the `*16` programs, how they are
   found, pinned and checked, and how to add or exclude one.
+- [`docs/run-dosbox.md`](docs/run-dosbox.md): `make run-dosbox`, the
+  commands DOSBox-X runs itself, and what works there.
 
 ## License
 

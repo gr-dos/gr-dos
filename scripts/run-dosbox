@@ -1,0 +1,165 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use Cwd qw( realpath );
+use File::Copy qw( copy );
+use File::Path qw( make_path remove_tree );
+
+# ABSTRACT: Run DOSBox-X with GR-DOS's full distribution in C:\DOS
+
+=head1 SYNOPSIS
+
+ scripts/run-dosbox [--dosbox DOSBOX] CFDIR WORKDIR [DOSBOX-ARGS...]
+ scripts/run-dosbox [--dosbox DOSBOX] --intercepts CFDIR WORKDIR
+
+ make run-dosbox [DOSBOX=dosbox-x] [DOSBOX_ARGS=...]
+
+=head1 DESCRIPTION
+
+Starts DOSBox-X with C:\DOS holding exactly the files of a CF install's
+C:\DOS: every file of F<CFDIR/manifest.txt> (F<build/linux/cf>) but IO.SYS,
+MSDOS.SYS and COMMAND.COM. It is for trying GR-DOS's command line tools,
+but on DOSBox-X's own DOS kernel and shell, not GR-DOS's: see
+F<docs/run-dosbox.md>.
+
+In F<WORKDIR> (F<build/linux/dosbox>):
+
+=over 4
+
+=item F<C/DOS>
+
+A fresh copy of the distribution each time, so nothing done in DOSBox-X
+changes the build.
+
+=item F<D>
+
+A data directory, mounted as D: and kept between runs; the session starts
+in it.
+
+=item F<dosbox-x.conf>
+
+The configuration, passed with C<-conf>, so the user's own DOSBox-X
+configuration is not loaded. DOSBox-X reports DOS 4.00 (C<ver = 4.0>),
+since many of MS-DOS 4.00's utilities refuse any other version, and
+C<PATH> is C<C:\DOS> alone: C<drive z expand path = false>, and Z: is
+only where DOSBox-X's MOUNT and the other tools of its own are, by full
+path.
+
+=back
+
+DOSBOX-ARGS go to DOSBox-X after C<-conf>.
+
+C<--intercepts> runs DOSBox-X without a window instead, with C:\DOS
+holding, for each program of the distribution, a .COM that prints its own
+name. It prints the names that DOSBox-X's shell runs itself instead of
+C:\DOS's program, typed alone, with the program's extension, and with its
+full path, so F<docs/run-dosbox.md> can be checked against a new DOSBox-X.
+
+=cut
+
+my $dosbox = 'dosbox-x';
+my $intercepts = 0;
+while(@ARGV && $ARGV[0] =~ /^--/) {
+  my $o = shift @ARGV;
+  if($o eq '--dosbox') { $dosbox = shift(@ARGV) // die "--dosbox needs a value\n" }
+  elsif($o eq '--intercepts') { $intercepts = 1 }
+  else { die "run-dosbox: unknown option $o\n" }
+}
+die "usage: scripts/run-dosbox [--dosbox DOSBOX] [--intercepts] CFDIR WORKDIR [DOSBOX-ARGS...]\n" unless @ARGV >= 2;
+my($cf, $work, @args) = @ARGV;
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "$path: $!\n";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "$path: $!\n";
+  print $fh $data;
+  close $fh or die "$path: $!\n";
+}
+
+# C:\DOS's files on a CF install: the manifest's, but C:'s root files.
+my %root = map { $_ => 1 } qw( IO.SYS MSDOS.SYS COMMAND.COM );
+my @files = grep { !$root{$_} } map { (split ' ')[-1] } split /\n/, slurp("$cf/manifest.txt");
+die "$cf/manifest.txt lists no files\n" unless @files;
+
+make_path($work);
+$work = realpath($work);
+die "WORKDIR must not have a double quote in its path\n" if $work =~ /"/;
+remove_tree("$work/C");
+make_path("$work/C/DOS", "$work/D");
+
+# A config for DOSBox-X: its own sections, with C: and D: mounted by the
+# full path of MOUNT, since Z: is not on PATH.
+sub config (@autoexec) {
+  return join "\n", '[dos]', 'ver = 4.0', 'drive z expand path = false', '',
+    '[config]', 'set path = C:\\DOS', 'set prompt = $P$G', '',
+    '[autoexec]', '@ECHO OFF', qq{Z:\\SYSTEM\\MOUNT -q C "$work/C"}, qq{Z:\\SYSTEM\\MOUNT -q D "$work/D"},
+    @autoexec, '';
+}
+
+if($intercepts) {
+  # Each program is a .COM that prints STUB-NAME (INT 21h AH=09h): DOS
+  # loads a file without an MZ header as a .COM, whatever its extension.
+  my $bat = "\@ECHO OFF\r\n";
+  my @names = sort grep { /\.(COM|EXE)$/ } @files;
+  for my $f (@names) {
+    my $b = $f =~ s/\..*//r;
+    spew("$work/C/DOS/$f", "\xB4\x09\xBA\x0B\x01\xCD\x21\xB4\x4C\xCD\x21STUB-$b\r\n\$");
+    for my $how ($b, $f, "C:\\DOS\\$b") {
+      $bat .= "ECHO == $b $how >> D:\\PROBE.OUT\r\n$how < NUL >> D:\\PROBE.OUT\r\n";
+    }
+  }
+  $bat .= "ECHO END >> D:\\PROBE.OUT\r\n";
+  my $probe = "$work/probe";
+  remove_tree($probe);
+  make_path($probe);
+  spew("$probe/PROBE.BAT", $bat);
+  unlink "$work/D/PROBE.OUT";
+  spew("$work/probe.conf", config(qq{Z:\\SYSTEM\\MOUNT -q E "$probe"}, 'D:', 'E:\\PROBE.BAT', 'EXIT'));
+  local $ENV{SDL_VIDEODRIVER} = 'dummy';
+  local $ENV{SDL_AUDIODRIVER} = 'dummy';
+  my $pid = fork // die "fork: $!\n";
+  if($pid == 0) {
+    open STDOUT, '>', "$work/probe.log" or die;
+    open STDERR, '>&', \*STDOUT or die;
+    exec $dosbox, '-conf', "$work/probe.conf", '-silent', '-nogui', '-nomenu', '-fastlaunch' or die "$dosbox: $!\n";
+  }
+  local $SIG{ALRM} = sub { kill 'KILL', $pid; die "$dosbox did not finish in 120 seconds (see $work/probe.log)\n" };
+  alarm 120;
+  waitpid $pid, 0;
+  alarm 0;
+  my $out = -f "$work/D/PROBE.OUT" ? slurp("$work/D/PROBE.OUT") =~ tr/\r//dr : '';
+  die "$dosbox ran no probe (see $work/probe.log)\n" unless $out =~ /^END$/m;
+  my(%ran, $key);
+  for (split /\n/, $out) {
+    if(/^== (\S+) (\S+)$/) { $key = "$1 $2"; $ran{$key} = 0; next }
+    $ran{$key} = 1 if $key && /^STUB-(\S+)$/ && $key =~ /^\Q$1\E /;
+  }
+  my @hit;
+  for my $f (@names) {
+    my $b = $f =~ s/\..*//r;
+    my @by = grep { !$ran{"$b $_->[1]"} } ([ 'name', $b ], [ 'name.ext', $f ], [ 'path', "C:\\DOS\\$b" ]);
+    push @hit, sprintf "%-12s intercepted typed as: %s", $f, join ', ', map { $_->[0] } @by if @by;
+  }
+  remove_tree("$work/C", $probe);
+  unlink "$work/D/PROBE.OUT", "$work/probe.conf";
+  say for @hit;
+  say "none of the distribution's programs is intercepted" unless @hit;
+  exit 0;
+}
+
+for my $f (@files) {
+  copy("$cf/$f", "$work/C/DOS/$f") or die "$cf/$f: $!\n";
+}
+spew("$work/dosbox-x.conf", config(
+  'D:',
+  'ECHO GR-DOS\'s full distribution is in C:\\DOS, on the PATH; D: is ' . "$work/D.",
+  'ECHO The DOS kernel and shell are DOSBox-X, not GR-DOS (docs/run-dosbox.md).',
+  'ECHO DOSBox-X runs its own ATTRIB and MORE: type C:\\DOS\\ATTRIB and C:\\DOS\\MORE.',
+  'ECHO ON',
+));
+exec $dosbox, '-conf', "$work/dosbox-x.conf", '-fastlaunch', @args or die "$dosbox: $!\n";
