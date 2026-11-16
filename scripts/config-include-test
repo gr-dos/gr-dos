@@ -3,17 +3,16 @@
 use 5.042;
 use warnings;
 use File::Basename qw( dirname );
-use File::Copy qw( copy );
 
-# ABSTRACT: Test CONFIG.SYS's INCLUDE= on a CF install's disk image
+# ABSTRACT: Test CONFIG.SYS's INCLUDEFILE= on a CF install's disk image
 
 =head1 SYNOPSIS
 
- scripts/config-include-test NLSINFO.COM OUTDIR [SCENARIO...]
+ scripts/config-include-test NLSINFO.COM LOWMEM.COM OUTDIR [SCENARIO...]
 
 =head1 DESCRIPTION
 
-Tests GR-DOS's C<INCLUDE=> in F<CONFIG.SYS> (issue #49,
+Tests GR-DOS's C<INCLUDEFILE=> in F<CONFIG.SYS> (issue #49,
 F<docs/config-include.md>) on a 512 MB CF install made by
 F<scripts/deploy-cf> in C<OUTDIR>, never on a block device.  Each scenario
 writes its own F<C:\CONFIG.SYS> and files on D: with mtools, boots a copy
@@ -37,9 +36,14 @@ must be there, and those that must not.
 C<base> has its settings in F<C:\CONFIG.SYS> itself; C<include> has the
 same ones in F<D:\CONFIG.SYS>, and must leave DOS exactly as much memory
 (C<MEM>'s largest executable program size): the include has no resident
-cost.  The others are an C<INCLUDE=> between other lines, and the failures:
-no such file, no such drive, a drive not ready, a nested C<INCLUDE=>, a file too big, a ^Z,
-no final line end, and an empty file.  With SCENARIOs, only those run.
+cost.  The others cover the order of the lines; the absent file, path,
+drive and disk, and the empty file, which are silent; disk errors while
+opening and reading (QEMU's C<blkdebug>, F<scripts/hd-boot-test
+--blkdebug>); a directory; the 32 KB limit, and CONFIG.SYS and the file
+together near the 64 KB one; too little memory (a master boot record,
+F<LOWMEM.COM>, that sets the BIOS's memory size); bad lines; C<INCLUDE=>,
+MS-DOS 6's, which is not C<INCLUDEFILE=>; nested and second
+C<INCLUDEFILE=>s.  With SCENARIOs, only those run.
 
 =cut
 
@@ -76,7 +80,7 @@ sub run (@cmd) {
   local $/;
   my $out = <$fh> // '';
   close $fh;
-  print $out =~ s/^/  | /mgr;
+  print $out =~ s/^/  | /mgr if length($out) < 4000;
   return ($? >> 8, $out);
 }
 
@@ -91,127 +95,299 @@ sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
 # DOS lines.
 sub dos (@lines) { join '', map { "$_\r\n" } @lines }
 
+# DOS lines, after REM lines that make them exactly $bytes long.
+sub sized ($bytes, @lines) {
+  my $tail = dos(@lines);
+  my $pad = $bytes - length $tail;
+  die "sized: $bytes is too small\n" if $pad < 0 || ($pad > 0 && $pad < 5);
+  my $head = '';
+  while($pad > 0) {
+    my $n = $pad >= 85 ? 80 : $pad > 80 ? 40 : $pad;
+    $head .= ($n >= 6 ? 'REM ' . ('x' x ($n - 6)) : 'REM') . "\r\n";
+    $pad -= $n;
+  }
+  return $head . $tail;
+}
+
 my $country = 'COUNTRY=049,,C:\DOS\COUNTRY.SYS';
 my $install = 'INSTALL=C:\DOS\FASTOPEN.EXE C:';
 my @settings = ('BREAK=ON', $country, $install);
-# What D:\AUTOEXEC.BAT reports with @settings in effect.
-my @effect = ('^COUNTRY 049 ', '^BREAK is on$', '^  [0-9A-F]{6}      FASTOPEN     [0-9A-F]{6}     Program +$');
-my @no_effect = ('^COUNTRY 001 ', '^BREAK is off$');
+# What D:\AUTOEXEC.BAT reports with @settings in effect, and without.
+my $fastopen = '^  [0-9A-F]{6}      FASTOPEN     [0-9A-F]{6}     Program +$';
+my @effect = ('^COUNTRY 049 ', '^BREAK is on$', $fastopen);
 my @base = ('FILES=20', 'BUFFERS=20');
+# C:'s lines for a failure: the include's settings must not apply, and
+# BREAK=ON after it must.
+my @after = ('BREAK=ON');
+my @not_applied = ('^COUNTRY 001 ', '^BREAK is on$');
+# Nothing about the include on the screen.
+my @silent = ('INCLUDEFILE', 'Error in CONFIG.SYS', 'Unrecognized');
+# INCLUDEFILE=NAME's message.
+sub not_used ($name, $why) { '^INCLUDEFILE=' . quotemeta($name) . " not used: $why\$" }
 
-# Each scenario: C:\CONFIG.SYS's lines, D:'s files, the lines COM1 must
-# have (in order), and the lines the screen must and must not have.
+# Each scenario: C:\CONFIG.SYS's lines (or bytes), D:'s directories and
+# files, the lines COM1 must have (in order), the lines the screen must
+# and must not have, a file on D: whose first sector fails to read
+# (blkdebug), and the memory size in KB (LOWMEM.COM).
 my %scenarios = (
   base => {
     config => [@base, @settings],
     serial => [@effect],
-    screen_not => ['include', 'Error in CONFIG.SYS'],
+    screen_not => [@silent],
   },
   include => {
-    config => [@base, 'INCLUDE=D:\CONFIG.SYS'],
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS'],
     files  => { 'CONFIG.SYS' => dos(@settings) },
     serial => [@effect],
-    screen_not => ['include', 'Error in CONFIG.SYS'],
+    screen_not => [@silent],
   },
-  # Lower case, blanks, and the included lines between C:'s: COUNTRY= is
-  # set three times, and the last, after the INCLUDE=, wins.
+  # Lower case, blanks around '=' and after the name, and the included
+  # lines between C:'s: COUNTRY= is set three times, and the last wins.
   order => {
-    config => [@base, 'COUNTRY=044,,C:\DOS\COUNTRY.SYS', '  include = d:\config.sys', 'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
+    config => [@base, 'COUNTRY=044,,C:\DOS\COUNTRY.SYS', "  includefile = d:\\config.sys \t",
+      'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
     files  => { 'CONFIG.SYS' => dos(@settings) },
-    serial => ['^COUNTRY 033 ', '^BREAK is on$', $effect[2]],
-    screen_not => ['include', 'Error in CONFIG.SYS'],
+    serial => ['^COUNTRY 033 ', '^BREAK is on$', $fastopen],
+    screen_not => [@silent],
   },
+
+  # Absent: silent.
   missing => {
-    config => [@base, 'INCLUDE=D:\NOPE.SYS', 'BREAK=ON'],
-    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
-    screen => ['^Cannot include D:\\\\NOPE\.SYS$'],
-    screen_not => ['Error in CONFIG.SYS'],
+    config => [@base, 'INCLUDEFILE=D:\NOPE.SYS', @after],
+    serial => [@not_applied],
+    screen_not => [@silent],
+  },
+  nopath => {
+    config => [@base, 'INCLUDEFILE=D:\NODIR\CONFIG.SYS', @after],
+    serial => [@not_applied],
+    screen_not => [@silent],
   },
   nodrive => {
-    config => [@base, 'INCLUDE=Q:\CONFIG.SYS', 'BREAK=ON'],
-    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
-    screen => ['^Cannot include Q:\\\\CONFIG\.SYS$'],
+    config => [@base, 'INCLUDEFILE=Q:\CONFIG.SYS', @after],
+    serial => [@not_applied],
+    screen_not => [@silent],
   },
-  # A: is QEMU's floppy drive, with no disk: not ready, which SYSINIT's
-  # critical error handler fails.
-  notready => {
-    config => [@base, 'INCLUDE=A:\CONFIG.SYS', 'BREAK=ON'],
-    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
-    screen => ['^Cannot include A:\\\\CONFIG\.SYS$'],
+  # A: is QEMU's floppy drive, with no disk. A real drive says it is not
+  # ready (critical error 2), which is silent; QEMU's gives a general
+  # failure (0Ch), which DOS can't tell from a broken drive.
+  emptyfloppy => {
+    config => [@base, 'INCLUDEFILE=A:\CONFIG.SYS', @after],
+    serial => [@not_applied],
+    screen => [not_used('A:\CONFIG.SYS', 'disk error')],
+  },
+  empty => {
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS', @after],
+    files  => { 'CONFIG.SYS' => '' },
+    serial => [@not_applied],
+    screen_not => [@silent],
+  },
+
+  # Disk errors: reported. The file's first sector, then its directory's.
+  readerror => {
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS', @after],
+    files  => { 'CONFIG.SYS' => dos(@settings) },
+    bad    => 'CONFIG.SYS',
+    serial => [@not_applied],
+    screen => [not_used('D:\CONFIG.SYS', 'disk error')],
+  },
+  openerror => {
+    config => [@base, 'INCLUDEFILE=D:\CFG\CONFIG.SYS', @after],
+    dirs   => ['CFG'],
+    files  => { 'CFG/CONFIG.SYS' => dos(@settings) },
+    bad    => 'CFG',
+    serial => [@not_applied],
+    screen => [not_used('D:\CFG\CONFIG.SYS', 'disk error')],
+  },
+  directory => {
+    config => [@base, 'INCLUDEFILE=D:\CFG', @after],
+    dirs   => ['CFG'],
+    serial => [@not_applied],
+    screen => [not_used('D:\CFG', 'cannot open')],
+  },
+
+  # Sizes.
+  max => {
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS'],
+    files  => { 'CONFIG.SYS' => sized(32768, @settings) },
+    serial => [@effect],
+    screen_not => [@silent],
+  },
+  toobig => {
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS', @after],
+    files  => { 'CONFIG.SYS' => sized(32769, @settings) },
+    serial => [@not_applied],
+    screen => [not_used('D:\CONFIG.SYS', 'too large')],
+  },
+  # CONFIG.SYS and the file together: 65,000 bytes fit the segment, 65,600
+  # do not.
+  segment => {
+    config_bytes => sized(65000 - 32768 + length(dos('INCLUDEFILE=D:\CONFIG.SYS')),
+      @base, 'INCLUDEFILE=D:\CONFIG.SYS'),
+    files  => { 'CONFIG.SYS' => sized(32768 - 2, @settings) },
+    serial => [@effect],
+    screen_not => [@silent],
+  },
+  oversegment => {
+    config_bytes => sized(65600 - 32768, @base, 'INCLUDEFILE=D:\CONFIG.SYS', @after),
+    files  => { 'CONFIG.SYS' => sized(32768, @settings) },
+    serial => [@not_applied],
+    screen => [not_used('D:\CONFIG.SYS', 'too large')],
+  },
+  lowmem => {
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS', @after],
+    files  => { 'CONFIG.SYS' => sized(32768, @settings) },
+    kb     => 160,
+    serial => ['^BREAK is on$'],
+    screen => [not_used('D:\CONFIG.SYS', 'not enough memory')],
+  },
+
+  # Bad lines: reported, and the line stays in its own line.
+  noname => {
+    config => [@base, 'INCLUDEFILE=', @after],
+    serial => [@not_applied],
+    screen => [not_used('', 'bad line')],
+    screen_not => ['Unrecognized'],
+  },
+  bare => {
+    config => [@base, 'INCLUDEFILE', '=D:\CONFIG.SYS', @after],
+    files  => { 'CONFIG.SYS' => dos(@settings) },
+    serial => [@not_applied],
+    screen => [not_used('', 'bad line'), '^Unrecognized command in CONFIG\.SYS$'],
+  },
+  extra => {
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS EXTRA', @after],
+    files  => { 'CONFIG.SYS' => dos(@settings) },
+    serial => [@not_applied],
+    screen => [not_used('D:\CONFIG.SYS', 'bad line')],
+  },
+  # The message is over 80 characters: it wraps.
+  longname => {
+    config => [@base, 'INCLUDEFILE=D:\\' . ('A' x 70), @after],
+    serial => [@not_applied],
+    screen => [not_used('D:\\' . ('A' x 60), 'bad line')],
+  },
+  # The keyword split over two lines is two unrecognized lines.
+  split => {
+    config => [@base, 'INCLUDEFIL', 'E=D:\CONFIG.SYS', @after],
+    files  => { 'CONFIG.SYS' => dos(@settings) },
+    serial => [@not_applied],
+    screen => ['^Unrecognized command in CONFIG\.SYS$'],
+    screen_not => ['INCLUDEFILE='],
+  },
+
+  # Not INCLUDEFILE=.
+  include6 => {
+    config => [@base, 'INCLUDE=D:\CONFIG.SYS', @after],
+    files  => { 'CONFIG.SYS' => dos(@settings) },
+    serial => [@not_applied],
+    screen => ['^Unrecognized command in CONFIG\.SYS$', '^Error in CONFIG\.SYS line 3$'],
   },
   nested => {
-    config => [@base, 'INCLUDE=D:\CONFIG.SYS'],
-    files  => { 'CONFIG.SYS' => dos('INCLUDE=D:\OTHER.SYS', @settings), 'OTHER.SYS' => dos('BREAK=OFF') },
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS'],
+    files  => { 'CONFIG.SYS' => dos('INCLUDEFILE=D:\OTHER.SYS', @settings), 'OTHER.SYS' => dos('BREAK=OFF') },
     serial => [@effect],
     screen => ['^Unrecognized command in CONFIG\.SYS$', '^Error in CONFIG\.SYS line 3$'],
   },
-  toobig => {
-    config => [@base, 'INCLUDE=D:\BIG.SYS', 'BREAK=ON'],
-    files  => { 'BIG.SYS' => dos('BREAK=OFF', map { 'REM ' . ('x' x 70) } 1 .. 500) },
-    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
-    screen => ['^Cannot include D:\\\\BIG\.SYS$'],
+  second => {
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS', 'INCLUDEFILE=D:\OTHER.SYS'],
+    files  => { 'CONFIG.SYS' => dos(@settings), 'OTHER.SYS' => dos('BREAK=OFF') },
+    serial => [@effect],
+    screen => ['^Unrecognized command in CONFIG\.SYS$', '^Error in CONFIG\.SYS line 6$'],
   },
+
+  # The file's own forms.
   ctrlz => {
-    config => [@base, 'INCLUDE=D:\CONFIG.SYS', 'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS', 'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
     files  => { 'CONFIG.SYS' => dos(@settings) . "\x1ABREAK=OFF\r\nGARBAGE\r\n" },
-    serial => ['^COUNTRY 033 ', '^BREAK is on$', $effect[2]],
-    screen_not => ['include', 'Error in CONFIG.SYS'],
+    serial => ['^COUNTRY 033 ', '^BREAK is on$', $fastopen],
+    screen_not => [@silent],
   },
   noeol => {
-    config => [@base, 'INCLUDE=D:\CONFIG.SYS', 'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
+    config => [@base, 'INCLUDEFILE=D:\CONFIG.SYS', 'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
     files  => { 'CONFIG.SYS' => 'BREAK=ON' },
     serial => ['^COUNTRY 033 ', '^BREAK is on$'],
-    screen_not => ['include', 'Error in CONFIG.SYS'],
-  },
-  empty => {
-    config => [@base, 'INCLUDE=D:\CONFIG.SYS', 'BREAK=ON'],
-    files  => { 'CONFIG.SYS' => '' },
-    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
-    screen_not => ['include', 'Error in CONFIG.SYS'],
+    screen_not => [@silent],
   },
 );
-my @order = qw( base include order missing nodrive notready nested toobig ctrlz noeol empty );
+my @order = qw( base include order missing nopath nodrive emptyfloppy empty readerror openerror directory
+  max toobig segment oversegment lowmem noname bare extra longname split include6 nested second ctrlz noeol );
 
 # The largest executable program size MEM reports.
 sub largest ($serial) { $serial =~ /^ *(\d+) largest executable program size$/m ? $1 : undef }
 
-sub scenario ($name, $template, $r, $nlsinfo, $out) {
+# The first sector (LBA) of a file or directory on the FAT drive at $start.
+sub first_sector ($img, $start, $path) {
+  open my $fh, '<:raw', $img or die "unable to read $img: $!";
+  sysseek $fh, $start * 512, 0;
+  sysread $fh, my $bs, 512;
+  close $fh;
+  my($bps, $spc, $reserved, $fats, $roots) = unpack 'v C v C v', substr($bs, 11, 8);
+  my $spf = unpack 'v', substr($bs, 22, 2);
+  die "$path: sectors of $bps bytes\n" unless $bps == 512;
+  my($cluster) = must('mshowfat', '-i', at($img, $start), "::$path") =~ /<(\d+)/
+    or die "$path: no cluster\n";
+  return $start + $reserved + $fats * $spf + $roots * 32 / 512 + ($cluster - 2) * $spc;
+}
+
+sub scenario ($name, $template, $r, $nlsinfo, $lowmem, $out) {
   my $s = $scenarios{$name};
   my $dir = "$out/$name";
   system('rm', '-rf', $dir) == 0 && mkdir $dir or die "unable to create $dir\n";
   my $img = "$dir/disk.img";
   must('cp', '--sparse=always', $template, $img);
   my $c = at($img, $r->{sys_start});
-  my $d = at($img, $r->{logical}[0][1]);
-  spew("$dir/CONFIG.SYS", dos($s->{config}->@*));
+  my $dstart = $r->{logical}[0][1];
+  my $d = at($img, $dstart);
+  spew("$dir/CONFIG.SYS", $s->{config_bytes} // dos($s->{config}->@*));
   must('mcopy', '-o', '-i', $c, "$dir/CONFIG.SYS", '::CONFIG.SYS');
+  must('mmd', '-i', $d, "::$_") for ($s->{dirs} // [])->@*;
   my %files = (($s->{files} // {})->%*, 'AUTOEXEC.BAT' => dos('@ECHO OFF', 'ECHO GRDOS-TEST-BEGIN>AUX',
     'D:\NLSINFO>AUX', 'BREAK>AUX', 'MEM /PROGRAM>AUX', 'ECHO GRDOS-TEST-END>AUX'));
   mkdir "$dir/d" or die "mkdir: $!";
   for my $f (sort keys %files) {
-    spew("$dir/d/$f", $files{$f});
-    must('mcopy', '-o', '-i', $d, "$dir/d/$f", "::$f");
+    (my $local = $f) =~ tr{/}{_};
+    spew("$dir/d/$local", $files{$f});
+    must('mcopy', '-o', '-i', $d, "$dir/d/$local", "::$f");
   }
   must('mcopy', '-o', '-i', $d, $nlsinfo, '::NLSINFO.COM');
+  if(defined $s->{kb}) {
+    # LOWMEM.COM's code, with the memory size, as the boot code.
+    my $code = slurp($lowmem);
+    die "$lowmem: too long for a master boot record\n" if length $code > 0x1BE;
+    substr($code, 2, 2) = pack 'v', $s->{kb};
+    open my $fh, '+<:raw', $img or die "unable to write $img: $!";
+    sysseek $fh, 0, 0;
+    syswrite $fh, $code;
+    close $fh;
+  }
+  my @blkdebug;
+  if(defined $s->{bad}) {
+    my $sector = first_sector($img, $dstart, $s->{bad});
+    spew("$dir/blkdebug.conf", qq{[inject-error]\nevent = "read_aio"\nerrno = "5"\nsector = "$sector"\n});
+    @blkdebug = ('--blkdebug', "$dir/blkdebug.conf");
+  }
   spew("$dir/expect", join "\n", '^GRDOS-TEST-BEGIN$', $s->{serial}->@*, '^GRDOS-TEST-END$', '');
-  my($rc) = run("$root/scripts/hd-boot-test", '--chs', '993/16/63', '--timeout', 120, $img, "$dir/expect",
-    "$dir/boot");
+  my($rc) = run("$root/scripts/hd-boot-test", '--chs', '993/16/63', '--timeout', 120, @blkdebug, $img,
+    "$dir/expect", "$dir/boot");
   ok($rc == 0, "$name: boots, with what COM1 must show");
   my $screen = -f "$dir/boot/screen.txt" ? slurp("$dir/boot/screen.txt") : '';
-  print $screen =~ s/^/  screen| /mgr;
+  # A line of 79 or 80 characters may go on in the next row (its row's
+  # trailing blanks were dropped).
+  $screen =~ s/^(.{79,80})\n/sprintf '%-80s', $1/mge;
+  print $screen =~ s/^/  screen| /mgr =~ s/^  screen\| *\n//mgr;
   for my $re (($s->{screen} // [])->@*) {
     ok(scalar($screen =~ /$re/m), "$name: the screen has /$re/");
   }
   for my $re (($s->{screen_not} // [])->@*) {
-    ok(scalar($screen !~ /$re/mi), "$name: the screen has no /$re/");
+    ok(scalar($screen !~ /$re/m), "$name: the screen has no /$re/");
   }
   unlink $img unless $failed;
   return -f "$dir/boot/serial.txt" ? slurp("$dir/boot/serial.txt") : '';
 }
 
 sub main (@args) {
-  my($nlsinfo, $out, @want) = @args;
-  die "usage: $0 NLSINFO.COM OUTDIR [SCENARIO...]\n" unless defined $out;
+  my($nlsinfo, $lowmem, $out, @want) = @args;
+  die "usage: $0 NLSINFO.COM LOWMEM.COM OUTDIR [SCENARIO...]\n" unless defined $out;
   @want = @order unless @want;
   $scenarios{$_} or die "no scenario $_\n" for @want;
   my $dist = "$root/build/linux/cf";
@@ -234,7 +410,7 @@ sub main (@args) {
   die "no layout record\n" unless $r{sys_start} && $r{logical}->@*;
 
   my %serial;
-  $serial{$_} = scenario($_, $template, \%r, $nlsinfo, $out) for @want;
+  $serial{$_} = scenario($_, $template, \%r, $nlsinfo, $lowmem, $out) for @want;
   if(defined $serial{base} && defined $serial{include}) {
     my($b, $i) = (largest($serial{base}), largest($serial{include}));
     ok(defined $b && defined $i && $b == $i,

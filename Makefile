@@ -371,11 +371,18 @@ $(TEST_DEPLOY_CF): test-deploy-cf-%: $(CF)/manifest.txt scripts/deploy-cf script
 	scripts/hd-boot-test scripts/partition-table dist16/lock
 	scripts/deploy-cf-test $* $(TESTS)/deploy-cf-$*
 
-# CONFIG.SYS's INCLUDE= (scripts/config-include-test, issue #49): a 512 MB
-# CF install, booted with each scenario's C:\CONFIG.SYS and files on D:.
-test-config-include: $(CF)/manifest.txt $(TESTS)/NLSINFO.COM scripts/config-include-test \
-	scripts/deploy-cf scripts/hd-boot-test
-	scripts/config-include-test $(TESTS)/NLSINFO.COM $(TESTS)/config-include
+# CONFIG.SYS's INCLUDEFILE= (scripts/config-include-test, issue #49): a
+# 512 MB CF install, booted with each scenario's C:\CONFIG.SYS and files on
+# D:. LOWMEM.COM is the low memory scenario's master boot record.
+test-config-include: $(CF)/manifest.txt $(TESTS)/NLSINFO.COM $(TESTS)/LOWMEM.COM \
+	scripts/config-include-test scripts/deploy-cf scripts/hd-boot-test
+	scripts/config-include-test $(TESTS)/NLSINFO.COM $(TESTS)/LOWMEM.COM $(TESTS)/config-include
+
+$(TESTS)/LOWMEM.COM: tests/config-include/lowmem.asm $(TOOLS)
+	mkdir -p $(@D)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
+	  && wasm -q -fo=$(@D)/LOWMEM.OBJ $< \
+	  && wlink option quiet format dos com name $@ file $(@D)/LOWMEM.OBJ
 
 fdisk-expect: $(DISK_TEST) $(FDISK_REFERENCE)
 	for t in $$(grep -L '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))) \
@@ -473,7 +480,7 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-install-SIZE     or one size (a tests/install directory)
   make test-deploy-cf      scripts/deploy-cf on disk images; or one case
   make test-deploy-cf-CASE   (CASE: $(DEPLOY_CF_TESTS))
-  make test-config-include  CONFIG.SYS's INCLUDE=, on a CF install's image
+  make test-config-include  CONFIG.SYS's INCLUDEFILE=, on a CF install's image
   make test-dist16         scripts/dist16 against a fake GitHub (offline)
   make test-help           check this list against the Makefile's targets
 
