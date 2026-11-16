@@ -28,6 +28,11 @@
 #                 dist16/lock, which pins the ones the build fetches;
 #                 make dist16-check only shows what that would change
 #                 (docs/dist16.md, issue #36)
+#   make run-dosbox  start DOSBox-X with the full distribution in C:\DOS,
+#                 the only directory on PATH, and D: a scratch directory,
+#                 build/linux/dosbox/D, for trying the command line tools
+#                 on DOSBox-X's kernel and shell, not GR-DOS's
+#                 (docs/run-dosbox.md); DOSBOX=, DOSBOX_ARGS=
 #   make fc-expect  write the FC tests' expected output with Microsoft's
 #                 FC.EXE of the M1 reference build
 #   make fdisk-expect  write the FDISK tests' expected screens and disks
@@ -413,7 +418,7 @@ clean:
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check
+	test-dist16 dist16-resolve dist16-check run-dosbox
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -635,6 +640,15 @@ $(DIST16_FILES): $(BUILD)/dist16.stamp
 # of the build.
 dist16-resolve dist16-check: dist16-%:
 	scripts/dist16 --reserved "$(RESERVED)" $*
+
+# DOSBox-X with C:\DOS as a CF install has it (docs/run-dosbox.md): its own
+# DOS kernel and shell, not GR-DOS's. Interactive, and not part of make
+# test. C: is copied afresh each time; D:, $(BUILD)/dosbox/D, is kept until
+# make clean.
+DOSBOX      ?= dosbox-x
+DOSBOX_ARGS ?=
+run-dosbox: $(CF)/manifest.txt scripts/run-dosbox
+	scripts/run-dosbox --dosbox "$(DOSBOX)" $(CF) $(BUILD)/dosbox $(DOSBOX_ARGS)
 
 $(BUILD)/image/AUTOEXEC.BAT: image/autoexec.bat
 	mkdir -p $(@D)
