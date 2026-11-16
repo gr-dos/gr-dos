@@ -1,0 +1,53 @@
+GR-DOS kernel identification (issue #46, docs/grver.md): INT 21h
+AX=3347h with BX=4752h ("GR") answers with the GR-DOS release version,
+which AH=30h, the MS-DOS compatible version (4.00), does not give.
+
+It is a subfunction of function 33h, after MS-DOS 4.00's 00h to 05h, in
+the dispatcher's fast path ($SET_CTRL_C_TRAPPING): registers only, on the
+caller's stack. GRDOSVER.INC, generated from VERSION by the Makefile,
+defines GRDOS_MAJOR and GRDOS_MINOR.
+
+Applied to a copy of v4.0/src before it is converted to CRLF (Makefile,
+PATCHES). `make check` builds without it.
+
+--- a/DOS/DISP.ASM
++++ b/DOS/DISP.ASM
+@@ -8,6 +8,7 @@
+ .xcref
+ INCLUDE DOSSYM.INC
+ include dosseg.asm
++INCLUDE GRDOSVER.INC
+ .cref
+ .list
+ 
+@@ -131,10 +132,29 @@
+         IRET                             ;AN000;;FT.
+ QueryDOSboot:                            ;AN000;
+         CMP     AL,5                ;AN000;MS.
+-        JA      BadVal              ;AN000;MS.
++        JA      GRDOS_Ident         ;AN000;MS. GR-DOS: was BadVal
+         MOV     DL,[BOOTDRIVE]      ;AN000;;MS. put boot drive in DL
+         IRET                        ;AN000;;MS.
+ 
++; GR-DOS identification (patches/kernel, docs/grver.md). AX=3347h with
++; BX=4752h ("GR") returns AX=4752h, BH = GR-DOS major and BL = minor
++; (GRDOSVER.INC, from VERSION), CL = the API revision, CH = 0 (reserved)
++; and DX complemented. Anything else is an invalid subfunction, AL=FFh, as
++; before. No memory is read or written; the flags are the caller's.
++GRDOS_ID_AL	EQU	47h
++GRDOS_ID_SIG	EQU	4752h
++GRDOS_ID_REV	EQU	1
++GRDOS_Ident:
++        CMP     AL,GRDOS_ID_AL
++        JNZ     BadVal
++        CMP     BX,GRDOS_ID_SIG
++        JNZ     BadVal
++        MOV     AX,GRDOS_ID_SIG
++        MOV     BX,GRDOS_MAJOR*256+GRDOS_MINOR
++        MOV     CX,GRDOS_ID_REV
++        NOT     DX
++        IRET
++
+ 
+ ;; DOS 4.00 File Tagging
+ 

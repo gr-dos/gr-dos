@@ -22,8 +22,10 @@ MSG   := $(SRC)/MESSAGES/USA-MS.MSG
 TOOLS := $(BUILD)/tools.env
 CF    := $(BUILD)/cf
 
-# Patches to v4.0/src, applied in order with patch -p1 (no fuzz).
-PATCHES := $(sort $(wildcard patches/branding/*.patch))
+# Patches to v4.0/src, applied in order with patch -p1 (no fuzz): the
+# branding (decision 7), then the kernel's GR-DOS identification call
+# (patches/kernel, issue #46).
+PATCHES := $(sort $(wildcard patches/branding/*.patch)) $(sort $(wildcard patches/kernel/*.patch))
 
 JWFLAGS := -q -Zj -Zm -Zg -Cx -I. -I$(CURDIR)/$(SRC)/INC -I$(CURDIR)/$(SRC)/DOS
 
@@ -529,6 +531,18 @@ $(SRC)/%.OBJ: $(BUILD)/messages.stamp $(TOOLS)
 
 # FORMAT and SYS include the boot sector.
 $(SRC)/CMD/FORMAT/MSFOR.OBJ $(SRC)/CMD/SYS/SYS1.OBJ: $(SRC)/INC/BOOT.INC
+
+# The kernel's dispatcher (DISP.ASM, in MSDISP.ASM) includes the GR-DOS
+# release version for its identification call (patches/kernel, issue #46):
+# VERSION, n.nn, as GRDOS_MAJOR and GRDOS_MINOR (0 to 99).
+$(SRC)/DOS/GRDOSVER.INC: VERSION $(BUILD)/tree.stamp
+	v=$$(tr -d ' \r\n' < VERSION); \
+	  echo "$$v" | grep -Eq '^[0-9]{1,3}\.[0-9]{2}$$' \
+	  && echo "$$v" | awk -F. '{ exit !($$1 + 0 <= 255) }' \
+	  || { echo "VERSION is not n.nn (major 0 to 255): $$v" >&2; exit 1; }; \
+	  echo "$$v" | awk -F. '{ printf "; GR-DOS release %s, from VERSION (Makefile)\r\nGRDOS_MAJOR\tEQU\t%d\r\nGRDOS_MINOR\tEQU\t%d\r\n", $$0, $$1 + 0, $$2 + 0 }' > $@
+
+$(SRC)/DOS/MSDISP.OBJ: $(SRC)/DOS/GRDOSVER.INC
 
 # FDISK includes the master boot record.
 $(SRC)/CMD/FDISK/BOOTREC.OBJ: $(SRC)/CMD/FDISK/FDBOOT.INC
