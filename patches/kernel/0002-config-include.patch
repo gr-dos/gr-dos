@@ -1,8 +1,10 @@
-GR-DOS: CONFIG.SYS's INCLUDE= (issue #49, docs/config-include.md), a
-prototype. INCLUDE=D:\CONFIG.SYS in C:\CONFIG.SYS puts that file's lines
-in place of the INCLUDE= line, before ORGANIZE, so every pass of the
-configuration sees them. Only one file, and only from CONFIG.SYS; a file
-that cannot be included is reported, and the boot goes on without it.
+GR-DOS: CONFIG.SYS's INCLUDEFILE= (issue #49, docs/config-include.md).
+INCLUDEFILE=D:\CONFIG.SYS in C:\CONFIG.SYS puts that file's lines in
+place of the INCLUDEFILE= line, before ORGANIZE, so every pass of the
+configuration sees them. Only one file, and only from CONFIG.SYS. The
+file is optional: when it is absent the line is dropped silently; a disk
+error or another failure is reported, and the boot goes on without it.
+MS-DOS 6's INCLUDE= (a block of the same file) is not supported.
 
 It is SYSINIT code (BIOS/GRINCL.INC), with its buffer in SYSINIT's
 temporary memory: nothing of it stays resident.
@@ -16,7 +18,7 @@ PATCHES). `make check` builds without it.
  	call	GetChr			;AN018;
  	jmp	Conflp			;AN018;
  GETCOM:
-+	call	GR_Include		;GR-DOS: INCLUDE= (GRINCL.INC)
++	call	GR_Include		;GR-DOS: INCLUDEFILE= (GRINCL.INC)
  	invoke	ORGANIZE		;ORGANIZE THE FILE
  	CALL	GETCHR
  
@@ -24,7 +26,7 @@ PATCHES). `make check` builds without it.
  EMS_Stub_Handler	endp			;AN030;
  
  
-+	include GRINCL.INC		;GR-DOS: INCLUDE= (issue #49)
++	include GRINCL.INC		;GR-DOS: INCLUDEFILE= (issue #49)
 +
  SYSINITSEG	ENDS
  	END
@@ -32,46 +34,82 @@ PATCHES). `make check` builds without it.
 \ No newline at end of file
 --- /dev/null
 +++ b/BIOS/GRINCL.INC
-@@ -0,0 +1,281 @@
+@@ -0,0 +1,440 @@
 +;
-+; GR-DOS: CONFIG.SYS's INCLUDE= (issue #49, docs/config-include.md).
++; GR-DOS: CONFIG.SYS's INCLUDEFILE= (issue #49, docs/config-include.md).
 +;
 +; GR_Include is called by DOCONF with CONFIG.SYS read into the buffer at
 +; CONFBOT:0, COUNT bytes ending in CR LF, before ORGANIZE. If a line of it
-+; is INCLUDE=d:\path\file (the first such line; the keyword in any case,
-+; then '=', a space or a tab), it makes a new buffer below the old one:
-+; the lines before INCLUDE=, then the file's (to a ^Z, and a CR LF), then
-+; the lines after. CONFBOT and COUNT then describe the new buffer, and
-+; TEMPCDS moves the CDSs below it, as NOPROB does after reading CONFIG.SYS.
-+; Every pass of the configuration reads that one buffer, so each sees the
-+; same lines in the same order. Both buffers are in SYSINIT's temporary
-+; memory, freed at the end of SYSINIT, like this code: nothing stays
-+; resident.
++; is INCLUDEFILE=d:\path\file (the first such line; the keyword in any
++; case, after blanks, then '=', a blank or the line's end), it makes a new
++; buffer below the old one: the lines before INCLUDEFILE=, then the file's
++; (to a ^Z, with a CR LF if its last line has none), then the lines after. CONFBOT and COUNT then
++; describe the new buffer, and TEMPCDS moves the CDSs below it, as NOPROB
++; does after reading CONFIG.SYS. Every pass of the configuration reads that
++; one buffer, so each sees the same lines in the same order. Both buffers
++; are in SYSINIT's temporary memory, freed at the end of SYSINIT, like this
++; code: nothing stays resident.
 +;
-+; Only one file, and only from CONFIG.SYS: an INCLUDE= in the included file
-+; (nested, or a cycle), or a second INCLUDE= line, is left alone, and
-+; ORGANIZE reports it as an unrecognized command. If the file cannot be
-+; included (no such drive or file, a read error, more than GRI_MAX bytes,
-+; or more than a segment with CONFIG.SYS), GR_Include prints "Cannot
-+; include FILE", makes the line a REM, and the boot goes on with
-+; CONFIG.SYS's lines alone.
++; The file is optional. If there is no such file, path or drive, or the
++; drive is not ready (no disk), or the file is empty, the line is dropped
++; with no message. Anything else that stops the include prints
++;
++;   INCLUDEFILE=NAME not used: REASON
++;
++; drops the line, and leaves CONFIG.SYS's own lines as they were: a disk
++; error (a critical error other than not ready, while opening, seeking or
++; reading), another error opening or reading the file, a file over GRI_MAX
++; bytes or one that with CONFIG.SYS passes a segment, too little memory,
++; or a bad line (no name, a name over GRI_NAMELEN characters, or more
++; after the name). MS-DOS 6's INCLUDE= (a block of the same file) is not
++; this: it stays an unrecognized command, as on MS-DOS 4.00.
++;
++; Only one file, and only from CONFIG.SYS: an INCLUDEFILE= in the included
++; file (nested, or a cycle), or a second one in CONFIG.SYS, is left alone,
++; and ORGANIZE reports it as an unrecognized command.
++;
++; While it opens and reads the file, GR_Include's own INT 24h handler
++; records the critical error's code and fails the call, as SYSINIT's does.
 +;
 +; In:  DS = SYSINITSEG, ES = CONFBOT
 +; Out: DS = SYSINITSEG, ES = CONFBOT (new or not); AX, BX, CX, DX, SI, DI
 +;      changed.
 +;
 +GRI_MAX 	equ	8000h		; the largest file included, in bytes
++GRI_KEYLEN	equ	11		; INCLUDEFILE
++GRI_NAMELEN	equ	63		; the longest file name
++GRI_NOCRIT	equ	0FFh		; no critical error
 +
-+GRI_Keyword	db	"INCLUDE"
-+GRI_Rem 	db	"REM    "
-+GRI_Msg 	db	"Cannot include $"
-+GRI_Name	db	64 dup (0)
++GRI_Keyword	db	"INCLUDEFILE"
++GRI_Rem 	db	"REM        "	; GRI_KEYLEN characters
++GRI_Msg1	db	"INCLUDEFILE=$"
++GRI_Msg2	db	" not used: $"
++GRI_Disk	db	"disk error",13,10,"$"
++GRI_Open	db	"cannot open",13,10,"$"
++GRI_Read	db	"cannot read",13,10,"$"
++GRI_Big 	db	"too large",13,10,"$"
++GRI_Mem 	db	"not enough memory",13,10,"$"
++GRI_Syntax	db	"bad line",13,10,"$"
++GRI_Name	db	GRI_NAMELEN + 1 dup (0)
++GRI_Bad 	db	0		; 1 if the line is bad
 +GRI_Key 	dw	0		; the keyword's offset in the buffer
-+GRI_Start	dw	0		; the INCLUDE= line's offset
++GRI_Start	dw	0		; the INCLUDEFILE= line's offset
 +GRI_End 	dw	0		; the offset after its LF
 +GRI_Size	dw	0		; the file's size
 +GRI_Bot 	dw	0		; the new buffer's segment
++GRI_Data	dw	0		; the file's offset in the new buffer
 +GRI_Handle	dw	0
++GRI_Old24	dd	0		; SYSINIT's INT 24h handler
++GRI_Crit	db	GRI_NOCRIT	; the last critical error's code
++
++; INT 24h while the file is opened and read: note the error, and fail.
++GRI_Int24:
++	push	ax
++	mov	ax, di
++	mov	cs:[GRI_Crit], al
++	pop	ax
++	mov	al, 3
++	iret
 +
 +GR_Include	proc	near
 +	ASSUME	DS:SYSINITSEG
@@ -94,8 +132,11 @@ PATCHES). `make check` builds without it.
 +GRI_Ret_Near:
 +	jmp	GRI_Ret
 +
-+GRI_Word:				; INCLUDE, then '=', ' ' or tab?
-+	cmp	cx, 8
++; INCLUDEFILE, then '=', a blank, CR or LF. The keyword's letters are
++; neither CR nor LF, and the buffer ends in CR LF, so the match stays in
++; its line.
++GRI_Word:
++	cmp	cx, GRI_KEYLEN + 1
 +	jb	GRI_Skip_Line
 +	xor	bx, bx
 +GRI_Cmp:
@@ -109,14 +150,18 @@ PATCHES). `make check` builds without it.
 +	cmp	al, GRI_Keyword[bx]
 +	jne	GRI_Skip_Line
 +	inc	bx
-+	cmp	bx, 7
++	cmp	bx, GRI_KEYLEN
 +	jb	GRI_Cmp
-+	mov	al, es:[si+7]
++	mov	al, es:[si+GRI_KEYLEN]
 +	cmp	al, '='
 +	je	GRI_Found
 +	cmp	al, ' '
 +	je	GRI_Found
 +	cmp	al, 9
++	je	GRI_Found
++	cmp	al, CR
++	je	GRI_Found
++	cmp	al, LF
 +	je	GRI_Found
 +
 +GRI_Skip_Line:				; to the next line
@@ -130,8 +175,9 @@ PATCHES). `make check` builds without it.
 +
 +GRI_Found:
 +	mov	[GRI_Key], si
-+	add	si, 7
-+	sub	cx, 7
++	add	si, GRI_KEYLEN
++	sub	cx, GRI_KEYLEN
++	mov	[GRI_Bad], 0
 +GRI_Delim:				; skip '=', spaces and tabs
 +	jcxz	GRI_Name_Copy
 +	mov	al, es:[si]
@@ -146,27 +192,48 @@ PATCHES). `make check` builds without it.
 +	dec	cx
 +	jmp	GRI_Delim
 +
-+GRI_Name_Copy:				; the file name, to a control
-+	mov	di, offset GRI_Name	; character or space
-+	mov	dx, 64
++GRI_Name_Copy:				; the name, to a control character
++	mov	di, offset GRI_Name	; or a blank
++	xor	dx, dx			; its length
 +GRI_Name_Char:
 +	jcxz	GRI_Name_End
 +	mov	al, es:[si]
 +	cmp	al, ' '
 +	jbe	GRI_Name_End
-+	dec	dx
-+	jz	GRI_Too_Long
++	cmp	dx, GRI_NAMELEN
++	jb	GRI_Name_Store
++	mov	[GRI_Bad], 1		; too long: read on to its end
++	jmp	GRI_Name_Next
++GRI_Name_Store:
 +	mov	[di], al
 +	inc	di
++	inc	dx
++GRI_Name_Next:
 +	inc	si
 +	dec	cx
 +	jmp	GRI_Name_Char
 +GRI_Name_End:
 +	mov	byte ptr [di], 0
-+	jmp	short GRI_EOL
-+GRI_Too_Long:
-+	mov	byte ptr [di], 0
-+	jmp	GRI_Fail
++	or	dx, dx
++	jnz	GRI_Trail
++	mov	[GRI_Bad], 1		; no name
++GRI_Trail:				; only blanks may follow the name
++	jcxz	GRI_EOL_Done
++	mov	al, es:[si]
++	cmp	al, CR
++	je	GRI_EOL
++	cmp	al, LF
++	je	GRI_EOL
++	cmp	al, ' '
++	je	GRI_Next_Trail
++	cmp	al, 9
++	je	GRI_Next_Trail
++	mov	[GRI_Bad], 1		; more after the name
++	jmp	GRI_EOL
++GRI_Next_Trail:
++	inc	si
++	dec	cx
++	jmp	GRI_Trail
 +GRI_EOL:				; the rest of the line
 +	jcxz	GRI_EOL_Done
 +	mov	al, es:[si]
@@ -176,55 +243,100 @@ PATCHES). `make check` builds without it.
 +	jne	GRI_EOL
 +GRI_EOL_Done:
 +	mov	[GRI_End], si
-+	cmp	di, offset GRI_Name
-+	je	GRI_Fail		; no file name
++	mov	dx, offset GRI_Syntax
++	cmp	[GRI_Bad], 0
++	je	GRI_Hook
++	jmp	GRI_Report
 +
-+	mov	dx, offset GRI_Name	; open it, and get its size
++GRI_Hook:				; our INT 24h, until GRI_Unhook
++	push	es
++	mov	ax, (GET_INTERRUPT_VECTOR SHL 8) OR 24h
++	int	21h
++	mov	word ptr [GRI_Old24], bx
++	mov	word ptr [GRI_Old24+2], es
++	pop	es
++	mov	dx, offset GRI_Int24
++	mov	ax, (SET_INTERRUPT_VECTOR SHL 8) OR 24h
++	int	21h
++	mov	[GRI_Crit], GRI_NOCRIT
++
++	mov	dx, offset GRI_Name	; open it
 +	mov	ax, OPEN SHL 8
 +	stc
 +	int	21h
-+	jc	GRI_Fail
++	jnc	GRI_Opened
++	cmp	[GRI_Crit], GRI_NOCRIT
++	je	GRI_Open_Error
++	cmp	[GRI_Crit], 2		; not ready: no disk
++	je	GRI_Quiet_Near
++	mov	dx, offset GRI_Disk
++	jmp	GRI_Unhook_Report
++GRI_Quiet_Near:
++	jmp	GRI_Quiet
++GRI_Open_Error:
++	cmp	ax, 2			; no such file
++	je	GRI_Quiet_Near
++	cmp	ax, 3			; no such path
++	je	GRI_Quiet_Near
++	cmp	ax, 15			; no such drive
++	je	GRI_Quiet_Near
++	mov	dx, offset GRI_Open
++	jmp	GRI_Unhook_Report
++
++GRI_Opened:
 +	mov	[GRI_Handle], ax
 +	mov	bx, ax
-+	xor	cx, cx
++	xor	cx, cx			; its size
 +	xor	dx, dx
 +	mov	ax, (LSEEK SHL 8) OR 2
++	stc
 +	int	21h
-+	jc	GRI_Close_Fail
++	jc	GRI_Read_Error_Near
 +	or	dx, dx
-+	jnz	GRI_Close_Fail
++	jnz	GRI_Too_Big_Near
 +	cmp	ax, GRI_MAX
-+	ja	GRI_Close_Fail
++	ja	GRI_Too_Big_Near
++	or	ax, ax
++	jnz	GRI_Not_Empty
++	jmp	GRI_Close_Quiet 	; empty: nothing to include
++GRI_Too_Big_Near:
++	jmp	GRI_Too_Big
++GRI_Read_Error_Near:
++	jmp	GRI_Read_Error
++GRI_No_Mem_Near:
++	jmp	GRI_No_Mem
++GRI_Not_Empty:
 +	mov	[GRI_Size], ax
 +	xor	cx, cx
 +	xor	dx, dx
 +	mov	ax, LSEEK SHL 8
++	stc
 +	int	21h
-+	jc	GRI_Close_Fail
++	jc	GRI_Read_Error_Near
 +
 +	mov	ax, [COUNT]		; the new buffer: CONFIG.SYS, less
-+	sub	ax, [GRI_End]		; the INCLUDE= line, with the file
-+	add	ax, [GRI_Start] 	; and a CR LF: within one segment
++	sub	ax, [GRI_End]		; the INCLUDEFILE= line, with the
++	add	ax, [GRI_Start] 	; file and a CR LF: in one segment
 +	add	ax, [GRI_Size]
-+	jc	GRI_Close_Fail
++	jc	GRI_Too_Big_Near
 +	add	ax, 2
-+	jc	GRI_Close_Fail
++	jc	GRI_Too_Big_Near
 +	cmp	ax, 0FFF0h
-+	ja	GRI_Close_Fail
++	ja	GRI_Too_Big_Near
 +	call	ParaRound
 +	mov	dx, [CONFBOT]
 +	sub	dx, ax
-+	jc	GRI_Close_Fail
++	jc	GRI_No_Mem_Near
 +	sub	dx, 11h
-+	jc	GRI_Close_Fail
++	jc	GRI_No_Mem_Near
 +	mov	ax, [MEMHI]		; well clear of the memory in use
 +	add	ax, 1000h
-+	jc	GRI_Close_Fail
++	jc	GRI_No_Mem_Near
 +	cmp	dx, ax
-+	jb	GRI_Close_Fail
++	jb	GRI_No_Mem_Near
 +	mov	[GRI_Bot], dx
 +
-+	mov	es, dx			; the lines before INCLUDE=
++	mov	es, dx			; the lines before INCLUDEFILE=
 +	xor	di, di
 +	xor	si, si
 +	mov	cx, [GRI_Start]
@@ -241,27 +353,32 @@ PATCHES). `make check` builds without it.
 +	push	es
 +	pop	ds
 +	ASSUME	DS:NOTHING
++	mov	cs:[GRI_Data], di
 +	mov	dx, di
 +	mov	ah, READ
 +	stc
 +	int	21h
 +	pop	ds
 +	ASSUME	DS:SYSINITSEG
-+	jc	GRI_Close_Fail
++	jc	GRI_Read_Error
 +	cmp	ax, cx
-+	jne	GRI_Close_Fail
++	jne	GRI_Read_Error		; a short read
 +	mov	al, 1Ah 		; to its ^Z, if any
-+	jcxz	GRI_Put_EOL
 +	repnz	scasb
-+	jnz	GRI_Put_EOL
++	jnz	GRI_EOL_Check
 +	dec	di
-+GRI_Put_EOL:
++GRI_EOL_Check:				; a CR LF, unless it is empty or
++	cmp	di, [GRI_Data]		; ends one already: so no blank
++	je	GRI_After		; line is added, and line numbers
++	cmp	byte ptr es:[di-1], LF	; move only by the file's own
++	je	GRI_After
 +	mov	al, CR
 +	stosb
 +	mov	al, LF
 +	stosb
++GRI_After:
 +
-+	mov	si, [GRI_End]		; the lines after INCLUDE=
++	mov	si, [GRI_End]		; the lines after INCLUDEFILE=
 +	mov	cx, [COUNT]
 +	sub	cx, si
 +	push	ds
@@ -275,20 +392,31 @@ PATCHES). `make check` builds without it.
 +	mov	[Config_Size], di
 +	mov	ax, [GRI_Bot]
 +	mov	[CONFBOT], ax
-+	mov	bx, [GRI_Handle]
-+	mov	ah, CLOSE
-+	int	21h
++	call	GRI_Close
++	call	GRI_Unhook
 +	call	TEMPCDS 		; (DS changed)
 +	push	cs
 +	pop	ds
-+	jmp	short GRI_Ret
++	jmp	GRI_Ret
 +
-+GRI_Close_Fail:
-+	mov	bx, [GRI_Handle]
-+	mov	ah, CLOSE
-+	int	21h
-+GRI_Fail:				; "Cannot include FILE"
-+	mov	dx, offset GRI_Msg
++GRI_Too_Big:
++	mov	dx, offset GRI_Big
++	jmp	GRI_Close_Report
++GRI_No_Mem:
++	mov	dx, offset GRI_Mem
++	jmp	GRI_Close_Report
++GRI_Read_Error:				; a disk error, if INT 24h said so
++	mov	dx, offset GRI_Read
++	cmp	[GRI_Crit], GRI_NOCRIT
++	je	GRI_Close_Report
++	mov	dx, offset GRI_Disk
++GRI_Close_Report:
++	call	GRI_Close
++GRI_Unhook_Report:
++	call	GRI_Unhook
++GRI_Report:				; "INCLUDEFILE=NAME not used: REASON"
++	push	dx
++	mov	dx, offset GRI_Msg1
 +	mov	ah, STD_CON_STRING_OUTPUT
 +	int	21h
 +	mov	si, offset GRI_Name
@@ -301,16 +429,49 @@ PATCHES). `make check` builds without it.
 +	int	21h
 +	jmp	GRI_Msg_Char
 +GRI_Msg_End:
-+	mov	dx, offset CRLFM
++	mov	dx, offset GRI_Msg2
 +	mov	ah, STD_CON_STRING_OUTPUT
 +	int	21h
-+GRI_Fail_Line:				; INCLUDE becomes REM
++	pop	dx
++	mov	ah, STD_CON_STRING_OUTPUT
++	int	21h
++	jmp	GRI_Drop_Line
++
++GRI_Close_Quiet:
++	call	GRI_Close
++GRI_Quiet:
++	call	GRI_Unhook
++GRI_Drop_Line:				; INCLUDEFILE becomes REM
 +	mov	es, [CONFBOT]
 +	mov	di, [GRI_Key]
 +	mov	si, offset GRI_Rem
-+	mov	cx, 7
++	mov	cx, GRI_KEYLEN
 +	rep	movsb
 +GRI_Ret:
 +	mov	es, [CONFBOT]
 +	ret
 +GR_Include	endp
++
++; Closes the file (DS = SYSINITSEG; DX kept).
++GRI_Close	proc	near
++	push	dx
++	mov	bx, [GRI_Handle]
++	mov	ah, CLOSE
++	int	21h
++	pop	dx
++	ret
++GRI_Close	endp
++
++; Puts SYSINIT's INT 24h handler back (DS = SYSINITSEG; DX kept).
++GRI_Unhook	proc	near
++	push	dx
++	push	ds
++	lds	dx, [GRI_Old24]
++	ASSUME	DS:NOTHING
++	mov	ax, (SET_INTERRUPT_VECTOR SHL 8) OR 24h
++	int	21h
++	pop	ds
++	ASSUME	DS:SYSINITSEG
++	pop	dx
++	ret
++GRI_Unhook	endp
