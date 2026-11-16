@@ -1,0 +1,387 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use Digest::SHA qw( sha256_hex );
+use File::Basename qw( dirname );
+use File::Path qw( make_path remove_tree );
+use JSON::PP ();
+
+# ABSTRACT: Test scripts/dist16 offline, against a fake GitHub (make test-dist16)
+
+=head1 SYNOPSIS
+
+ tests/dist16/run OUTDIR
+
+=head1 DESCRIPTION
+
+Runs F<scripts/dist16> against fixtures in OUTDIR, which stand in for the
+GitHub API, release downloads and raw files through C<file://> URLs, so
+it needs no network. Each case is a config, the repositories and releases
+GitHub has, and what C<resolve>, C<check> or C<fetch> must then do:
+gr-dos/libc16 excluded; include and exclude precedence; no release, a
+pinned release and a prerelease; malformed releases; checksum and size
+mismatches; unexpected and ambiguous asset names; collisions with GR-DOS's
+files and between programs; missing and disallowed licenses; 32-bit and
+malformed programs; GitHub refusing (a rate limit) or failing; forks,
+archived and private repositories; and a deterministic lock, reproduced
+offline from the cache.
+
+=cut
+
+my $root = dirname(dirname(dirname(__FILE__)));
+my $tool = "$root/scripts/dist16";
+my $out = shift // die "usage: tests/dist16/run OUTDIR\n";
+my $json = JSON::PP->new->canonical;
+my($tests, $failed) = (0, 0);
+
+sub ok ($cond, $what) {
+  $tests++;
+  $failed++ unless $cond;
+  say $cond ? "ok $tests - $what" : "not ok $tests - $what";
+  return $cond;
+}
+
+sub spew ($path, $data) {
+  make_path(dirname($path));
+  open my $fh, '>:raw', $path or die "$path: $!";
+  print $fh $data;
+  close $fh;
+}
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or return undef;
+  local $/;
+  return scalar <$fh>;
+}
+
+# A small real-mode MZ program: a header of 2 paragraphs and SIZE bytes in
+# all, filled from SEED so each program differs.
+sub mz ($size = 600, $seed = 'x') {
+  my $pages = int(($size + 511) / 512);
+  my $last = $size % 512;
+  my $hdr = pack('a2 v4 v4 v2 v', 'MZ', $last, $pages, 0, 2, 0, 0xFFFF, 0, 0x100, 0, 0, 0, 0x1C, 0);
+  return substr($hdr . ($seed x $size), 0, $size);
+}
+
+# The fake GitHub, in $dir: owners' repositories and their releases.
+# A release is { tag, assets => { name => data }, license => SPDX or undef,
+# draft, prerelease, digest => { name => sha256 }, size => { name => n } }.
+my $case_n = 0;
+sub github (%gh) {
+  my $dir = "$out/case" . ++$case_n;
+  remove_tree($dir);
+  my $api = "$dir/api";
+  for my $owner (sort keys $gh{owners}->%*) {
+    my @repos = $gh{owners}{$owner}->@*;
+    my @list = map { { name => $_->{name}, full_name => "$owner/$_->{name}",
+      fork => $_->{fork} ? JSON::PP::true : JSON::PP::false,
+      archived => $_->{archived} ? JSON::PP::true : JSON::PP::false,
+      private => $_->{private} ? JSON::PP::true : JSON::PP::false } } @repos;
+    # GitHub lists only the public repositories.
+    spew("$api/users/$owner/repos\@per_page=100&page=1", $json->encode([ map { $list[$_] } grep { !$repos[$_]{private} } 0 .. $#repos ]));
+    for my $i (0 .. $#repos) {
+      my $r = $repos[$i];
+      my $full = "$owner/$r->{name}";
+      spew("$api/repos/$full/index", $json->encode($list[$i]));
+      for my $rel (($r->{releases} // [])->@*) {
+        my $tag = $rel->{tag};
+        my $sha = substr(sha256_hex("$full $tag"), 0, 40);
+        my @assets = map {
+          my $name = $_;
+          my $data = $rel->{assets}{$name};
+          { name => $name, size => $rel->{size}{$name} // length($data),
+            digest => exists $rel->{digest}{$name} ? $rel->{digest}{$name} : 'sha256:' . sha256_hex($data) }
+        } sort keys $rel->{assets}->%*;
+        my $release = { tag_name => $tag, draft => $rel->{draft} ? JSON::PP::true : JSON::PP::false,
+          prerelease => $rel->{prerelease} ? JSON::PP::true : JSON::PP::false, assets => \@assets };
+        $release = $rel->{raw} if exists $rel->{raw};
+        spew("$api/repos/$full/releases/tags/$tag", ref $release ? $json->encode($release) : $release);
+        spew("$api/repos/$full/releases/latest", ref $release ? $json->encode($release) : $release) if $rel->{latest};
+        spew("$api/repos/$full/commits/$tag", $json->encode({ sha => $sha }));
+        if(defined $rel->{license}) {
+          spew("$api/repos/$full/license\@ref=$sha", $json->encode({ path => 'LICENSE', license => { spdx_id => $rel->{license} } }));
+          spew("$dir/raw/$full/$sha/LICENSE", "$rel->{license} license of $full\n");
+        }
+        spew("$dir/dl/$full/releases/download/$tag/$_", $rel->{assets}{$_}) for keys $rel->{assets}->%*;
+      }
+    }
+  }
+  for my $status (sort keys(($gh{status} // {})->%*)) {
+    spew("$api$status.status", $gh{status}{$status});
+  }
+  spew("$dir/config", $gh{config});
+  return $dir;
+}
+
+# Run dist16 in a case: (exit status, output).
+sub dist16 ($dir, @args) {
+  my @opts = ('--config', "$dir/config", '--lock', "$dir/lock", '--cache', "$dir/cache",
+    '--api', "file://$dir/api", '--github', "file://$dir/dl", '--raw', "file://$dir/raw",
+    '--reserved', 'IO.SYS MSDOS.SYS COMMAND.COM MORE.COM TICO.EXE');
+  my $cmd = join ' ', map { quotemeta } $tool, @opts, @args;
+  my $output = `$cmd 2>&1`;
+  return ($? >> 8, $output);
+}
+
+sub lock_lines ($dir) { [ grep { !/^#/ } split /\n/, slurp("$dir/lock") // '' ] }
+sub has ($lines, $re) { scalar grep { $_ =~ $re } @$lines }
+
+my $base_config = "discover gr-dos 16\nexclude gr-dos/libc16 a C runtime library, not a DOS program\nlicense MIT\n";
+sub prog ($name, %r) {
+  return { name => $name, releases => [ { tag => 'v0.01', latest => 1, license => 'MIT',
+    assets => { ($name =~ s/16$//r) . '.exe' => mz(600, $name) }, %r } ] };
+}
+
+# 1. gr-dos/libc16 is excluded, though its name ends in 16 and it has a
+# release; the others are included, in a deterministic, sorted lock.
+{
+  my $dir = github(config => $base_config, owners => { 'gr-dos' => [
+    prog('md5sum16'), prog('crcsum16'),
+    { name => 'libc16', releases => [ { tag => 'v0.04', latest => 1, license => 'MIT',
+      assets => { 'libc16-0.04.zip' => 'PK' } } ] },
+    { name => 'gr-dos' }, { name => 'notes' } ] });
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'resolve succeeds');
+  ok(has($lines, qr{^skip gr-dos/libc16 excluded a C runtime library}), 'gr-dos/libc16 is excluded, with its reason');
+  ok(!has($lines, qr{^program gr-dos/libc16}), 'gr-dos/libc16 is not a program');
+  ok($o =~ m{^excluded +gr-dos/libc16: a C runtime library}m, 'the report says libc16 is excluded');
+  ok(@$lines == 3 && $lines->[0] =~ m{^program gr-dos/crcsum16 v0\.01 [0-9a-f]{40} crcsum\.exe CRCSUM\.EXE 600 }
+    && $lines->[1] =~ m{^program gr-dos/libc16|^skip gr-dos/libc16} && $lines->[2] =~ m{^program gr-dos/md5sum16 },
+    'only *16 repositories, sorted by name');
+  my $first = slurp("$dir/lock");
+  ($rc) = dist16($dir, 'resolve');
+  ok(slurp("$dir/lock") eq $first, 'resolving again writes the same lock');
+  ($rc, $o) = dist16($dir, 'check');
+  ok($rc == 0 && $o =~ /is up to date/, 'check: the lock is up to date');
+
+  # A new release changes the lock only through resolve; check shows it.
+  spew("$dir/api/repos/gr-dos/md5sum16/releases/latest", slurp("$dir/api/repos/gr-dos/md5sum16/releases/tags/v0.01") =~ s/v0\.01/v0.02/r);
+  ($rc, $o) = dist16($dir, 'check');
+  ok($rc == 1 && $o =~ /^- program gr-dos\/md5sum16 v0\.01/m, 'check: a new release is drift, exit 1, with the lines');
+  ok(slurp("$dir/lock") eq $first, 'check does not change the lock');
+
+  # fetch: the programs and licenses, then offline from the cache.
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest");
+  ok($rc == 0 && -f "$dir/dest/CRCSUM.EXE" && -f "$dir/dest/MD5SUM.EXE" && -f "$dir/dest/licenses/MD5SUM.EXE.txt",
+    'fetch stages the programs and licenses');
+  ok(slurp("$dir/dest/CRCSUM.EXE") eq mz(600, 'crcsum16'), 'a fetched program is the release asset');
+  remove_tree("$dir/dl", "$dir/raw");
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest2");
+  ok($rc == 0 && slurp("$dir/dest2/MD5SUM.EXE") eq slurp("$dir/dest/MD5SUM.EXE"), 'offline, fetch reproduces them from the cache');
+  spew("$dir/cache/gr-dos/md5sum16/v0.01/md5sum.exe", 'tampered');
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest3");
+  ok($rc == 2 && $o =~ /md5sum16 v0\.01 md5sum\.exe: cannot download .*no verified copy/, 'offline, a corrupt cache is refused, not used');
+  unlink "$dir/cache/gr-dos/md5sum16/v0.01/md5sum.exe";
+  spew("$dir/dl/gr-dos/md5sum16/releases/download/v0.01/md5sum.exe", mz(600, 'md5sum16'));
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest3");
+  ok($rc == 0 && -f "$dir/dest3/MD5SUM.EXE", 'a fetch that failed part way can be run again');
+  my($lrc, $list) = dist16($dir, 'list');
+  ok($lrc == 0 && $list eq "CRCSUM.EXE\nMD5SUM.EXE\n", 'list: the DOS names, in lock order');
+  spew("$dir/notdist", 'x');
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/notdist");
+  ok($rc == 2 && $o =~ /not a dist16 directory/, 'fetch will not remove a directory it did not make');
+}
+
+# 2. Include and exclude precedence.
+{
+  my $dir = github(config => "$base_config" . "include gr-dos/libc16\n", owners => { 'gr-dos' => [ prog('libc16') ] });
+  my($rc, $o) = dist16($dir, 'resolve');
+  ok($rc == 2 && $o =~ /both included and excluded/ && !-e "$dir/lock", 'a repository both included and excluded is an error');
+
+  $dir = github(config => "discover gr-dos 16\nexclude gr-dos/x16\nlicense MIT\n", owners => { 'gr-dos' => [] });
+  ($rc, $o) = dist16($dir, 'resolve');
+  ok($rc == 2 && $o =~ /the reason is required/, 'an exclude needs a reason');
+
+  $dir = github(config => "$base_config" . "exclude gr-dos/gone16 removed\ninclude other/tool16\ninclude gr-dos/a16 tag=v0.01\n",
+    owners => { 'gr-dos' => [ { name => 'a16', releases => [
+        { tag => 'v0.01', license => 'MIT', assets => { 'a.exe' => mz(600, 'a1') } },
+        { tag => 'v0.02', latest => 1, license => 'MIT', assets => { 'a.exe' => mz(600, 'a2') } } ] } ],
+      other => [ prog('tool16'), prog('unrelated16') ] });
+  ($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0 && has($lines, qr{^program other/tool16 v0\.01 .* TOOL\.EXE }), 'an include adds another owner\'s repository');
+  ok(!has($lines, qr{unrelated16}), 'only the named repository of that owner');
+  ok(has($lines, qr{^program gr-dos/a16 v0\.01 }) && (grep { m{gr-dos/a16} } @$lines) == 1,
+    'an include of a discovered repository pins its tag, with no duplicate');
+  ok($o =~ m{gr-dos/a16 is pinned at v0\.01; the latest release is v0\.02}, 'the report notes the newer release');
+  ok($o =~ m{exclude gr-dos/gone16 matches no discovered repository}, 'an exclude that matches nothing is reported');
+}
+
+# 3. No release, a missing pinned release, drafts and prereleases;
+# forks, archived and private repositories.
+{
+  my $dir = github(config => "$base_config" . "include gr-dos/pin16 tag=v9.99\ninclude gr-dos/oldfork16\ninclude other/secret16\n",
+    owners => { 'gr-dos' => [ { name => 'none16' }, prog('pin16'), prog('pre16', prerelease => 1),
+      prog('fork16'), { %{ prog('oldfork16') }, fork => 1 }, { %{ prog('fork16b') }, name => 'fork16', fork => 1 },
+      { %{ prog('arch16') }, archived => 1 } ],
+    other => [ { %{ prog('secret16') }, private => 1 } ] });
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'resolve succeeds');
+  ok(has($lines, qr{^skip gr-dos/none16 unavailable no release$}), 'no release: unavailable');
+  ok(has($lines, qr{^skip gr-dos/pin16 unavailable no release v9\.99$}), 'a pinned release that does not exist: unavailable');
+  ok(has($lines, qr{^skip gr-dos/pre16 unavailable v0\.01 is a prerelease$}), 'a prerelease: unavailable');
+  ok(has($lines, qr{^skip gr-dos/fork16 unavailable a fork$}), 'a fork: unavailable');
+  ok(has($lines, qr{^program gr-dos/oldfork16 }), 'an included fork is a program');
+  ok(has($lines, qr{^skip gr-dos/arch16 unavailable archived$}), 'archived: unavailable');
+  ok(has($lines, qr{^skip other/secret16 failed private$}), 'a private repository: failed');
+  ok($o =~ m{^unavailable +gr-dos/none16: no release$}m && $o =~ m{^failed +other/secret16: private$}m,
+    'the report says why each is left out');
+}
+
+# 4. Malformed releases, checksums and sizes.
+{
+  my $dir = github(config => $base_config, owners => { 'gr-dos' => [
+    prog('badjson16', raw => '{ not json'),
+    prog('noassets16', raw => { tag_name => 'v0.01' }),
+    prog('noname16', raw => { tag_name => 'v0.01', assets => [ { size => 3 } ] }),
+    prog('sum16', digest => { 'sum.exe' => 'sha256:' . ('0' x 64) }),
+    prog('size16', size => { 'size.exe' => 999 }),
+    prog('baddig16', digest => { 'baddig.exe' => 'md5:1234' }),
+    prog('nodigest16', digest => { 'nodigest.exe' => undef }) ] });
+  my($rc, $o) = dist16($dir, 'resolve');
+  ok($rc == 2 && $o =~ m{badjson16/releases/latest: malformed JSON} && !-e "$dir/lock",
+    'malformed JSON from GitHub stops resolve, writing nothing');
+  unlink "$dir/api/repos/gr-dos/badjson16/releases/latest";
+  ($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'resolve succeeds');
+  ok(has($lines, qr{^skip gr-dos/noassets16 failed v0\.01: malformed release: no assets list$}), 'a release without assets: failed');
+  ok(has($lines, qr{^skip gr-dos/noname16 failed v0\.01: malformed release: an asset without a name}), 'an asset without a name: failed');
+  ok(has($lines, qr{^skip gr-dos/sum16 failed v0\.01: sum\.exe checksum mismatch: GitHub says 0{64}, downloaded [0-9a-f]{64}$}),
+    'a checksum mismatch: failed');
+  ok(has($lines, qr{^skip gr-dos/size16 failed v0\.01: size\.exe is 600 bytes, but GitHub says 999$}), 'a size mismatch: failed');
+  ok(has($lines, qr{^skip gr-dos/baddig16 failed v0\.01: baddig\.exe has a malformed digest$}), 'a malformed digest: failed');
+  ok(has($lines, qr{^program gr-dos/nodigest16 }), 'no digest from GitHub: the download\'s SHA-256 is pinned');
+
+  # fetch refuses a download that is not what the lock pins.
+  ($rc) = dist16($dir, 'fetch', "$dir/dest");
+  ok($rc == 0, 'fetch succeeds');
+  remove_tree("$dir/cache");
+  spew("$dir/dl/gr-dos/nodigest16/releases/download/v0.01/nodigest.exe", mz(600, 'changed'));
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest");
+  ok($rc == 2 && $o =~ /nodigest16 v0\.01 nodigest\.exe: checksum mismatch: dist16\/lock pins [0-9a-f]{64}/,
+    'fetch: a changed release asset is a checksum mismatch');
+  spew("$dir/lock", slurp("$dir/lock") . "program gr-dos/x16 v1\n");
+  ($rc, $o) = dist16($dir, 'list');
+  ok($rc == 2 && $o =~ /a program line has 10 fields/, 'a malformed lock is refused');
+}
+
+# 5. Asset names.
+{
+  my $dir = github(config => "$base_config" . "include gr-dos/pick16 asset=pick.com\ninclude gr-dos/nopick16 asset=other.exe\n",
+    owners => { 'gr-dos' => [
+    prog('zip16', assets => { 'zip16-1.0.zip' => 'PK', 'README' => 'r' }),
+    prog('both16', assets => { 'both.exe' => mz(600, 'b'), 'both.com' => "\xC3" }),
+    prog('two16', assets => { 'two.exe' => mz(600, 't'), 'other.exe' => mz(600, 'o') }),
+    prog('ambi16', assets => { 'ambi.exe' => mz(600, 'a'), 'ambi16.exe' => mz(600, 'b') }),
+    prog('full16', assets => { 'full16.exe' => mz(600, 'f') }),
+    prog('pick16', assets => { 'pick.exe' => mz(600, 'p'), 'pick.com' => "\xC3" }),
+    prog('nopick16'),
+    prog('longname16', assets => { 'longname16.exe' => mz(600, 'l') }) ] });
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'resolve succeeds');
+  ok(has($lines, qr{^skip gr-dos/zip16 unavailable v0\.01 has no program asset zip\.exe or zip\.com \(assets: README zip16-1\.0\.zip\)$}),
+    'only unexpected assets: unavailable, listing them');
+  ok(has($lines, qr{^program gr-dos/both16 v0\.01 \S+ both\.exe BOTH\.EXE }) && $o =~ /both\.exe as BOTH\.EXE, MIT \(ignored: both\.com\)/,
+    'NAME.exe and NAME.com: the .exe, and the .com is reported ignored');
+  ok(has($lines, qr{^program gr-dos/two16 v0\.01 \S+ two\.exe }), 'an asset with another name is ignored');
+  ok(has($lines, qr{^skip gr-dos/ambi16 failed v0\.01 has more than one program \(ambi\.exe ambi16\.exe\): set asset=}),
+    'STEM.exe and STEM16.exe: ambiguous, failed');
+  ok(has($lines, qr{^program gr-dos/full16 v0\.01 \S+ full16\.exe FULL16\.EXE }), 'STEM16.exe is a program name too');
+  ok(has($lines, qr{^program gr-dos/pick16 v0\.01 \S+ pick\.com PICK\.COM }), 'asset= chooses the .com');
+  ok(has($lines, qr{^skip gr-dos/nopick16 failed v0\.01 has no asset other\.exe \(assets: nopick\.exe\)$}), 'asset= naming no asset: failed');
+  ok(has($lines, qr{^skip gr-dos/longname16 failed v0\.01: longname16\.exe is not an 8\.3 \.COM or \.EXE name$}), 'a name longer than 8.3: failed');
+}
+
+# 6. Names: GR-DOS's own, and each other's.
+{
+  my $dir = github(config => "$base_config" . "include other/dup16\n", owners => {
+    'gr-dos' => [ prog('more16', assets => { 'more.exe' => mz(600, 'm') }), prog('dup16'), prog('io16', assets => { 'io.com' => "\xC3" }) ],
+    other => [ prog('dup16', assets => { 'dup.com' => "\xC3" }) ] });
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'resolve succeeds');
+  ok(has($lines, qr{^skip gr-dos/more16 failed MORE\.EXE has the name of GR-DOS's MORE\.COM$}), 'MORE.EXE would shadow GR-DOS\'s MORE.COM: failed');
+  ok(has($lines, qr{^skip gr-dos/io16 failed IO\.COM has the name of GR-DOS's IO\.SYS$}), 'any extension collides');
+  ok(has($lines, qr{^skip gr-dos/dup16 failed DUP\.EXE has the name of other/dup16's program$})
+    && has($lines, qr{^skip other/dup16 failed DUP\.COM has the name of gr-dos/dup16's program$}),
+    'two programs with one name: both failed');
+  # The lock is checked again when the build reads it.
+  spew("$dir/lock", "program gr-dos/x16 v0.01 " . ('a' x 40) . " more.com MORE.COM 1 " . ('b' x 64) . " MIT LICENSE " . ('c' x 64) . "\n");
+  ($rc, $o) = dist16($dir, 'list');
+  ok($rc == 2 && $o =~ /MORE\.COM \(gr-dos\/x16\) has the name of GR-DOS's MORE\.COM/, 'list refuses a lock that collides');
+}
+
+# 7. Licenses.
+{
+  my $dir = github(config => $base_config, owners => { 'gr-dos' => [
+    prog('nolic16', license => undef), prog('gpl16', license => 'GPL-3.0'), prog('other16', license => 'NOASSERTION') ] });
+  my($rc) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok(has($lines, qr{^skip gr-dos/nolic16 failed v0\.01: no license$}), 'no license at the release\'s commit: failed');
+  ok(has($lines, qr{^skip gr-dos/gpl16 failed v0\.01: license GPL-3\.0 is not one dist16/config allows$}), 'a license the config does not allow: failed');
+  ok(has($lines, qr{^skip gr-dos/other16 failed v0\.01: license NOASSERTION is not one}), 'an unrecognized license: failed');
+}
+
+# 8. Architecture: real-mode DOS programs only.
+{
+  my $pe = mz(0x100, 'p');
+  substr($pe, 0x18, 2) = pack 'v', 0x40;
+  substr($pe, 0x3C, 4) = pack 'V', 0x80;
+  substr($pe, 0x80, 4) = "PE\0\0";
+  my $ne = $pe =~ s/PE\0\0/NE\0\0/r;
+  my $coff = mz(512, 'c') . pack('v', 0x014C) . ('c' x 100);
+  my $dos4g = mz(600, 'g') . 'DOS/4G';
+  my $bad = mz(600, 'h');
+  substr($bad, 4, 2) = pack 'v', 9;
+  my $dir = github(config => $base_config, owners => { 'gr-dos' => [
+    prog('pe16', assets => { 'pe.exe' => $pe }), prog('ne16', assets => { 'ne.exe' => $ne }),
+    prog('coff16', assets => { 'coff.exe' => $coff }), prog('dosx16', assets => { 'dosx.exe' => $dos4g }),
+    prog('nomz16', assets => { 'nomz.exe' => 'not a program' }), prog('hdr16', assets => { 'hdr.exe' => $bad }),
+    prog('bigcom16', assets => { 'bigcom.com' => "\x90" x 0xFF01 }), prog('com16', assets => { 'com.com' => "\x90" x 0xFF00 }) ] });
+  my($rc) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok(has($lines, qr{^skip gr-dos/pe16 failed v0\.01: pe\.exe is a PE program, not a real-mode DOS one$}), 'a PE program: failed');
+  ok(has($lines, qr{^skip gr-dos/ne16 failed v0\.01: ne\.exe is a NE program}), 'an NE program: failed');
+  ok(has($lines, qr{^skip gr-dos/coff16 failed v0\.01: coff\.exe is a 32-bit \(COFF\) program behind a DOS stub$}), 'a 32-bit COFF program behind a stub: failed');
+  ok(has($lines, qr{^skip gr-dos/dosx16 failed v0\.01: dosx\.exe needs a 32-bit DOS extender \(DOS/4G\)$}), 'a DOS extender program: failed');
+  ok(has($lines, qr{^skip gr-dos/nomz16 failed v0\.01: nomz\.exe has no MZ header$}), 'an .exe with no MZ header: failed');
+  ok(has($lines, qr{^skip gr-dos/hdr16 failed v0\.01: hdr\.exe has a malformed MZ header$}), 'a malformed MZ header: failed');
+  ok(has($lines, qr{^skip gr-dos/bigcom16 failed v0\.01: bigcom\.com is 65281 bytes, too big for a \.COM$}), 'a .COM over 65,280 bytes: failed');
+  ok(has($lines, qr{^program gr-dos/com16 v0\.01 \S+ com\.com COM\.COM 65280 }), 'a .COM of 65,280 bytes is a program');
+}
+
+# 9. GitHub refusing or failing stops resolve, and leaves the lock as it was.
+{
+  my $dir = github(config => $base_config, owners => { 'gr-dos' => [ prog('a16') ] });
+  my($rc) = dist16($dir, 'resolve');
+  my $lock = slurp("$dir/lock");
+  spew("$dir/api/users/gr-dos/repos\@per_page=100&page=1.status", "403\n");
+  my $o;
+  ($rc, $o) = dist16($dir, 'resolve');
+  ok($rc == 2 && $o =~ /HTTP 403: rate limited or forbidden/, 'a rate limit (403) stops resolve');
+  ok(slurp("$dir/lock") eq $lock, 'and the lock is unchanged');
+  unlink "$dir/api/users/gr-dos/repos\@per_page=100&page=1.status";
+  spew("$dir/api/repos/gr-dos/a16/releases/latest.status", "500\n");
+  ($rc, $o) = dist16($dir, 'resolve');
+  ok($rc == 2 && $o =~ m{releases/latest: HTTP 500}, 'a server error on one release stops resolve too');
+  ok(slurp("$dir/lock") eq $lock, 'and the lock is unchanged');
+  ($rc, $o) = dist16($dir, '--api', 'file:///nonexistent/api', 'resolve');
+  ok($rc == 2 && $o =~ /no user or organization gr-dos/, 'an owner GitHub does not have stops resolve');
+
+  # A required repository that cannot be included stops resolve.
+  spew("$dir/config", "$base_config" . "include gr-dos/a16 required\n");
+  unlink "$dir/api/repos/gr-dos/a16/releases/latest.status";
+  unlink "$dir/api/repos/gr-dos/a16/releases/latest";
+  ($rc, $o) = dist16($dir, 'resolve');
+  ok($rc == 2 && $o =~ m{gr-dos/a16 is required \(dist16/config\), but unavailable: no release}, 'a required repository with no release stops resolve');
+  ok(slurp("$dir/lock") eq $lock, 'and the lock is unchanged');
+}
+
+say "1..$tests";
+say $failed ? "dist16 tests: $failed of $tests failed" : "dist16 tests: passed";
+exit($failed ? 1 : 0);

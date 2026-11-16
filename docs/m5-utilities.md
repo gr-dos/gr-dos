@@ -194,7 +194,8 @@ image's files with their size, attributes, time and SHA-256.
 ### C: and the release
 
 `ALL_FILES` is everything: the M4 utilities, TICO.EXE, all 19 commands,
-GRAPHICS.PRO and AUTOEXEC.BAT. `scripts/deploy-cf` installs all of it but
+GRAPHICS.PRO, the other `*16` programs ([dist16.md](dist16.md), since
+issue #36) and AUTOEXEC.BAT. `scripts/deploy-cf` installs all of it but
 AUTOEXEC.BAT in `C:\DOS` (`build/linux/cf`). Its manifest is that of a
 1.44 MB image of the same files, so each file is stamped as on the
 floppies. The release ZIP's `BIN` has the same files.

@@ -73,6 +73,7 @@ Contents
   BIN\TREE.COM     shows the directory tree
   BIN\XCOPY.EXE    copies files and directory trees
   BIN\GRAPHICS.PRO GRAPHICS's printer profile
+@DIST16@
   BIN\AUTOEXEC.BAT sets the prompt and PATH A:\
   BUILDINFO        the commit and the tool versions it was built with
   SHA256SUMS       SHA-256 checksums of the other files in this archive
@@ -85,8 +86,11 @@ compiled with Microsoft C 5.1, and linked with libc16, a C runtime for DOS
 programs. FIND.EXE, EXE2BIN.EXE and IFSFUNC.EXE are not EXEPACKed, as
 Microsoft's were: the EXEPACK loader fails with "Packed file is corrupt"
 when a program is loaded in the first 64 KB of memory, as it is on
-GR-DOS. TICO.EXE is tico16's release v0.02,
-unchanged (https://github.com/tico-edit/tico16).
+GR-DOS. TICO.EXE and the programs listed after GRAPHICS.PRO are the
+releases of the GitHub projects named, unchanged: the ones whose names
+end in 16 in the gr-dos organization (https://github.com/gr-dos), and
+tico16 (https://github.com/tico-edit/tico16). They are on no floppy but
+TICO.EXE; each one's license is at the end of this file.
 
 Booting
 -------
