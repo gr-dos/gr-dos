@@ -22,8 +22,10 @@ MSG   := $(SRC)/MESSAGES/USA-MS.MSG
 TOOLS := $(BUILD)/tools.env
 CF    := $(BUILD)/cf
 
-# Patches to v4.0/src, applied in order with patch -p1 (no fuzz).
-PATCHES := $(sort $(wildcard patches/branding/*.patch))
+# Patches to v4.0/src, applied in order with patch -p1 (no fuzz): the
+# branding (decision 7), then the kernel's GR-DOS identification call
+# (patches/kernel, issue #46).
+PATCHES := $(sort $(wildcard patches/branding/*.patch)) $(sort $(wildcard patches/kernel/*.patch))
 
 JWFLAGS := -q -Zj -Zm -Zg -Cx -I. -I$(CURDIR)/$(SRC)/INC -I$(CURDIR)/$(SRC)/DOS
 
@@ -191,11 +193,15 @@ FILES_720  := $(PROGRAMS) $(call extra_files,$(FLOPPY_720)) $(BUILD)/image/AUTOE
 FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(BUILD)/image/AUTOEXEC.BAT
 FILES_1440 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1440)) $(BUILD)/image/AUTOEXEC.BAT
 
+# GRVER (issue #46, docs/grver.md): GR-DOS's own program, in grver/, which
+# reports the release version from the kernel's identification call.
+GRVER := $(BUILD)/grver/GRVER.EXE
+
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
 # programs, then all of issue #17's in CMD's order, GRAPHICS.PRO,
-# COUNTRY.SYS and KEYBOARD.SYS, and the other *16 programs.
+# COUNTRY.SYS and KEYBOARD.SYS, GRVER, and the other *16 programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(GRAPHICS_PRO) \
-	$(NLS_DATA) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
+	$(NLS_DATA) $(GRVER) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
 
 # GR-DOS's own file names, which no *16 program may have, even with
 # another extension (COMMAND.COM would run only one of them).
@@ -221,7 +227,7 @@ TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
-	test-keyb test-fdisk test-install test-deploy-cf
+	test-keyb test-grver test-fdisk test-install test-deploy-cf
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
 test-dist16: scripts/dist16 tests/dist16/run
@@ -299,6 +305,23 @@ test-country: $(TEST_COUNTRY)
 
 $(TEST_COUNTRY): test-country-%: $(TESTS)/country-%.img
 	scripts/smoke-test $< tests/country/$*/expect $(TESTS)/country-$*
+
+# GRVER's tests (tests/grver, issue #46): its output and exit status, and
+# FAKEID's imitations of the identification call's answer, on GR-DOS; and
+# on MS-DOS 4.00, the reference build's kernel (make check's, without
+# PATCHES), which must not be taken for GR-DOS.
+test-grver: test-grver-grdos test-grver-msdos
+
+test-grver-grdos test-grver-msdos: test-grver-%: $(TESTS)/grver-%.img
+	scripts/smoke-test $(if $(filter grdos,$*),--expect $(TESTS)/grver-version.expect) \
+	  $< tests/grver/expect-$* $(TESTS)/grver-$*
+
+test-grver-grdos: $(TESTS)/grver-version.expect
+
+# On GR-DOS, GRVER's line is VERSION's, exactly.
+$(TESTS)/grver-version.expect: VERSION
+	mkdir -p $(@D)
+	printf '^GR-DOS %s$$\n' "$$(tr -d ' \r\n' < VERSION | sed 's/[.]/\\./')" > $@
 
 # The KEYB test (tests/keyb, issue #23): keys typed at the 1.44 MB release
 # image's prompt, through each layout, read back from the screen.
@@ -380,7 +403,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
 	  scripts/dist16 notices $(DIST16); \
-	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE)\n----------------------------------------------------\n\n'; \
+	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE and GRVER.EXE)\n-----------------------------------------------------------------\n\n'; \
 	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	. ./$(TOOLS) && { \
@@ -435,6 +458,9 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-country        CONFIG.SYS's COUNTRY=, with COUNTRY.SYS; or one
   make test-country-COUNTRY  (COUNTRY: $(COUNTRY_TESTS))
   make test-keyb           KEYB's layouts, typed at the 1.44 MB image's prompt
+  make test-grver          GRVER and the kernel's identification call, on
+  make test-grver-grdos,     GR-DOS and on MS-DOS 4.00; or one of them
+  make test-grver-msdos
   make test-fdisk          FDISK on disposable hard disk images, against
   make test-fdisk-NAME       Microsoft's FDISK; or one (a tests/fdisk directory)
   make test-install        install GR-DOS on a blank hard disk and boot it;
@@ -463,7 +489,7 @@ Variables
 endef
 
 # .PHONY targets that are not for users.
-HELP_INTERNAL := check-tree
+HELP_INTERNAL := check-tree msdos-core
 
 help:
 	$(info $(HELP))
@@ -479,7 +505,8 @@ test-help: scripts/check-help
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb
+	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb \
+	test-grver test-grver-grdos test-grver-msdos msdos-core
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -529,6 +556,18 @@ $(SRC)/%.OBJ: $(BUILD)/messages.stamp $(TOOLS)
 
 # FORMAT and SYS include the boot sector.
 $(SRC)/CMD/FORMAT/MSFOR.OBJ $(SRC)/CMD/SYS/SYS1.OBJ: $(SRC)/INC/BOOT.INC
+
+# The kernel's dispatcher (DISP.ASM, in MSDISP.ASM) includes the GR-DOS
+# release version for its identification call (patches/kernel, issue #46):
+# VERSION, n.nn, as GRDOS_MAJOR and GRDOS_MINOR (0 to 99).
+$(SRC)/DOS/GRDOSVER.INC: VERSION $(BUILD)/tree.stamp
+	v=$$(tr -d ' \r\n' < VERSION); \
+	  echo "$$v" | grep -Eq '^[0-9]{1,3}\.[0-9]{2}$$' \
+	  && echo "$$v" | awk -F. '{ exit !($$1 + 0 <= 255) }' \
+	  || { echo "VERSION is not n.nn (major 0 to 255): $$v" >&2; exit 1; }; \
+	  echo "$$v" | awk -F. '{ printf "; GR-DOS release %s, from VERSION (Makefile)\r\nGRDOS_MAJOR\tEQU\t%d\r\nGRDOS_MINOR\tEQU\t%d\r\n", $$0, $$1 + 0, $$2 + 0 }' > $@
+
+$(SRC)/DOS/MSDISP.OBJ: $(SRC)/DOS/GRDOSVER.INC
 
 # FDISK includes the master boot record.
 $(SRC)/CMD/FDISK/BOOTREC.OBJ: $(SRC)/CMD/FDISK/FDBOOT.INC
@@ -604,6 +643,18 @@ $(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE $(SRC)/CMD/FDISK/FDISK.EXE $
 	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
 	  name $@ $(foreach o,$(filter %.OBJ,$^),file $(o)) library $(LIBC16)
 	scripts/check-runtime $(@:.EXE=.MAP) $(LIBC16) $(filter %.OBJ,$^)
+
+# GRVER, C with libc16 and its startup, like MEM.
+$(BUILD)/grver/GRVER.OBJ: grver/grver.c $(TOOLS) $(BUILD)/libc16.stamp
+	mkdir -p $(@D)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
+	  wcc $(filter-out -w0 -I$(CURDIR)/$(SRC)/H,$(WCFLAGS)) -w4 -we -fo=$@ $<
+
+$(GRVER): $(BUILD)/grver/GRVER.OBJ $(TOOLS) $(BUILD)/libc16.stamp scripts/check-runtime
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos \
+	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
+	  name $@ file $< library $(LIBC16)
+	scripts/check-runtime $(@:.EXE=.MAP) $(LIBC16) $<
 
 # EXE2BIN; the image is padded to the size Microsoft LINK gives it.
 size = $$(scripts/mslink-layout --size $(filter %.OBJ,$^))
@@ -836,6 +887,43 @@ $(TESTS)/country-$(1).img: $(CORE) $(call country_files,$(1)) scripts/mkimage sc
 	scripts/mkimage $$@ $(SRC) $(call country_files,$(1))
 endef
 $(foreach t,$(COUNTRY_TESTS),$(eval $(call country_test_image,$(t))))
+
+# GRVER's test disks: GRVER, FAKEID and the batch files, with GR-DOS's
+# system files or MS-DOS 4.00's. The reference build is make check's; its
+# files are made by the same sub-make, which does nothing when they are up
+# to date.
+MSDOS_SRC  := $(BUILD)/reference/$(notdir $(SRC))
+MSDOS_CORE := $(addprefix $(MSDOS_SRC)/,BOOT/MSBOOT.BIN BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM)
+
+$(TESTS)/FAKEID.COM: tests/grver/fakeid.asm $(TOOLS)
+	mkdir -p $(@D)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
+	  && wasm -q -fo=$(@D)/FAKEID.OBJ $< \
+	  && wlink option quiet format dos com name $@ file $(@D)/FAKEID.OBJ
+
+$(TESTS)/grver-files/AUTOEXEC.BAT: tests/grver/grver.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/grver-files/RC.BAT: tests/grver/rc.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/grver-files/FAKE.BAT: tests/grver/fake.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+GRVER_TEST_FILES := $(GRVER) $(TESTS)/FAKEID.COM \
+	$(addprefix $(TESTS)/grver-files/,AUTOEXEC.BAT RC.BAT FAKE.BAT)
+
+$(TESTS)/grver-grdos.img: $(CORE) $(GRVER_TEST_FILES) scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(GRVER_TEST_FILES)
+
+$(TESTS)/grver-msdos.img: msdos-core $(GRVER_TEST_FILES) scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(MSDOS_SRC) $(GRVER_TEST_FILES)
+
+msdos-core: $(TOOLS)
+	$(MAKE) BUILD=$(BUILD)/reference TOOLS=$(TOOLS) PATCHES= $(MSDOS_CORE)
 
 # The distribution tests' disks (tests/floppy): the files of one format,
 # with the test AUTOEXEC.BAT for the image's, and COMP's answer.

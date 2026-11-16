@@ -17,7 +17,8 @@ drives ([`docs/deploy-cf.md`](docs/deploy-cf.md)). That install, and the release
 carry the DOS programs of the [gr-dos](https://github.com/gr-dos) organization's
 `*16` repositories, such as LESS, DIFF16 and TAR. They are found on GitHub
 and pinned in `dist16/lock` ([`docs/dist16.md`](docs/dist16.md)). Apart from the GR-DOS branding of the
-banner, `VER` and FDISK's menu (`patches/branding`), the binaries of the
+banner, `VER` and FDISK's menu (`patches/branding`), and the kernel's GR-DOS
+identification call (`patches/kernel`, [`docs/grver.md`](docs/grver.md)), the binaries of the
 assembly sources are byte-identical to the original MASM/LINK build; ATTRIB,
 MEM, FDISK and FC, which are C, are built with Open Watcom C and GR-DOS's own C
 runtime ([`docs/m4-utilities.md`](docs/m4-utilities.md)). See
@@ -84,7 +85,7 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `APPEND.EXE`, `SHARE.EXE`, `EXE2BIN.EXE`, `GRAFTABL.COM`, `GRAPHICS.COM`, `GRAPHICS.PRO`, `NLSFUNC.EXE` | | | ✓ |
 | `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
 
-The 360 KB disk's files are frozen. FASTOPEN and IFSFUNC are on C: only. `image/files-360k.txt` (and so on) lists each image's
+The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC and GRVER are on C: only. `image/files-360k.txt` (and so on) lists each image's
 files in order, and `make` checks the image against it.
 `build/linux/manifest-360k.txt` (and so on) lists them with their checksums. To
 build one image from a built tree, choose the format with `--format` (1440
@@ -163,6 +164,7 @@ gr-dos-VERSION/
 │   │   IFSFUNC.EXE, KEYB.COM, LABEL.COM, NLSFUNC.EXE, PRINT.COM,
 │   │   RECOVER.COM, SHARE.EXE, SORT.EXE, TREE.COM, XCOPY.EXE,
 │   │   GRAPHICS.PRO, COUNTRY.SYS, KEYBOARD.SYS
+│   ├── GRVER.EXE     the GR-DOS release version, from the kernel
 │   ├── CRCSUM.EXE, DF.EXE, DIFF16.EXE, LESS.EXE, MD5SUM.EXE, TAR.EXE,
 │   │   TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
 │   └── AUTOEXEC.BAT
@@ -213,6 +215,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   utilities, each format's files, and their tests.
 - [`docs/country-keyboard.md`](docs/country-keyboard.md): COUNTRY.SYS and
   KEYBOARD.SYS, the countries and layouts, configuration and limits.
+- [`docs/grver.md`](docs/grver.md): the kernel's GR-DOS identification
+  call (`INT 21h AX=3347h`), GRVER.EXE, and how a program calls it.
 - [`docs/dist16.md`](docs/dist16.md): the `*16` programs, how they are
   found, pinned and checked, and how to add or exclude one.
 - [`docs/run-dosbox.md`](docs/run-dosbox.md): `make run-dosbox`, the

@@ -127,7 +127,8 @@ following, in this order:
    SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND, FC, DEBUG, MEM, MODE
    and TICO, all of [M5](m5-utilities.md)'s commands (APPEND to XCOPY)
    with GRAPHICS.PRO, COUNTRY.SYS and KEYBOARD.SYS
-   ([country-keyboard.md](country-keyboard.md)), and the other `*16` programs `dist16/lock` pins
+   ([country-keyboard.md](country-keyboard.md)), GRVER
+   ([grver.md](grver.md)), and the other `*16` programs `dist16/lock` pins
    (CRCSUM, DF, DIFF16, LESS, MD5SUM, TAR, TRUNCATE and WHICH;
    [dist16.md](dist16.md)). The floppy images keep those they carry in the
    root directory.

@@ -175,15 +175,15 @@ drive. What a floppy carries is chosen for that use, not to fill it:
   APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and its GRAPHICS.PRO, and
   NLSFUNC. Everything that is useful on a floppy fits on 1.2 MB, so the two
   have the same files.
-- **No floppy:** FASTOPEN, which works on hard disks only, and IFSFUNC,
+- **No floppy:** GRVER ([grver.md](grver.md)), FASTOPEN, which works on hard disks only, and IFSFUNC,
   which needs an installable file system driver, and there is none.
 
 | Image | Files | Bytes free |
 |---|---:|---:|
 | 360 KB | 17 | 17,408 |
 | 720 KB | 30 | 230,400 |
-| 1.2 MB | 37 | 644,608 |
-| 1.44 MB | 37 | 888,320 |
+| 1.2 MB | 37 | 644,096 |
+| 1.44 MB | 37 | 887,808 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's

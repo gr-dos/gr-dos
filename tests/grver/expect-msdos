@@ -1,0 +1,46 @@
+# As expect-grdos, on MS-DOS 4.00: the reference build's kernel, which
+# leaves AX=3347h an unknown subfunction (AL=FFh), is not GR-DOS.
+
+^GRDOS-TEST-BEGIN$
+^== GRVER$
+^GR-DOS kernel not detected\.$
+^EXIT 1$
+^== GRVER \/\?$
+^Displays the GR-DOS release version, as the GR-DOS kernel reports it\.$
+^GRVER \[\/\?\]$
+^Exit status: 0 GR-DOS, 1 not GR-DOS, 2 invalid response, 3 bad parameter\.$
+^EXIT 0$
+^== GRVER \/X$
+^Invalid parameter - \/X$
+^Displays the GR-DOS release version, as the GR-DOS kernel reports it\.$
+^GRVER \[\/\?\]$
+^Exit status: 0 GR-DOS, 1 not GR-DOS, 2 invalid response, 3 bad parameter\.$
+^EXIT 3$
+^== GRVER A B$
+^Invalid parameter - A$
+^Displays the GR-DOS release version, as the GR-DOS kernel reports it\.$
+^GRVER \[\/\?\]$
+^Exit status: 0 GR-DOS, 1 not GR-DOS, 2 invalid response, 3 bad parameter\.$
+^EXIT 3$
+^== FAKEID U$
+^GR-DOS kernel not detected\.$
+^EXIT 1$
+^== FAKEID D$
+^GR-DOS kernel not detected\.$
+^EXIT 1$
+^== FAKEID S$
+^GR-DOS kernel response not valid\.$
+^EXIT 2$
+^== FAKEID C$
+^GR-DOS kernel response not valid\.$
+^EXIT 2$
+^== FAKEID M$
+^GR-DOS kernel response not valid\.$
+^EXIT 2$
+^== FAKEID R$
+^GR-DOS kernel response not valid\.$
+^EXIT 2$
+^== FAKEID G$
+^GR-DOS 2\.99$
+^EXIT 0$
+^GRDOS-TEST-END$
