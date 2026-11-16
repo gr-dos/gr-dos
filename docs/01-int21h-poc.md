@@ -1,6 +1,7 @@
 # GR-DOS — PoC Enhancement: Custom INT 21h Service
 
-**Status:** Deferred proposal, post-MVP.
+**Status:** Done (issue #46): `INT 21h AX=3347h` and GRVER.EXE, in
+[grver.md](grver.md).
 
 ## Goal
 

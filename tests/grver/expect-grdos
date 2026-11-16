@@ -1,0 +1,48 @@
+# Lines GRVER's test (grver.bat) must write to COM1 on GR-DOS
+# (scripts/smoke-test): the kernel's version, from VERSION; the help and
+# the exit statuses; and each of FAKEID's imitations (fakeid.asm). GRVER
+# takes none of them for GR-DOS but G, a valid answer.
+
+^GRDOS-TEST-BEGIN$
+^== GRVER$
+^GR-DOS \d+\.\d\d$
+^EXIT 0$
+^== GRVER \/\?$
+^Displays the GR-DOS release version, as the GR-DOS kernel reports it\.$
+^GRVER \[\/\?\]$
+^Exit status: 0 GR-DOS, 1 not GR-DOS, 2 invalid response, 3 bad parameter\.$
+^EXIT 0$
+^== GRVER \/X$
+^Invalid parameter - \/X$
+^Displays the GR-DOS release version, as the GR-DOS kernel reports it\.$
+^GRVER \[\/\?\]$
+^Exit status: 0 GR-DOS, 1 not GR-DOS, 2 invalid response, 3 bad parameter\.$
+^EXIT 3$
+^== GRVER A B$
+^Invalid parameter - A$
+^Displays the GR-DOS release version, as the GR-DOS kernel reports it\.$
+^GRVER \[\/\?\]$
+^Exit status: 0 GR-DOS, 1 not GR-DOS, 2 invalid response, 3 bad parameter\.$
+^EXIT 3$
+^== FAKEID U$
+^GR-DOS kernel not detected\.$
+^EXIT 1$
+^== FAKEID D$
+^GR-DOS kernel not detected\.$
+^EXIT 1$
+^== FAKEID S$
+^GR-DOS kernel response not valid\.$
+^EXIT 2$
+^== FAKEID C$
+^GR-DOS kernel response not valid\.$
+^EXIT 2$
+^== FAKEID M$
+^GR-DOS kernel response not valid\.$
+^EXIT 2$
+^== FAKEID R$
+^GR-DOS kernel response not valid\.$
+^EXIT 2$
+^== FAKEID G$
+^GR-DOS 2\.99$
+^EXIT 0$
+^GRDOS-TEST-END$

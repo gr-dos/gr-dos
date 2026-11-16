@@ -175,7 +175,7 @@ drive. What a floppy carries is chosen for that use, not to fill it:
   APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and its GRAPHICS.PRO, and
   NLSFUNC. Everything that is useful on a floppy fits on 1.2 MB, so the two
   have the same files.
-- **No floppy:** FASTOPEN, which works on hard disks only, and IFSFUNC,
+- **No floppy:** GRVER ([grver.md](grver.md)), FASTOPEN, which works on hard disks only, and IFSFUNC,
   which needs an installable file system driver, and there is none.
 
 | Image | Files | Bytes free |

@@ -27,8 +27,9 @@ and use B: for programs and data. Each also installs GR-DOS on a hard disk
   1.2 MB,  those, and APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS,
   1.44 MB  GRAPHICS.PRO and NLSFUNC
 
-FASTOPEN and IFSFUNC are on no floppy: FASTOPEN works on hard disks only,
-and IFSFUNC needs an installable file system driver.
+FASTOPEN, IFSFUNC and GRVER are on no floppy: FASTOPEN works on hard
+disks only, IFSFUNC needs an installable file system driver, and GRVER is
+for C:\DOS and this archive.
 
 COUNTRY.SYS and KEYBOARD.SYS are MS-DOS 4.00's country and keyboard
 data. COUNTRY=049 in CONFIG.SYS gives the German date, time and number
@@ -83,6 +84,7 @@ Contents
   BIN\GRAPHICS.PRO GRAPHICS's printer profile
   BIN\COUNTRY.SYS  country information, for COUNTRY= in CONFIG.SYS
   BIN\KEYBOARD.SYS keyboard layouts, for KEYB
+  BIN\GRVER.EXE    shows the GR-DOS release version, from the kernel
 @DIST16@
   BIN\AUTOEXEC.BAT sets the prompt and PATH A:\
   BUILDINFO        the commit and the tool versions it was built with
@@ -93,10 +95,10 @@ Contents
 The utilities are built from the MS-DOS 4.00 source. ATTRIB.EXE, MEM.EXE,
 FDISK.EXE and FC.EXE are compiled with Open Watcom C, where Microsoft's were
 compiled with Microsoft C 5.1, and linked with libc16, a C runtime for DOS
-programs. FIND.EXE, EXE2BIN.EXE and IFSFUNC.EXE are not EXEPACKed, as
+programs. GRVER.EXE is GR-DOS's own, built the same way. FIND.EXE, EXE2BIN.EXE and IFSFUNC.EXE are not EXEPACKed, as
 Microsoft's were: the EXEPACK loader fails with "Packed file is corrupt"
 when a program is loaded in the first 64 KB of memory, as it is on
-GR-DOS. TICO.EXE and the programs listed after KEYBOARD.SYS are the
+GR-DOS. TICO.EXE and the programs listed after GRVER.EXE are the
 releases of the GitHub projects named, unchanged: the ones whose names
 end in 16 in the gr-dos organization (https://github.com/gr-dos), and
 tico16 (https://github.com/tico-edit/tico16). They are on no floppy but
@@ -113,7 +115,9 @@ or, for the 360 KB image:
 
   qemu-system-i386 -drive file=gr-dos-@VERSION@-360k.img,if=floppy,format=raw -boot a
 
-The DOS version reported to programs is 4.00. The boot sector loads IO.SYS
+The DOS version reported to programs is 4.00. GRVER shows GR-DOS's own
+version (@VERSION@), which programs get from INT 21h AX=3347h, BX=4752h
+(docs/grver.md in the source). The boot sector loads IO.SYS
 and MSDOS.SYS only from the first two root directory entries, stored
 contiguously, so copy the images rather than these files to make a boot
 disk, or use FORMAT /S or SYS on GR-DOS.
@@ -185,7 +189,7 @@ Licenses
 GR-DOS's own work is MIT licensed. The MS-DOS 4.00 source it is built from
 keeps its own MIT license. MS-DOS is a trademark of Microsoft. GR-DOS is an
 independent project, not endorsed by Microsoft or IBM. TICO.EXE is tico16's,
-under its MIT license. ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are
-compiled with Open Watcom C, but contain no Open Watcom code: their C runtime is libc16
+under its MIT license. ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE and GRVER.EXE
+are compiled with Open Watcom C, but contain no Open Watcom code: their C runtime is libc16
 (https://github.com/gr-dos/libc16), under its MIT license. The four MIT
 licenses follow.
