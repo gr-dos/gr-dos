@@ -1,0 +1,24 @@
+# Lines the country test (country.bat) must write to COM1 with
+# COUNTRY=049 (scripts/smoke-test): Germany, from \COUNTRY.SYS (the boot
+# disk's root, the default) in its default code page, 437. DATE's prompt
+# is COMMAND.COM's own, with dashes.
+
+^GRDOS-TEST-BEGIN$
+^== COUNTRY$
+^COUNTRY 049 DATE 1 TIME 1 CURRENCY "DM" FORMAT 2 DIGITS 2$
+^SEPARATORS THOUSANDS "\." DECIMAL "," DATE "\." TIME "\." LIST ";"$
+^CODEPAGE ACTIVE 437 SYSTEM 437$
+^UPCASE 84 8E$
+^Current date is \w{3} \d\d\.\d\d\.\d{4}$
+^Enter new date \(dd-mm-yy\): $
+^Current time is +\d+\.\d\d\.\d\d,\d\d$
+^NLSINFO  COM +544 \d\d\.\d\d\.\d\d +\d+\.\d\d$
+
+# CHCP 850, after NLSFUNC: Germany's 850 data, which keeps the diaeresis
+^== NLSFUNC$
+^Active code page: 437$
+^Active code page: 850$
+^COUNTRY 049 DATE 1 TIME 1 CURRENCY "DM" FORMAT 2 DIGITS 2$
+^CODEPAGE ACTIVE 850 SYSTEM 437$
+^UPCASE 84 8E$
+^GRDOS-TEST-END$

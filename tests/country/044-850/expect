@@ -1,0 +1,21 @@
+# Lines the country test (country.bat) must write to COM1 with
+# COUNTRY=044,850,A:\COUNTRY.SYS (scripts/smoke-test): the United Kingdom
+# in code page 850, from the file given. The currency is the pound sign,
+# 9Ch in code pages 437 and 850. CHCP 850 keeps the code page.
+
+^GRDOS-TEST-BEGIN$
+^== COUNTRY$
+^COUNTRY 044 DATE 1 TIME 0 CURRENCY "\x9C" FORMAT 0 DIGITS 2$
+^SEPARATORS THOUSANDS "," DECIMAL "\." DATE "-" TIME ":" LIST ","$
+^CODEPAGE ACTIVE 850 SYSTEM 437$
+^UPCASE 84 41$
+^Current date is \w{3} \d\d-\d\d-\d{4}$
+^Enter new date \(dd-mm-yy\): $
+^Current time is +\d+:\d\d:\d\d\.\d\d[ap]$
+^NLSINFO  COM +544 \d\d-\d\d-\d\d +\d+:\d\d[ap]$
+^== NLSFUNC$
+^Active code page: 850$
+^Active code page: 850$
+^COUNTRY 044 DATE 1 TIME 0 CURRENCY "\x9C" FORMAT 0 DIGITS 2$
+^CODEPAGE ACTIVE 850 SYSTEM 437$
+^GRDOS-TEST-END$

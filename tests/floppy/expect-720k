@@ -26,8 +26,14 @@
 ^Files compare OK$
 ^ Volume in drive B is GRDATA2 +$
 
-# SHARE, GRAFTABL, GRAPHICS and APPEND (twice) are not on this disk
+# KEYB GR installs the German layout, which KEYB then reports; with no
+# DISPLAY.SYS, CON has no code page to give
+^Current keyboard code: GR  code page: 437$
+^Active code page not available from CON device$
+
+# SHARE, GRAFTABL, GRAPHICS, APPEND (twice) and NLSFUNC are not on this disk
 ^== FLOPPY-1200$
+^Bad command or file name$
 ^Bad command or file name$
 ^Bad command or file name$
 ^Bad command or file name$
@@ -36,5 +42,5 @@
 ^== FILES$
 
 # The files of A:, the format's with COMP.IN, and the free space
-^ +26 File\(s\) +281600 bytes free$
+^ +29 File\(s\) +229376 bytes free$
 ^GRDOS-TEST-END$

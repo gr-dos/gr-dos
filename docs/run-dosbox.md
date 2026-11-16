@@ -96,7 +96,8 @@ As checked with DOSBox-X 2026.01.02:
 - **Load, but are not tested here:** APPEND, ASSIGN, NLSFUNC, GRAPHICS
   and FASTOPEN. They are resident programs that hook into MS-DOS 4.00's
   kernel, which DOSBox-X's only resembles. IFSFUNC says "IFSFUNC already
-  installed", because DOSBox-X reports a network redirector. KEYB needs
-  KEYBOARD.SYS, which GR-DOS does not have yet.
+  installed", because DOSBox-X reports a network redirector. KEYB, with
+  `C:\DOS\KEYBOARD.SYS` (issue #23), is not tested here either; DOSBox-X
+  has its own keyboard layouts (`[dos] keyboardlayout`).
 - **Report DOSBox-X's devices:** `MODE CON` shows the status DOSBox-X's
   CON device gives (`COLUMNS=40`, `LINES=136`), not the screen's.

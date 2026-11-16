@@ -1,0 +1,72 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Write COUNTRY.SYS as MKCNTRY.EXE does, without running it
+
+=head1 SYNOPSIS
+
+ scripts/mkcntry MKCNTRY.EXE COUNTRY.SYS
+
+=head1 DESCRIPTION
+
+The MS-DOS 4.00 build makes F<DEV/COUNTRY/COUNTRY.SYS> by running
+F<MKCNTRY.EXE> (F<DEV/COUNTRY/MAKEFILE>), which writes the country
+information it holds to F<COUNTRY.SYS> and exits. This writes the same
+bytes on the build machine, by reading the program instead of running it
+(issue #23).
+
+F<MKCNTRY.ASM>'s code is a few instructions:
+
+ mov  ax,dseg              ; B8 lo hi, with a segment relocation
+ ...
+ mov  bx,ax                ; 8B D8, the handle from create
+ mov  ah,40h               ; B4 40, write
+ mov  cx,cdiend-cdinfo     ; B9 lo hi (90, MASM 5's padding)
+ lea  dx,cdinfo            ; 8D 16 lo hi
+ int  21h                  ; CD 21
+
+So the file is the CX bytes at DSEG:DX of the load image, where DSEG is
+the segment the program's first instruction loads (relative to the
+image's start). It fails unless the program is exactly that: an entry
+point at C<mov ax,SEG>, one relocation, that one, and the write
+sequence once, so a change to F<MKCNTRY.ASM> is noticed, not guessed at.
+No relocation may fall in the written bytes, since DOS would have
+changed them.
+
+=cut
+
+die "usage: scripts/mkcntry MKCNTRY.EXE COUNTRY.SYS\n" unless @ARGV == 2;
+my($in, $out) = @ARGV;
+
+my $exe = do { open my $fh, '<:raw', $in or die "$in: $!\n"; local $/; <$fh> };
+die "$in: not an MZ executable\n" unless length($exe) >= 28 && substr($exe, 0, 2) eq 'MZ';
+my($last, $pages, $nreloc, $hdr, undef, undef, undef, undef, undef, $ip, $cs, $relo)
+  = unpack 'v12', substr($exe, 2, 24);
+my $size = $pages * 512 - ($last ? 512 - $last : 0);
+my $image = substr $exe, $hdr * 16, $size - $hdr * 16;
+
+die "$in: $nreloc relocations, not 1\n" unless $nreloc == 1;
+my($roff, $rseg) = unpack 'v2', substr($exe, $relo, 4);
+my $reloc = $rseg * 16 + $roff;
+
+my $entry = $cs * 16 + $ip;
+my($op, $dseg) = unpack 'Cv', substr($image, $entry, 3);
+die "$in: the entry point is not mov ax,SEG\n" unless $op == 0xB8 && $reloc == $entry + 1;
+
+my $code = substr $image, $entry;
+my @writes;
+while($code =~ /\x8B\xD8\xB4\x40\xB9(..)\x90?\x8D\x16(..)\xCD\x21/sg) {
+  push @writes, [ unpack('v', $1), unpack('v', $2) ];
+}
+die "$in: " . @writes . " writes of the file found, not 1\n" unless @writes == 1;
+my($cx, $dx) = $writes[0]->@*;
+
+my $start = $dseg * 16 + $dx;
+die "$in: the file's bytes are past the image\n" if $start + $cx > length $image;
+die "$in: a relocation is in the file's bytes\n" if $reloc + 2 > $start && $reloc < $start + $cx;
+
+open my $fh, '>:raw', $out or die "$out: $!\n";
+print $fh substr($image, $start, $cx);
+close $fh or die "$out: $!\n";

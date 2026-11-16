@@ -1,0 +1,24 @@
+# Lines the country test (country.bat) must write to COM1 with no
+# COUNTRY= (scripts/smoke-test): MS-DOS 4.00's built-in United States
+# settings. COUNTRY.SYS's data is Microsoft's (DEV/COUNTRY/MKCNTRY.ASM).
+
+^GRDOS-TEST-BEGIN$
+^== COUNTRY$
+^COUNTRY 001 DATE 0 TIME 0 CURRENCY "\$" FORMAT 0 DIGITS 2$
+^SEPARATORS THOUSANDS "," DECIMAL "\." DATE "-" TIME ":" LIST ","$
+^CODEPAGE ACTIVE 437 SYSTEM 437$
+^UPCASE 84 8E$
+^Current date is \w{3} \d\d-\d\d-\d{4}$
+^Enter new date \(mm-dd-yy\): $
+^Current time is +\d+:\d\d:\d\d\.\d\d[ap]$
+^NLSINFO  COM +544 \d\d-\d\d-\d\d +\d+:\d\d[ap]$
+
+# NLSFUNC reads COUNTRY.SYS for CHCP, which changes the code page to 850:
+# its uppercase table, the United Kingdom's, drops the diaeresis
+^== NLSFUNC$
+^Active code page: 437$
+^Active code page: 850$
+^COUNTRY 001 DATE 0 TIME 0 CURRENCY "\$" FORMAT 0 DIGITS 2$
+^CODEPAGE ACTIVE 850 SYSTEM 437$
+^UPCASE 84 41$
+^GRDOS-TEST-END$

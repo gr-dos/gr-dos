@@ -22,14 +22,22 @@ and use B: for programs and data. Each also installs GR-DOS on a hard disk
            FDISK, ATTRIB, MORE, FIND, FC, DEBUG, MEM, MODE, TICO and
            AUTOEXEC.BAT
   720 KB   those, and XCOPY, COMP, DISKCOMP, LABEL, TREE, SORT, EDLIN,
-           PRINT, ASSIGN and RECOVER
-  1.2 MB,  those, and APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and
-  1.44 MB  GRAPHICS.PRO
+           PRINT, ASSIGN, RECOVER and KEYB, with COUNTRY.SYS and
+           KEYBOARD.SYS
+  1.2 MB,  those, and APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS,
+  1.44 MB  GRAPHICS.PRO and NLSFUNC
 
-KEYB, NLSFUNC, FASTOPEN and IFSFUNC are on no floppy: KEYB and NLSFUNC
-need KEYBOARD.SYS and COUNTRY.SYS, which GR-DOS does not include yet,
-FASTOPEN works on hard disks only, and IFSFUNC needs an installable file
-system driver.
+FASTOPEN and IFSFUNC are on no floppy: FASTOPEN works on hard disks only,
+and IFSFUNC needs an installable file system driver.
+
+COUNTRY.SYS and KEYBOARD.SYS are MS-DOS 4.00's country and keyboard
+data. COUNTRY=049 in CONFIG.SYS gives the German date, time and number
+formats, for example, from \COUNTRY.SYS on the boot disk (or
+COUNTRY=049,,C:\DOS\COUNTRY.SYS), and KEYB GR the German keyboard;
+Ctrl+Alt+F1 switches to the US keyboard and Ctrl+Alt+F2 back. There are 23
+countries and 17 keyboard layouts. Use code page 437 where the layout has
+it: there is no DISPLAY.SYS, so the screen's characters are code page
+437's.
 
 Contents
 --------
@@ -63,9 +71,9 @@ Contents
   BIN\GRAFTABL.COM loads the graphics characters of a code page
   BIN\GRAPHICS.COM prints the graphics screen with Print Screen
   BIN\IFSFUNC.EXE  installable file system support
-  BIN\KEYB.COM     loads a keyboard layout (needs KEYBOARD.SYS)
+  BIN\KEYB.COM     loads a keyboard layout from KEYBOARD.SYS
   BIN\LABEL.COM    sets a disk's volume label
-  BIN\NLSFUNC.EXE  national language support (needs COUNTRY.SYS)
+  BIN\NLSFUNC.EXE  national language support for CHCP, from COUNTRY.SYS
   BIN\PRINT.COM    prints files in the background
   BIN\RECOVER.COM  recovers the readable part of files with bad sectors
   BIN\SHARE.EXE    file sharing and locking
@@ -73,6 +81,8 @@ Contents
   BIN\TREE.COM     shows the directory tree
   BIN\XCOPY.EXE    copies files and directory trees
   BIN\GRAPHICS.PRO GRAPHICS's printer profile
+  BIN\COUNTRY.SYS  country information, for COUNTRY= in CONFIG.SYS
+  BIN\KEYBOARD.SYS keyboard layouts, for KEYB
 @DIST16@
   BIN\AUTOEXEC.BAT sets the prompt and PATH A:\
   BUILDINFO        the commit and the tool versions it was built with
@@ -86,7 +96,7 @@ compiled with Microsoft C 5.1, and linked with libc16, a C runtime for DOS
 programs. FIND.EXE, EXE2BIN.EXE and IFSFUNC.EXE are not EXEPACKed, as
 Microsoft's were: the EXEPACK loader fails with "Packed file is corrupt"
 when a program is loaded in the first 64 KB of memory, as it is on
-GR-DOS. TICO.EXE and the programs listed after GRAPHICS.PRO are the
+GR-DOS. TICO.EXE and the programs listed after KEYBOARD.SYS are the
 releases of the GitHub projects named, unchanged: the ones whose names
 end in 16 in the gr-dos organization (https://github.com/gr-dos), and
 tico16 (https://github.com/tico-edit/tico16). They are on no floppy but
