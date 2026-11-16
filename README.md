@@ -13,7 +13,10 @@ editor; the larger ones carry more of the utilities. With FDISK,
 FORMAT and SYS, GR-DOS installs on a hard disk and boots from it
 ([`docs/fdisk.md`](docs/fdisk.md)), and `scripts/deploy-cf` installs it from
 Linux on a CF card or disk image, then updates C: without touching the data
-drives ([`docs/deploy-cf.md`](docs/deploy-cf.md)). Apart from the GR-DOS branding of the
+drives ([`docs/deploy-cf.md`](docs/deploy-cf.md)). That install, and the release ZIP, also
+carry the DOS programs of the [gr-dos](https://github.com/gr-dos) organization's
+`*16` repositories, such as LESS, DIFF16 and TAR. They are found on GitHub
+and pinned in `dist16/lock` ([`docs/dist16.md`](docs/dist16.md)). Apart from the GR-DOS branding of the
 banner, `VER` and FDISK's menu (`patches/branding`), the binaries of the
 assembly sources are byte-identical to the original MASM/LINK build; ATTRIB,
 MEM, FDISK and FC, which are C, are built with Open Watcom C and GR-DOS's own C
@@ -30,7 +33,7 @@ You need:
 - `fsck.fat` (dosfstools), for `make test-deploy-cf`.
 
 ```sh
-make          # build into build/linux, fetching JWasm, Open Watcom and TICO.EXE into build/tools
+make          # build into build/linux, fetching JWasm, Open Watcom and the *16 programs into build/tools
 make check    # build without the branding and compare with the MS-DOS 4.00 reference build
 make test     # boot each image in QEMU, and test the utilities on disposable disks
 make dist     # package the release assets in build/linux/release
@@ -116,7 +119,8 @@ compares FC's output with Microsoft's FC.EXE's (`make test-fc`), runs FDISK on d
 it (`make test-fdisk`), and installs GR-DOS on a blank hard disk and boots
 it (`make test-install`). It provisions disk images of 512 MB to 8 GB with
 `scripts/deploy-cf`, boots them, and updates them, checking that every
-sector outside C: stays the same (`make test-deploy-cf`).
+sector outside C: stays the same (`make test-deploy-cf`). It tests
+`scripts/dist16` offline, against a fake GitHub (`make test-dist16`).
 
 ## Releases
 
@@ -151,6 +155,8 @@ gr-dos-VERSION/
 │   │   IFSFUNC.EXE, KEYB.COM, LABEL.COM, NLSFUNC.EXE, PRINT.COM,
 │   │   RECOVER.COM, SHARE.EXE, SORT.EXE, TREE.COM, XCOPY.EXE,
 │   │   GRAPHICS.PRO
+│   ├── CRCSUM.EXE, DF.EXE, DIFF16.EXE, LESS.EXE, MD5SUM.EXE, TAR.EXE,
+│   │   TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
 │   └── AUTOEXEC.BAT
 ├── BUILDINFO         the commit and tool versions
 ├── SHA256SUMS        checksums of the files in the ZIP
@@ -197,13 +203,17 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   Linux, and updating C: only.
 - [`docs/m5-utilities.md`](docs/m5-utilities.md): the other assembly
   utilities, each format's files, and their tests.
+- [`docs/dist16.md`](docs/dist16.md): the `*16` programs, how they are
+  found, pinned and checked, and how to add or exclude one.
 
 ## License
 
 GR-DOS's own scripts, patches and documentation are MIT, see
 [`LICENSE`](LICENSE). The MS-DOS 4.00 source in `v4.0` keeps its own MIT
 license, [`v4.0/LICENSE`](v4.0/LICENSE). TICO.EXE is
-[tico16](https://github.com/tico-edit/tico16)'s, under its MIT license.
+[tico16](https://github.com/tico-edit/tico16)'s, and each other `*16` program is its
+repository's, under that repository's license, all MIT today
+(`dist16/lock`).
 ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are compiled with Open Watcom C but linked with
 [libc16](https://github.com/gr-dos/libc16), an MIT C runtime, and contain
 no Open Watcom code ([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes

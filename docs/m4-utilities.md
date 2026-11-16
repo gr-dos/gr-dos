@@ -217,10 +217,14 @@ The JWasm patches the utilities need, 0003 to 0011, are described in
 
 ## TICO.EXE
 
-`scripts/fetch-tico` downloads `tico.exe` from the tico16 release v0.02 and
-the `LICENSE` from the release's commit, and checks both against pinned
-SHA-256 checksums. It is not compiled here. The disk has it as `TICO.EXE`,
-and the release README includes its MIT license.
+`TICO.EXE` is `tico.exe` from the tico16 release v0.02. It is not compiled
+here. `dist16/config` pins that release and marks it `required`, and
+`dist16/lock` pins the release's commit and the SHA-256 checksums of
+`tico.exe` and the `LICENSE` from that commit. The build fetches and checks
+both with `scripts/dist16`. Until issue #36 this was `scripts/fetch-tico`,
+which pinned the same release, commit and checksums. TICO.EXE is the one
+`*16` program on the floppies ([dist16.md](dist16.md)), and the release
+README includes its MIT license.
 
 ## The images
 

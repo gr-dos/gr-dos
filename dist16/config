@@ -1,0 +1,23 @@
+# The *16 programs of GR-DOS's full distribution, C:\DOS and the release
+# ZIP (issue #36, docs/dist16.md). Every gr-dos repository whose name ends
+# in 16 is found on GitHub, so a new gr-dos/foo16 needs no change here;
+# this file holds only the exceptions and additions, each with its reason.
+# After a change, run `make dist16-resolve` and commit dist16/lock with it.
+
+discover gr-dos 16
+
+# libc16 is a C runtime library (its release is libc16-VERSION.zip), not a
+# DOS program; GR-DOS's FDISK, ATTRIB, MEM and FC are linked with it.
+exclude gr-dos/libc16 a C runtime library, not a DOS program
+# hello16 is the template the other gr-dos *16 repositories are made from;
+# HELLO.EXE only prints a greeting.
+exclude gr-dos/hello16 the template for gr-dos *16 programs, not a utility
+
+# The tico16 text editor, from another organization. It is on every boot
+# floppy as TICO.EXE, and the 360 KB disk's files are frozen (issue #17),
+# so it is pinned, and a release of it is taken only by changing tag= here.
+include tico-edit/tico16 tag=v0.02 required
+
+# The licenses a shipped program may have (GitHub's SPDX identifiers):
+# permissive ones, whose notice the release ZIP's README.txt carries.
+license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD

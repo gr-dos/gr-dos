@@ -1,5 +1,6 @@
 # Build and verify GR-DOS, boot the four floppy images and test the utilities
-# in QEMU (decisions 13, 17 and 18, issue #4). The job `ci` is the required
+# in QEMU (decisions 13, 17 and 18, issue #4), with the *16 programs
+# dist16/lock pins (issue #36). The job `ci` is the required
 # status check on main. When a push to main carries a VERSION with no release
 # yet, `release` tags that commit v<VERSION> and publishes the `gr-dos`
 # artifact, exactly six assets (the 1.44 MB, 1.2 MB, 720 KB and 360 KB
@@ -34,7 +35,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/tools
-          key: tools-ubuntu-24.04-${{ hashFiles('scripts/fetch-jwasm', 'scripts/fetch-watcom', 'scripts/fetch-tico', 'patches/jwasm/*.patch') }}
+          key: tools-ubuntu-24.04-${{ hashFiles('scripts/fetch-jwasm', 'scripts/fetch-watcom', 'dist16/lock', 'patches/jwasm/*.patch') }}
 
       - name: Install mtools, QEMU and dosfstools
         run: |
@@ -45,8 +46,18 @@ jobs:
         run: |
           scripts/fetch-jwasm
           scripts/fetch-watcom
-          scripts/fetch-tico
           scripts/fetch-libc16
+          make build/linux/dist16.stamp
+
+      # What a new `make dist16-resolve` would change in dist16/lock: a new
+      # *16 repository or release (docs/dist16.md). Informational: the build
+      # uses the lock, so a failure here is a prompt to update it, not a
+      # broken build.
+      - name: Check dist16/lock against GitHub
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: make dist16-check
 
       - name: Build, and compare an unbranded build with the M1 reference
         run: |

@@ -22,7 +22,12 @@
 #                 (tests/fdisk), and make test-install installs GR-DOS on
 #                 one (FDISK, FORMAT and SYS) and boots it; make
 #                 test-deploy-cf tests scripts/deploy-cf, the CF card
-#                 installer, on disk images (issue #14)
+#                 installer, on disk images (issue #14); make test-dist16
+#                 tests scripts/dist16 offline (tests/dist16)
+#   make dist16-resolve  find the *16 programs on GitHub again and rewrite
+#                 dist16/lock, which pins the ones the build fetches;
+#                 make dist16-check only shows what that would change
+#                 (docs/dist16.md, issue #36)
 #   make fc-expect  write the FC tests' expected output with Microsoft's
 #                 FC.EXE of the M1 reference build
 #   make fdisk-expect  write the FDISK tests' expected screens and disks
@@ -35,7 +40,8 @@
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
 # git, curl and xz; mtools for the image and qemu-system-i386 for the test,
 # and fsck.fat (dosfstools) for test-deploy-cf.
-# JWasm, Open Watcom and TICO.EXE (tico16) are fetched into build/tools,
+# JWasm, Open Watcom and the *16 programs dist16/lock pins (TICO.EXE among
+# them; scripts/dist16, issue #36) are fetched into build/tools,
 # and the C runtime for ATTRIB, MEM, FDISK and FC, the pinned libc16 release,
 # into build/libc16 (scripts/fetch-libc16). make LIBC16_ROOT=../libc16 builds
 # against a libc16 checkout built with its own make instead.
@@ -165,8 +171,15 @@ IMAGES  := $(foreach f,$(FORMATS),$(BUILD)/gr-dos-$(f)k.img)
 MANIFESTS := $(foreach f,$(FORMATS),$(BUILD)/manifest-$(f)k.txt)
 TESTS   := $(BUILD)/tests
 
-# TICO.EXE, from the pinned tico16 release, and its license.
-TICO := $(BUILD)/tico/TICO.EXE
+# The *16 programs (issue #36, docs/dist16.md): the releases dist16/lock
+# pins, which scripts/dist16 fetches and verifies into $(DIST16), with their
+# licenses in $(DIST16)/licenses. TICO.EXE (tico16) is one, and is on every
+# floppy; the others are on C:\DOS and in the ZIP only, after the rest.
+DIST16       := $(BUILD)/dist16
+DIST16_FILES := $(addprefix $(DIST16)/,$(shell scripts/dist16 list))
+TICO         := $(DIST16)/TICO.EXE
+DIST16_EXTRA := $(filter-out $(TICO),$(DIST16_FILES))
+$(if $(filter $(TICO),$(DIST16_FILES)),,$(error dist16/lock has no TICO.EXE))
 
 # The programs LINK packed (/EXEPACK) are linked again without it for the
 # distribution, in $(BUILD)/image: LINK's EXEPACK loader fails ("Packed file
@@ -202,9 +215,15 @@ FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(BUILD)/image/AUTO
 FILES_1440 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1440)) $(BUILD)/image/AUTOEXEC.BAT
 
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
-# programs, then all of issue #17's in CMD's order, and GRAPHICS.PRO.
+# programs, then all of issue #17's in CMD's order, GRAPHICS.PRO and the
+# other *16 programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(GRAPHICS_PRO) \
-	$(BUILD)/image/AUTOEXEC.BAT
+	$(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
+
+# GR-DOS's own file names, which no *16 program may have, even with
+# another extension (COMMAND.COM would run only one of them).
+RESERVED = $(sort $(notdir $(CORE) $(filter-out $(DIST16_FILES),$(ALL_FILES)) $(SRC)/CMD/FDISK/FDBOOT.BIN) \
+	CONFIG.SYS GRDOS.ID VERSION)
 
 all: $(addprefix $(SRC)/,$(OUTPUTS)) $(IMAGES) $(MANIFESTS) $(CF)/manifest.txt
 
@@ -224,7 +243,12 @@ TEST_FORMATS := $(addprefix test-,$(FORMATS))
 TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
-test: $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-fdisk test-install test-deploy-cf
+test: test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-fdisk test-install \
+	test-deploy-cf
+
+# scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
+test-dist16: scripts/dist16 tests/dist16/run
+	tests/dist16/run $(TESTS)/dist16
 
 $(TEST_FORMATS): test-%: $(TESTS)/smoke-%k.img
 	scripts/smoke-test --expect tests/smoke/expect-$*k $< tests/smoke/expect $(TESTS)/smoke-$*k
@@ -327,7 +351,7 @@ TEST_DEPLOY_CF  := $(addprefix test-deploy-cf-,$(DEPLOY_CF_TESTS))
 test-deploy-cf: $(TEST_DEPLOY_CF)
 
 $(TEST_DEPLOY_CF): test-deploy-cf-%: $(CF)/manifest.txt scripts/deploy-cf scripts/deploy-cf-test \
-	scripts/hd-boot-test scripts/partition-table
+	scripts/hd-boot-test scripts/partition-table dist16/lock
 	scripts/deploy-cf-test $* $(TESTS)/deploy-cf-$*
 
 fdisk-expect: $(DISK_TEST) $(FDISK_REFERENCE)
@@ -352,15 +376,16 @@ RELEASE := $(BUILD)/release
 DIST_LOGS ?= $(wildcard build/make.log build/test.log)
 DIST_INFO ?=
 
-dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.stamp
+dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.stamp $(BUILD)/dist16.stamp
 	rm -rf $(DIST) $(RELEASE)
 	mkdir -p $(DIST)/$(NAME)/BIN $(RELEASE)
 	cp $(CORE) $(ALL_FILES) $(DIST)/$(NAME)/BIN/
+	scripts/dist16 bin-list $(notdir $(TICO)) > $(BUILD)/dist16-bin.txt
 	{ \
-	  sed 's/@VERSION@/$(VERSION)/g' release/README.txt; \
+	  sed -e '/^@DIST16@$$/{r $(BUILD)/dist16-bin.txt' -e 'd;}' -e 's/@VERSION@/$(VERSION)/g' release/README.txt; \
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
-	  printf '\ntico16 (TICO.EXE)\n-----------------\n\n'; cat $(dir $(TICO))LICENSE; \
+	  scripts/dist16 notices $(DIST16); \
 	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE)\n----------------------------------------------------\n\n'; \
 	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
@@ -387,7 +412,8 @@ clean:
 	rm -rf $(BUILD)
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
-	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean
+	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
+	test-dist16 dist16-resolve dist16-check
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -595,9 +621,20 @@ $(CF)/manifest.txt: $(CORE) $(ALL_FILES) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION scr
 	rm $(BUILD)/all-files.img
 	mv $@.tmp $@
 
-$(TICO): scripts/fetch-tico
-	mkdir -p $(@D)
-	tico=$$(scripts/fetch-tico) && cp $$tico/TICO.EXE $$tico/LICENSE $(@D)/
+# The *16 programs; a verified copy in build/tools/dist16 is not downloaded
+# again.
+$(BUILD)/dist16.stamp: dist16/lock scripts/dist16
+	scripts/dist16 --reserved "$(RESERVED)" fetch $(DIST16)
+	touch $@
+
+$(DIST16_FILES): $(BUILD)/dist16.stamp
+
+# Find the *16 programs on GitHub again and rewrite dist16/lock, with a
+# report of what is included and what is not and why (dist16-resolve); or
+# only show how the lock differs from that (dist16-check). Neither is part
+# of the build.
+dist16-resolve dist16-check: dist16-%:
+	scripts/dist16 --reserved "$(RESERVED)" $*
 
 $(BUILD)/image/AUTOEXEC.BAT: image/autoexec.bat
 	mkdir -p $(@D)

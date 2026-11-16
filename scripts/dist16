@@ -1,0 +1,615 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use Cwd qw( realpath );
+use Digest::SHA qw( sha256_hex );
+use File::Basename qw( dirname );
+use File::Copy qw( copy );
+use File::Path qw( make_path remove_tree );
+use File::Temp qw( tempdir );
+use Getopt::Long qw( GetOptionsFromArray );
+use JSON::PP ();
+
+# ABSTRACT: Find, pin and fetch the *16 programs of the full distribution
+
+=head1 SYNOPSIS
+
+ scripts/dist16 [OPTIONS] resolve      # GitHub -> dist16/lock, with a report
+ scripts/dist16 [OPTIONS] check        # is dist16/lock what resolve would write?
+ scripts/dist16 [OPTIONS] fetch DEST   # dist16/lock -> DEST, verified
+ scripts/dist16 [OPTIONS] list         # the DOS file names, in the lock's order
+ scripts/dist16 [OPTIONS] notices DEST # each program's provenance and license
+ scripts/dist16 [OPTIONS] bin-list     # README.txt lines for the ZIP's BIN
+
+=head1 DESCRIPTION
+
+GR-DOS's full distribution (C:\DOS and the release ZIP) includes the DOS
+programs of the GitHub repositories whose names end in C<16> (issue #36),
+found on GitHub, not named here, with the exceptions and additions in
+F<dist16/config>.
+
+C<resolve> lists the repositories, takes each one's latest release (or
+the tag the config pins), chooses its program, downloads it and its
+license, checks them, and writes F<dist16/lock>: one C<program> line per
+program, pinning the release, its commit, the asset, its SHA-256 and the
+license's, and one C<skip> line per repository left out, with why. It
+prints what it included, excluded, found unavailable, or failed to
+validate. It writes nothing if GitHub cannot be read, or a C<required>
+repository fails: a partial lock would drop programs silently.
+
+The build reads only the lock. C<fetch> downloads each program and license
+the lock names, from the release and the commit it pins, into the cache
+(F<build/tools/dist16>), checks their SHA-256 against the lock, and copies
+them to F<DEST> as DOS names (and F<DEST/licenses>). A verified cache is
+not downloaded again, so a rebuild needs no network. So the distribution
+changes only when the lock does, in a reviewed change; C<check> shows what
+a new C<resolve> would change.
+
+=head2 dist16/config
+
+One directive a line; C<#> starts a comment.
+
+=over 4
+
+=item discover OWNER SUFFIX
+
+Every public repository of the GitHub user or organization OWNER whose
+name ends in SUFFIX. Forks and archived repositories are left out.
+
+=item exclude OWNER/NAME REASON
+
+Leave a repository out; the reason is required, and is in the lock.
+
+=item include OWNER/NAME [tag=TAG] [asset=FILE] [required]
+
+Add a repository from any owner, or set options for a discovered one.
+C<tag=> pins a release instead of the latest; C<asset=> names the release
+asset to ship; C<required> makes C<resolve> fail, not skip it, if it
+cannot be included. An include overrides fork and archived. A repository
+both included and excluded is an error.
+
+=item license SPDX...
+
+The licenses a program may have (GitHub's SPDX identifiers).
+
+=back
+
+=head2 The release contract
+
+A repository's program is the asset of its release named F<STEM.exe> or
+F<STEM.com>, where STEM is the repository name with or without the suffix
+(F<crcsum16>: F<crcsum.exe> or F<crcsum16.exe>). With both, the F<.exe>,
+the C reference of the gr-dos/hello16 conventions, is shipped. Other
+assets are ignored. The program must have an 8.3 name that is not one of
+GR-DOS's own (C<--reserved>), nor another program's, ignoring the
+extension, since COMMAND.COM would run only one of them; be a real-mode
+DOS program (an F<.exe> must have an MZ header and no NE, LE, LX or PE
+header or 32-bit extender; a F<.com> must fit in its 64 KB segment); match
+the size and SHA-256 GitHub gives; and have a license file at the
+release's commit, under one of the configured licenses.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --config FILE, --lock FILE
+
+Default F<dist16/config> and F<dist16/lock>.
+
+=item --reserved "NAME ..."
+
+GR-DOS's own file names (the Makefile passes them).
+
+=item --cache DIR
+
+Default F<build/tools/dist16>.
+
+=item --api URL, --github URL, --raw URL
+
+Default C<https://api.github.com>, C<https://github.com> and
+C<https://raw.githubusercontent.com>. A C<file://> URL reads a directory
+instead (the tests): a C<?> in a path is C<@> in the file name, a path
+that is a directory is its F<index> file, a missing file is a 404, and
+F<PATH.status> holds another HTTP status.
+
+=back
+
+The GitHub API token is C<GH_TOKEN> or C<GITHUB_TOKEN>, or C<gh auth
+token>; without one, GitHub allows 60 requests an hour.
+
+=cut
+
+my $root = realpath(dirname(dirname(__FILE__)));
+my %opt = (
+  config => "$root/dist16/config",
+  lock   => "$root/dist16/lock",
+  cache  => "$root/build/tools/dist16",
+  api    => 'https://api.github.com',
+  github => 'https://github.com',
+  raw    => 'https://raw.githubusercontent.com',
+  reserved => '',
+);
+my $json = JSON::PP->new->canonical;
+my $tmp;
+
+# The lock's program fields, in order.
+my @FIELDS = qw( repo tag commit asset name size sha256 spdx license license_sha256 );
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "$path: $!\n";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', "$path.tmp" or die "$path.tmp: $!\n";
+  print $fh $data;
+  close $fh or die "$path.tmp: $!\n";
+  rename "$path.tmp", $path or die "$path: $!\n";
+}
+
+# HTTP: (status, body). A file:// URL reads the test fixtures.
+my $token;
+sub token () {
+  return $token if defined $token;
+  $token = $ENV{GH_TOKEN} // $ENV{GITHUB_TOKEN} // '';
+  if($token eq '' && grep { -x "$_/gh" } split /:/, $ENV{PATH} // '') {
+    $token = `gh auth token 2>/dev/null` // '';
+    chomp $token;
+  }
+  return $token;
+}
+
+sub get ($url, $api = 0) {
+  if($url =~ m{^file://(.*)}) {
+    my $path = $1 =~ tr/?/@/r;
+    $path .= '/index' if -d $path;
+    if(-e "$path.status") {
+      my($status) = slurp("$path.status") =~ /(\d+)/;
+      return ($status, '') if $status != 200;
+    }
+    return (404, '') unless -f $path;
+    return (200, slurp($path));
+  }
+  $tmp //= tempdir('dist16-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+  my @headers;
+  if($api) {
+    open my $h, '>', "$tmp/headers" or die "$tmp/headers: $!\n";
+    print $h "Accept: application/vnd.github+json\nX-GitHub-Api-Version: 2022-11-28\n";
+    print $h "Authorization: Bearer ", token(), "\n" if token() ne '';
+    close $h;
+    @headers = ('-H', "\@$tmp/headers");
+  }
+  unlink "$tmp/body";
+  open my $curl, '-|', 'curl', '-sS', '-L', '--retry', '2', '-o', "$tmp/body", '-w', '%{http_code}', @headers, $url
+    or die "curl: $!\n";
+  my $status = do { local $/; <$curl> };
+  close $curl;
+  die "cannot reach $url (curl exit @{[ $? >> 8 ]})\n" if $? != 0 || $status !~ /^[1-9]\d\d$/;
+  return ($status, -f "$tmp/body" ? slurp("$tmp/body") : '');
+}
+
+# The GitHub API: the decoded JSON, or undef for a 404. Anything else
+# stops resolve, since a partial lock would drop programs.
+sub api ($path) {
+  my($status, $body) = get("$opt{api}$path", 1);
+  return undef if $status == 404;
+  if($status == 403 || $status == 429) {
+    die "GitHub API $path: HTTP $status: rate limited or forbidden"
+      . (token() eq '' ? ' (no token: set GH_TOKEN, or log in with gh)' : '') . "\n";
+  }
+  die "GitHub API $path: HTTP $status\n" unless $status == 200;
+  my $data = eval { $json->decode($body) };
+  die "GitHub API $path: malformed JSON\n" unless ref $data;
+  return $data;
+}
+
+sub read_config ($path) {
+  my %c = (discover => [], exclude => {}, include => {}, license => {}, order => []);
+  my $n = 0;
+  for my $line (split /\n/, slurp($path)) {
+    $n++;
+    $line =~ s/#.*//;
+    my @w = split ' ', $line;
+    next unless @w;
+    my $where = "$path:$n";
+    my $cmd = shift @w;
+    my $repo_re = qr{^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$};
+    if($cmd eq 'discover') {
+      die "$where: discover OWNER SUFFIX\n" unless @w == 2 && $w[0] =~ /^[A-Za-z0-9-]+$/;
+      push $c{discover}->@*, [@w];
+    } elsif($cmd eq 'exclude') {
+      die "$where: exclude OWNER/NAME REASON (the reason is required)\n" unless @w >= 2 && $w[0] =~ $repo_re;
+      my $key = lc shift @w;
+      die "$where: $key is excluded twice\n" if $c{exclude}{$key};
+      $c{exclude}{$key} = "@w";
+    } elsif($cmd eq 'include') {
+      die "$where: include OWNER/NAME [tag=TAG] [asset=FILE] [required]\n" unless @w && $w[0] =~ $repo_re;
+      my $repo = shift @w;
+      die "$where: $repo is included twice\n" if $c{include}{lc $repo};
+      my %i = (repo => $repo);
+      for (@w) {
+        if(/^(tag|asset)=(\S+)$/) { $i{$1} = $2 }
+        elsif($_ eq 'required') { $i{required} = 1 }
+        else { die "$where: unknown include option $_\n" }
+      }
+      $c{include}{lc $repo} = \%i;
+    } elsif($cmd eq 'license') {
+      die "$where: license SPDX...\n" unless @w;
+      $c{license}{$_} = 1 for @w;
+    } else {
+      die "$where: unknown directive $cmd\n";
+    }
+  }
+  for my $key (sort keys $c{include}->%*) {
+    die "$path: $c{include}{$key}{repo} is both included and excluded\n" if exists $c{exclude}{$key};
+  }
+  die "$path: no license directive\n" unless %{ $c{license} };
+  return \%c;
+}
+
+sub reserved () {
+  my %r;
+  $r{base($_)} = $_ for map { uc } split /[\s,]+/, $opt{reserved};
+  delete $r{''};
+  return \%r;
+}
+
+sub base ($name) { $name =~ s/\.[^.]*$//r }
+
+# Why an asset is not a real-mode DOS program, or undef if it is one.
+sub not_dos ($name, $data) {
+  my $size = length $data;
+  if($name =~ /\.com$/i) {
+    return "$name is $size bytes, too big for a .COM" if $size > 0xFF00;
+    return undef;
+  }
+  my $sig = substr($data, 0, 2);
+  return "$name has no MZ header" unless $size >= 28 && ($sig eq 'MZ' || $sig eq 'ZM');
+  my($last, $pages, undef, $hdr) = unpack 'v4', substr($data, 2, 8);
+  my $image = $pages * 512 - ($last ? 512 - $last : 0);
+  return "$name has a malformed MZ header" if $pages == 0 || $hdr * 16 > $image || $image > $size;
+  my $reloc = unpack 'v', substr($data, 0x18, 2);
+  if($reloc >= 0x40 && $size >= 0x40) {
+    my $new = unpack 'V', substr($data, 0x3C, 4);
+    if($new >= 0x40 && $new + 2 <= $size && substr($data, $new, 2) =~ /^(NE|LE|LX|PE)$/) {
+      return "$name is a $1 program, not a real-mode DOS one";
+    }
+  }
+  # A DOS extender's stub, and the 32-bit program after it.
+  if($image + 2 <= $size && unpack('v', substr($data, $image, 2)) == 0x014C) {
+    return "$name is a 32-bit (COFF) program behind a DOS stub";
+  }
+  for my $x ('DOS/4G', 'CWSDPMI', 'go32stub', 'PMODE/W', 'DOS32A') {
+    return "$name needs a 32-bit DOS extender ($x)" if index($data, $x) >= 0;
+  }
+  return undef;
+}
+
+sub valid_83 ($name) { $name =~ /^[A-Z0-9_\$~!#%&'(){}^@`-]{1,8}\.(COM|EXE)$/ }
+
+# Resolve the config against GitHub: (results, notes). Each result is a
+# hash with kind included, excluded, unavailable or failed.
+sub resolve_all ($c) {
+  my(%repos, @notes);
+  for my $d ($c->{discover}->@*) {
+    my($owner, $suffix) = @$d;
+    my $found = 0;
+    for(my $page = 1; ; $page++) {
+      my $list = api("/users/$owner/repos?per_page=100&page=$page")
+        // die "GitHub has no user or organization $owner\n";
+      die "GitHub API /users/$owner/repos: not a list\n" unless ref $list eq 'ARRAY';
+      last unless @$list;
+      for my $r (@$list) {
+        my $full = $r->{full_name} // die "GitHub API /users/$owner/repos: a repository without full_name\n";
+        next unless lc($r->{name} // '') =~ /\Q@{[ lc $suffix ]}\E$/;
+        $found++;
+        $repos{lc $full} = { repo => $full, meta => $r, how => 'discovered', suffix => $suffix };
+      }
+      last if @$list < 100;
+    }
+    push @notes, "discover $owner *$suffix found no repositories" unless $found;
+  }
+  for my $key (sort keys $c->{exclude}->%*) {
+    push @notes, "exclude $key matches no discovered repository" unless $repos{$key};
+  }
+  for my $key (sort keys $c->{include}->%*) {
+    my $i = $c->{include}{$key};
+    my($owner) = $i->{repo} =~ m{^([^/]+)};
+    my($d) = grep { lc $_->[0] eq lc $owner } $c->{discover}->@*;
+    $repos{$key} //= { repo => $i->{repo}, how => 'included', suffix => $d ? $d->[1] : '16' };
+    $repos{$key}{opt} = $i;
+  }
+
+  my @results;
+  for my $key (sort keys %repos) {
+    my $r = $repos{$key};
+    push @results, resolve_one($c, $r, \@notes);
+  }
+
+  # Names: GR-DOS's own, and each other's, ignoring the extension.
+  my $reserved = reserved();
+  my %by_base;
+  for my $res (grep { $_->{kind} eq 'included' } @results) {
+    my $b = base($res->{name});
+    if(my $own = $reserved->{$b}) {
+      fail($res, "$res->{name} has the name of GR-DOS's $own");
+      next;
+    }
+    push $by_base{$b}->@*, $res;
+  }
+  for my $b (sort keys %by_base) {
+    my @same = $by_base{$b}->@*;
+    next if @same < 2;
+    for my $res (@same) {
+      my @others = map { $_->{repo} } grep { $_ != $res } @same;
+      fail($res, "$res->{name} has the name of @{[ join ', ', @others ]}'s program");
+    }
+  }
+
+  for my $res (@results) {
+    my $i = $res->{opt} // {};
+    die "$res->{repo} is required (dist16/config), but $res->{kind}: $res->{reason}\n"
+      if $i->{required} && $res->{kind} ne 'included';
+  }
+  return (\@results, \@notes);
+}
+
+sub fail ($res, $reason) {
+  $res->{kind} = 'failed';
+  $res->{reason} = $reason;
+}
+
+sub resolve_one ($c, $r, $notes) {
+  my $repo = $r->{repo};
+  my $i = $r->{opt} // {};
+  my %res = (repo => $repo, opt => $i);
+  my $skip = sub ($kind, $reason) { return { %res, kind => $kind, reason => $reason } };
+
+  if(my $why = $c->{exclude}{lc $repo}) {
+    return $skip->('excluded', $why);
+  }
+  my $meta = $r->{meta} //= api("/repos/$repo") // return $skip->('failed', 'no such repository');
+  $repo = $res{repo} = $meta->{full_name} // $repo;
+  return $skip->('failed', 'private') if $meta->{private};
+  unless($i->{repo}) {
+    return $skip->('unavailable', 'a fork') if $meta->{fork};
+    return $skip->('unavailable', 'archived') if $meta->{archived};
+  }
+
+  my $rel;
+  if(my $tag = $i->{tag}) {
+    $rel = api("/repos/$repo/releases/tags/$tag") // return $skip->('unavailable', "no release $tag");
+    my $latest = api("/repos/$repo/releases/latest");
+    push @$notes, "$repo is pinned at $tag; the latest release is $latest->{tag_name}"
+      if $latest && ($latest->{tag_name} // '') ne $tag;
+  } else {
+    $rel = api("/repos/$repo/releases/latest") // return $skip->('unavailable', 'no release');
+  }
+  my $tag = $rel->{tag_name};
+  return $skip->('failed', 'malformed release: no tag_name') unless defined $tag && $tag =~ /^[\w.+-]+$/;
+  $res{tag} = $tag;
+  return $skip->('unavailable', "$tag is a draft") if $rel->{draft};
+  return $skip->('unavailable', "$tag is a prerelease") if $rel->{prerelease};
+  my $assets = $rel->{assets};
+  return $skip->('failed', "$tag: malformed release: no assets list") unless ref $assets eq 'ARRAY';
+  for my $a (@$assets) {
+    return $skip->('failed', "$tag: malformed release: an asset without a name or size")
+      unless ref $a eq 'HASH' && defined $a->{name} && $a->{name} =~ /^[\w.+-]+$/
+        && defined $a->{size} && $a->{size} =~ /^\d+$/;
+  }
+
+  # The program.
+  my $asset;
+  my @names = map { $_->{name} } @$assets;
+  if(my $want = $i->{asset}) {
+    ($asset) = grep { $_->{name} eq $want } @$assets;
+    return $skip->('failed', "$tag has no asset $want (assets: @{[ join(' ', @names) || 'none' ]})") unless $asset;
+  } else {
+    my($name) = $repo =~ m{/(.*)};
+    my $stem = lc($name) =~ s/\Q@{[ lc $r->{suffix} ]}\E$//r;
+    my @progs = grep { lc($_->{name}) =~ /^(\Q$stem\E|\Q@{[ lc $name ]}\E)\.(exe|com)$/ } @$assets;
+    my %bases;
+    $bases{lc base($_->{name})}++ for @progs;
+    return $skip->('unavailable', "$tag has no program asset $stem.exe or $stem.com (assets: @{[ join(' ', @names) || 'none' ]})")
+      unless @progs;
+    return $skip->('failed', "$tag has more than one program (@{[ join ' ', map { $_->{name} } @progs ]}): set asset= in dist16/config")
+      if keys %bases > 1;
+    ($asset) = sort { (lc($a->{name}) =~ /\.exe$/ ? 0 : 1) <=> (lc($b->{name}) =~ /\.exe$/ ? 0 : 1) } @progs;
+  }
+  $res{asset} = $asset->{name};
+  $res{name} = uc $asset->{name};
+  $res{ignored} = [ grep { $_ ne $asset->{name} } @names ];
+  return $skip->('failed', "$tag: $asset->{name} is not an 8.3 .COM or .EXE name") unless valid_83($res{name});
+
+  my $commit = api("/repos/$repo/commits/$tag") // return $skip->('failed', "$tag: no commit");
+  return $skip->('failed', "$tag: malformed commit") unless ($commit->{sha} // '') =~ /^[0-9a-f]{40}$/;
+  $res{commit} = $commit->{sha};
+
+  my $lic = api("/repos/$repo/license?ref=$res{commit}") // return $skip->('failed', "$tag: no license");
+  my $spdx = $lic->{license}{spdx_id} // 'NOASSERTION';
+  my $lpath = $lic->{path} // '';
+  return $skip->('failed', "$tag: license $spdx is not one dist16/config allows") unless $c->{license}{$spdx};
+  return $skip->('failed', "$tag: malformed license path") unless $lpath =~ m{^[\w./-]+$} && $lpath !~ /\.\./;
+  my($ls, $ltext) = get("$opt{raw}/$repo/$res{commit}/$lpath");
+  die "$opt{raw}/$repo/$res{commit}/$lpath: HTTP $ls\n" unless $ls == 200 || $ls == 404;
+  return $skip->('failed', "$tag: license file $lpath is missing") unless $ls == 200;
+  @res{qw( spdx license license_sha256 )} = ($spdx, $lpath, sha256_hex($ltext));
+
+  my $url = "$opt{github}/$repo/releases/download/$tag/$asset->{name}";
+  my($as, $data) = get($url);
+  die "$url: HTTP $as\n" unless $as == 200 || $as == 404;
+  return $skip->('failed', "$tag: $asset->{name} cannot be downloaded") unless $as == 200;
+  my $sha = sha256_hex($data);
+  if(length($data) != $asset->{size}) {
+    return $skip->('failed', "$tag: $asset->{name} is @{[ length $data ]} bytes, but GitHub says $asset->{size}");
+  }
+  if(defined $asset->{digest} && $asset->{digest} ne '') {
+    my($want) = $asset->{digest} =~ /^sha256:([0-9a-f]{64})$/
+      or return $skip->('failed', "$tag: $asset->{name} has a malformed digest");
+    return $skip->('failed', "$tag: $asset->{name} checksum mismatch: GitHub says $want, downloaded $sha")
+      if $want ne $sha;
+  }
+  if(my $why = not_dos($asset->{name}, $data)) {
+    return $skip->('failed', "$tag: $why");
+  }
+  @res{qw( size sha256 )} = (length $data, $sha);
+  return { %res, kind => 'included' };
+}
+
+sub lock_text ($results) {
+  my @lines = (
+    '# The *16 programs of the full distribution (issue #36), written by',
+    '# `make dist16-resolve` from dist16/config: do not edit. Review changes in',
+    '# the pull request that updates it (docs/dist16.md).',
+    '#',
+    "# program @{[ map { uc } @FIELDS ]}",
+    '# skip REPO KIND REASON',
+  );
+  for my $res (@$results) {
+    if($res->{kind} eq 'included') {
+      push @lines, join ' ', 'program', map { $res->{$_} } @FIELDS;
+    } else {
+      push @lines, join ' ', 'skip', $res->{repo}, $res->{kind}, $res->{reason};
+    }
+  }
+  return join("\n", @lines) . "\n";
+}
+
+sub report ($results, $notes) {
+  for my $res (@$results) {
+    if($res->{kind} eq 'included') {
+      my $ign = $res->{ignored}->@* ? " (ignored: @{ $res->{ignored} })" : '';
+      say sprintf '%-12s %s %s %s as %s, %s%s', 'included', $res->{repo}, $res->{tag}, $res->{asset}, $res->{name}, $res->{spdx}, $ign;
+    } else {
+      say sprintf '%-12s %s: %s', $res->{kind}, $res->{repo}, $res->{reason};
+    }
+  }
+  say sprintf '%-12s %s', 'note', $_ for @$notes;
+}
+
+sub read_lock () {
+  my @programs;
+  my $n = 0;
+  for my $line (split /\n/, slurp($opt{lock})) {
+    $n++;
+    next if $line =~ /^\s*(#|$)/;
+    my @w = split ' ', $line;
+    if($w[0] eq 'program') {
+      die "$opt{lock}:$n: a program line has @{[ scalar @FIELDS ]} fields\n" unless @w == @FIELDS + 1;
+      my %p;
+      @p{@FIELDS} = @w[1 .. $#w];
+      die "$opt{lock}:$n: malformed program line\n"
+        unless $p{repo} =~ m{^[\w.-]+/[\w.-]+$} && $p{commit} =~ /^[0-9a-f]{40}$/ && $p{size} =~ /^\d+$/
+          && $p{sha256} =~ /^[0-9a-f]{64}$/ && $p{license_sha256} =~ /^[0-9a-f]{64}$/ && valid_83($p{name})
+          && $p{name} eq uc $p{asset} && $p{license} !~ /\.\./;
+      push @programs, \%p;
+    } elsif($w[0] ne 'skip') {
+      die "$opt{lock}:$n: unknown line $w[0]\n";
+    }
+  }
+  my $reserved = reserved();
+  my %seen;
+  for my $p (@programs) {
+    my $b = base($p->{name});
+    die "$opt{lock}: $p->{name} ($p->{repo}) has the name of GR-DOS's $reserved->{$b}\n" if $reserved->{$b};
+    die "$opt{lock}: $p->{name} ($p->{repo}) has the name of $seen{$b}'s program\n" if $seen{$b};
+    $seen{$b} = $p->{repo};
+  }
+  return \@programs;
+}
+
+# A verified copy of a file the lock pins, from the cache or downloaded.
+sub cached ($url, $path, $sha256, $what) {
+  return $path if -f $path && sha256_hex(slurp($path)) eq $sha256;
+  my($status, $data) = get($url);
+  die "$what: cannot download $url (HTTP $status), and no verified copy is in $opt{cache}\n" unless $status == 200;
+  my $got = sha256_hex($data);
+  die "$what: checksum mismatch: dist16/lock pins $sha256, $url is $got\n" unless $got eq $sha256;
+  make_path(dirname($path));
+  spew($path, $data);
+  return $path;
+}
+
+sub cmd_fetch ($dest) {
+  my $programs = read_lock();
+  die "$dest exists and is not a dist16 directory\n" if -e $dest && !-e "$dest/.dist16";
+  remove_tree($dest);
+  make_path("$dest/licenses");
+  # Marked at once, so a fetch that fails part way can be run again.
+  spew("$dest/.dist16", '');
+  for my $p (@$programs) {
+    my $dir = "$opt{cache}/$p->{repo}/$p->{tag}";
+    my $exe = cached("$opt{github}/$p->{repo}/releases/download/$p->{tag}/$p->{asset}", "$dir/$p->{asset}",
+      $p->{sha256}, "$p->{repo} $p->{tag} $p->{asset}");
+    my $lic = cached("$opt{raw}/$p->{repo}/$p->{commit}/$p->{license}", "$dir/license",
+      $p->{license_sha256}, "$p->{repo} $p->{tag} $p->{license}");
+    copy($exe, "$dest/$p->{name}") or die "$dest/$p->{name}: $!\n";
+    copy($lic, "$dest/licenses/$p->{name}.txt") or die "$dest/licenses/$p->{name}.txt: $!\n";
+  }
+  say "$_->{name}  $_->{repo} $_->{tag}" for @$programs;
+}
+
+sub cmd_notices ($dest) {
+  for my $p (read_lock()->@*) {
+    my $head = "$p->{name}: $p->{repo} $p->{tag} (commit $p->{commit}), $p->{spdx}";
+    print "\n\n$head\n", '-' x length($head), "\n\n";
+    my $text = slurp("$dest/licenses/$p->{name}.txt") =~ s/\r//gr;
+    $text =~ s/\n*\z/\n/;
+    print $text;
+  }
+}
+
+sub main (@args) {
+  GetOptionsFromArray(\@args, \%opt, 'config=s', 'lock=s', 'cache=s', 'api=s', 'github=s', 'raw=s', 'reserved=s')
+    or die "usage: scripts/dist16 [OPTIONS] resolve|check|fetch DEST|list|notices DEST|bin-list\n";
+  my $cmd = shift(@args) // '';
+  if($cmd eq 'resolve' || $cmd eq 'check') {
+    my $c = read_config($opt{config});
+    my($results, $notes) = resolve_all($c);
+    report($results, $notes);
+    my $text = lock_text($results);
+    if($cmd eq 'resolve') {
+      spew($opt{lock}, $text);
+      say "wrote $opt{lock}";
+      return 0;
+    }
+    my $old = -f $opt{lock} ? slurp($opt{lock}) : '';
+    if($old eq $text) {
+      say "$opt{lock} is up to date";
+      return 0;
+    }
+    my %old = map { $_ => 1 } split /\n/, $old;
+    my %new = map { $_ => 1 } split /\n/, $text;
+    say "$opt{lock} differs from what resolve would write:";
+    say "- $_" for grep { !$new{$_} } split /\n/, $old;
+    say "+ $_" for grep { !$old{$_} } split /\n/, $text;
+    return 1;
+  }
+  if($cmd eq 'fetch' && @args == 1) {
+    cmd_fetch($args[0]);
+    return 0;
+  }
+  if($cmd eq 'list') {
+    say $_->{name} for read_lock()->@*;
+    return 0;
+  }
+  if($cmd eq 'notices' && @args == 1) {
+    cmd_notices($args[0]);
+    return 0;
+  }
+  if($cmd eq 'bin-list') {
+    my %skip = map { uc($_) => 1 } @args;
+    printf "  BIN\\%-12s from %s %s\n", $_->{name}, $_->{repo}, $_->{tag} for grep { !$skip{$_->{name}} } read_lock()->@*;
+    return 0;
+  }
+  die "usage: scripts/dist16 [OPTIONS] resolve|check|fetch DEST|list|notices DEST|bin-list\n";
+}
+
+my $rc = eval { main(@ARGV) };
+if(!defined $rc) {
+  print STDERR "dist16: $@";
+  exit 2;
+}
+exit $rc;

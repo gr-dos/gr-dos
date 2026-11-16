@@ -1,0 +1,20 @@
+# The *16 programs of the full distribution (issue #36), written by
+# `make dist16-resolve` from dist16/config: do not edit. Review changes in
+# the pull request that updates it (docs/dist16.md).
+#
+# program REPO TAG COMMIT ASSET NAME SIZE SHA256 SPDX LICENSE LICENSE_SHA256
+# skip REPO KIND REASON
+program gr-dos/crcsum16 v0.03 87ccbadf42e14f23a8ca44b9efd394008d8e3f07 crcsum.exe CRCSUM.EXE 5948 0684f5394538d492c4e1b6216ffe32d5f463acb450569ce18dbc573de5ff6df1 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+program gr-dos/df16 v0.02 3119638466d454e8266d384d63c86c24861a55b1 df.exe DF.EXE 4680 75793021c804a3a956e2cb81ba24b695a37b8dd59d44997ce7f19cee1643e559 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+program gr-dos/diff16 v0.01 734a4b03a7b7166cdf52f5135e70bff68fac583e diff16.exe DIFF16.EXE 16286 11fab205e8c31619e62aa80533ca8216b01bea387f9bff26f1ad1f77538239ec MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+skip gr-dos/hello16 excluded the template for gr-dos *16 programs, not a utility
+program gr-dos/less16 v0.01 7a73e763d05f6f74a92ac43268e30de3d3a11725 less.exe LESS.EXE 41962 23efcfaa671a9dbc874c79ed210effa27b8d213f12652900a24d41ced098a4c0 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+skip gr-dos/libc16 excluded a C runtime library, not a DOS program
+program gr-dos/md5sum16 v0.02 b3adaa7658607dbd0d93e528a86eb30b96b015a5 md5sum.exe MD5SUM.EXE 14302 d992a6a2b599acd4c1e66c07bed270f549afad5ab53121b22f64d93054d43cbe MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+skip gr-dos/patch16 unavailable no release
+skip gr-dos/perl16 unavailable no release
+program gr-dos/tar16 v0.03 674ad72e06edcf621ff8378ab5b2f80df1874055 tar.exe TAR.EXE 20758 430e8b6252ad63ea91cd682e7a6187214cb178baf21f0b11ebe30714e852049d MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+skip gr-dos/term16 unavailable no release
+program gr-dos/truncate16 v0.03 0da8037cf051e21cf03c3d2643e2c8c57a17d56f truncate.exe TRUNCATE.EXE 5728 ccf9b8be82fb7c9e4fdb25f1aa51b8197fb58001b45693279819cd587b532162 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+program gr-dos/which16 v0.03 ddb3985d15a3d51c6b06b42b7773c3fa50895cc6 which.exe WHICH.EXE 4252 13c0590ca64cfbac10b97c87c3e2100f086141ed797f2c74413df04b78e076aa MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+program tico-edit/tico16 v0.02 5769a9a6bc9d74f612966eebef4d7dde62220e90 tico.exe TICO.EXE 29702 f55cbcee0623a4982bb20eada3b084024d73d41e03c21530c3e0ff14b7a35a76 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
