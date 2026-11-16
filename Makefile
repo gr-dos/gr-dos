@@ -91,8 +91,17 @@ APPEND_OBJS  := $(SRC)/CMD/APPEND/APPEND.OBJ
 ASSIGN_OBJS  := $(addprefix $(SRC)/CMD/ASSIGN/,ASSGMAIN.OBJ ASSGPARM.OBJ)
 NLSFUNC_OBJS := $(addprefix $(SRC)/CMD/NLSFUNC/,NLSFUNC.OBJ NLSPARM.OBJ)
 
+# The country and keyboard data (issue #23, docs/country-keyboard.md):
+# COUNTRY.SYS, which CONFIG.SYS's COUNTRY= and NLSFUNC read, and
+# KEYBOARD.SYS, KEYB's layouts. DEV/KEYBOARD's tables are linked and
+# converted with EXE2BIN; MKCNTRY.EXE holds COUNTRY.SYS and writes it when
+# run, which scripts/mkcntry does instead.
+KEYBOARD_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/KEYBOARD/KEYBOARD.LNK))
+MKCNTRY_OBJS  := $(SRC)/DEV/COUNTRY/MKCNTRY.OBJ
+NLS_FILES     := DEV/COUNTRY/COUNTRY.SYS DEV/KEYBOARD/KEYBOARD.SYS
+
 OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM \
-	$(UTILITIES) $(EXTRA_UTILITIES)
+	$(UTILITIES) $(EXTRA_UTILITIES) $(NLS_FILES)
 
 # The message files of utility $(1): X.CL$(c) for each c of $(2), and X.CTL.
 utility_messages = $(foreach c,$(2),CMD/$(1)/$(1).CL$(c)) CMD/$(1)/$(1).CTL
@@ -126,7 +135,7 @@ MESSAGES := BOOT/BOOT.CL1 \
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
 	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE %/FDISK.EXE %/FC.EXE,$(UTILITIES)) \
 	CMD/CHKDSK/CHKDSK.EXE CMD/FDISK/FDBOOT.BIN CMD/FDISK/FDBOOT.INC \
-	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE
+	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE DEV/COUNTRY/MKCNTRY.EXE $(NLS_FILES)
 
 # Floppy formats, by size in KB (scripts/mkimage --format); 1440 is the
 # default.
@@ -162,27 +171,31 @@ FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
 # The utilities of issue #17 that each larger floppy adds, before
 # AUTOEXEC.BAT, for a two-drive machine with the boot disk in A: and data
 # in B: (docs/m5-utilities.md, image/files-*k.txt). The 720 KB disk gets
-# the everyday file and disk commands; 1.2 MB and 1.44 MB add the rest that
-# work from a floppy. KEYB and NLSFUNC need KEYBOARD.SYS and COUNTRY.SYS,
-# which GR-DOS does not build, FASTOPEN works on hard disks only and IFSFUNC
-# only with an installable file system, so they are on C: alone.
+# the everyday file and disk commands, and KEYB with KEYBOARD.SYS and
+# COUNTRY.SYS (issue #23); 1.2 MB and 1.44 MB add the rest that work from
+# a floppy. FASTOPEN works on hard disks only and IFSFUNC only with an
+# installable file system, so they are on C: alone.
 extra = $(call dist,$(foreach u,$(1),$(filter $(SRC)/CMD/$(u)/%,$(addprefix $(SRC)/,$(EXTRA_UTILITIES)))))
-FLOPPY_720  := XCOPY COMP DISKCOMP LABEL TREE SORT EDLIN PRINT ASSIGN RECOVER
-FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS
+FLOPPY_720  := XCOPY COMP DISKCOMP LABEL TREE SORT EDLIN PRINT ASSIGN RECOVER KEYB
+FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS NLSFUNC
 FLOPPY_1440 := $(FLOPPY_1200)
 # GRAPHICS reads its printer profile, GRAPHICS.PRO, from its own directory.
+# A floppy with KEYB has the data files, in its root, where KEYB and
+# COUNTRY= look for them by default.
 GRAPHICS_PRO := $(SRC)/CMD/GRAPHICS/GRAPHICS.PRO
-extra_files = $(call extra,$(1)) $(if $(filter GRAPHICS,$(1)),$(GRAPHICS_PRO))
+NLS_DATA     := $(addprefix $(SRC)/,$(NLS_FILES))
+extra_files = $(call extra,$(1)) $(if $(filter GRAPHICS,$(1)),$(GRAPHICS_PRO)) \
+	$(if $(filter KEYB,$(1)),$(NLS_DATA))
 FILES_360  := $(FILES)
 FILES_720  := $(PROGRAMS) $(call extra_files,$(FLOPPY_720)) $(BUILD)/image/AUTOEXEC.BAT
 FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(BUILD)/image/AUTOEXEC.BAT
 FILES_1440 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1440)) $(BUILD)/image/AUTOEXEC.BAT
 
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
-# programs, then all of issue #17's in CMD's order, GRAPHICS.PRO and the
-# other *16 programs.
+# programs, then all of issue #17's in CMD's order, GRAPHICS.PRO,
+# COUNTRY.SYS and KEYBOARD.SYS, and the other *16 programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(GRAPHICS_PRO) \
-	$(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
+	$(NLS_DATA) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
 
 # GR-DOS's own file names, which no *16 program may have, even with
 # another extension (COMMAND.COM would run only one of them).
@@ -207,8 +220,8 @@ TEST_FORMATS := $(addprefix test-,$(FORMATS))
 TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
-test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-fdisk test-install \
-	test-deploy-cf
+test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
+	test-keyb test-fdisk test-install test-deploy-cf
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
 test-dist16: scripts/dist16 tests/dist16/run
@@ -274,6 +287,23 @@ test-fc: $(TESTS)/fc.img
 fc-expect: $(TESTS)/fc-reference.img
 	scripts/smoke-test $< tests/fc/expect-reference $(TESTS)/fc-reference
 	$(call fc_output,$(TESTS)/fc-reference) > tests/fc/expect.log
+
+# The country tests (tests/country, issue #23): each boots a 1.44 MB image
+# whose CONFIG.SYS is tests/country/NAME/config.sys, with COUNTRY.SYS and
+# NLSFUNC, and checks what DOS then reports (tests/country/nlsinfo.asm),
+# DATE, TIME and DIR, and CHCP after NLSFUNC.
+COUNTRY_TESTS := $(sort $(patsubst tests/country/%/config.sys,%,$(wildcard tests/country/*/config.sys)))
+TEST_COUNTRY  := $(addprefix test-country-,$(COUNTRY_TESTS))
+
+test-country: $(TEST_COUNTRY)
+
+$(TEST_COUNTRY): test-country-%: $(TESTS)/country-%.img
+	scripts/smoke-test $< tests/country/$*/expect $(TESTS)/country-$*
+
+# The KEYB test (tests/keyb, issue #23): keys typed at the 1.44 MB release
+# image's prompt, through each layout, read back from the screen.
+test-keyb: $(BUILD)/gr-dos-1440k.img scripts/disk-test
+	scripts/disk-test $< tests/keyb $(TESTS)/keyb
 
 # The FDISK tests (tests/fdisk, issue #10). Each scenario boots the 1.44 MB
 # image, types commands at its prompt and reads the screen, with a new,
@@ -402,6 +432,9 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-utils          the utilities, DISKCOPY and FORMAT /S to B:
   make test-extras         the utilities of issue #17, APPEND to XCOPY
   make test-fc             FC, against Microsoft's FC's output
+  make test-country        CONFIG.SYS's COUNTRY=, with COUNTRY.SYS; or one
+  make test-country-COUNTRY  (COUNTRY: $(COUNTRY_TESTS))
+  make test-keyb           KEYB's layouts, typed at the 1.44 MB image's prompt
   make test-fdisk          FDISK on disposable hard disk images, against
   make test-fdisk-NAME       Microsoft's FDISK; or one (a tests/fdisk directory)
   make test-install        install GR-DOS on a blank hard disk and boot it;
@@ -441,12 +474,12 @@ test-help: scripts/check-help
 	mkdir -p $(TESTS)
 	$(MAKE) --no-print-directory -s help > $(TESTS)/help.txt
 	scripts/check-help $(TESTS)/help.txt 'FORMAT=$(FORMATS)' 'NAME=$(FDISK_TESTS)' \
-	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' $(HELP_INTERNAL) -- \
+	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' 'COUNTRY=$(COUNTRY_TESTS)' $(HELP_INTERNAL) -- \
 	  $$($(MAKE) --no-print-directory -pRrq : 2>/dev/null | sed -n 's/^\.PHONY: //p')
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check run-dosbox help test-help
+	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -515,9 +548,11 @@ $(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)) $(EXTRA_DIRS),\
   $(eval $(SRC)/CMD/$(u)/$(u).EXE: $($(u)_OBJS)))
 
 $(SRC)/CMD/FDISK/FDBOOT.EXE:    $(SRC)/CMD/FDISK/FDBOOT.OBJ
+$(SRC)/DEV/KEYBOARD/KEYBOARD.EXE: $(KEYBOARD_OBJS)
+$(SRC)/DEV/COUNTRY/MKCNTRY.EXE: $(MKCNTRY_OBJS)
 
 EXES := $(addprefix $(SRC)/,BOOT/MSBOOT.EXE BIOS/MSLOAD.EXE BIOS/MSBIO.EXE DOS/MSDOS.EXE \
-	CMD/COMMAND/COMMAND.EXE CMD/FDISK/FDBOOT.EXE) \
+	CMD/COMMAND/COMMAND.EXE CMD/FDISK/FDBOOT.EXE DEV/KEYBOARD/KEYBOARD.EXE DEV/COUNTRY/MKCNTRY.EXE) \
 	$(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)) $(EXTRA_DIRS),$(SRC)/CMD/$(u)/$(u).EXE)
 
 # The programs CONVERT makes into .COM files are linked as Microsoft LINK
@@ -529,6 +564,7 @@ $(SRC)/CMD/FIND/FIND.EXE: MSLINK := --exepack
 EXE_EXTRAS := APPEND FASTOPEN NLSFUNC SHARE SORT XCOPY
 $(foreach u,$(EXE_EXTRAS),$(SRC)/CMD/$(u)/$(u).EXE): MSLINK := --exe
 $(SRC)/CMD/EXE2BIN/EXE2BIN.EXE $(SRC)/CMD/IFSFUNC/IFSFUNC.EXE: MSLINK := --exepack
+$(SRC)/DEV/COUNTRY/MKCNTRY.EXE: MSLINK := --exe
 
 # SORT's makefile then runs EXEFIX, which scripts/exefix replaces.
 $(SRC)/CMD/SORT/SORT.EXE: EXEFIX := 1 1
@@ -599,6 +635,15 @@ $(foreach u,$(EXE2BIN),$(eval $(SRC)/CMD/$(u)/$(u).COM: $($(u)_OBJS)))
 
 $(foreach u,$(EXE2BIN),$(SRC)/CMD/$(u)/$(u).COM): %.COM: %.EXE scripts/exe2bin scripts/mslink-layout
 	scripts/exe2bin --size $(size) $< $@
+
+# KEYBOARD.SYS: the tables, from offset 0 (DEV/KEYBOARD/MAKEFILE).
+$(SRC)/DEV/KEYBOARD/KEYBOARD.SYS: $(SRC)/DEV/KEYBOARD/KEYBOARD.EXE $(KEYBOARD_OBJS) scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --size $(size) $< $@
+
+# COUNTRY.SYS: what MKCNTRY.EXE writes (DEV/COUNTRY/MAKEFILE runs it).
+$(SRC)/DEV/COUNTRY/COUNTRY.SYS: $(SRC)/DEV/COUNTRY/MKCNTRY.EXE scripts/mkcntry
+	scripts/mkcntry $< $@
 
 # CONVERT: a .COM program that loads the .EXE it holds.
 $(foreach u,$(CONVERTED),$(SRC)/CMD/$(u)/$(u).COM): %.COM: %.EXE scripts/convert
@@ -762,6 +807,35 @@ $(TESTS)/extras.img: $(CORE) $(ALL_FILES) $(TESTS)/autoexec-extras/AUTOEXEC.BAT 
 	scripts/mkimage scripts/check-image
 	scripts/mkimage $@ $(SRC) $(filter-out %/AUTOEXEC.BAT,$(ALL_FILES)) \
 	  $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES)
+
+# The country tests' disks: the system files, the scenario's CONFIG.SYS,
+# the test program, COUNTRY.SYS and NLSFUNC.
+$(TESTS)/NLSINFO.COM: tests/country/nlsinfo.asm $(TOOLS)
+	mkdir -p $(@D)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
+	  && wasm -q -fo=$(@D)/NLSINFO.OBJ $< \
+	  && wlink option quiet format dos com name $@ file $(@D)/NLSINFO.OBJ
+
+$(TESTS)/autoexec-country/AUTOEXEC.BAT: tests/country/country.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/autoexec-country/ENTER.IN:
+	mkdir -p $(@D)
+	printf '\r\n' > $@
+
+$(TESTS)/country-%/CONFIG.SYS: tests/country/%/config.sys
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+country_files = $(TESTS)/country-$(1)/CONFIG.SYS $(TESTS)/NLSINFO.COM $(SRC)/DEV/COUNTRY/COUNTRY.SYS \
+	$(SRC)/CMD/NLSFUNC/NLSFUNC.EXE $(TESTS)/autoexec-country/AUTOEXEC.BAT $(TESTS)/autoexec-country/ENTER.IN
+
+define country_test_image
+$(TESTS)/country-$(1).img: $(CORE) $(call country_files,$(1)) scripts/mkimage scripts/check-image
+	scripts/mkimage $$@ $(SRC) $(call country_files,$(1))
+endef
+$(foreach t,$(COUNTRY_TESTS),$(eval $(call country_test_image,$(t))))
 
 # The distribution tests' disks (tests/floppy): the files of one format,
 # with the test AUTOEXEC.BAT for the image's, and COMP's answer.
