@@ -1,46 +1,5 @@
-# GR-DOS Linux build (decisions 11 and 19).
-#
-#   make          build the boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM and
-#                 the utilities, and the bootable floppy images
-#                 build/linux/gr-dos-{1440,1200,720,360}k.img (3.5" 1.44 MB,
-#                 5.25" 1.2 MB, 3.5" 720 KB, 5.25" 360 KB), each with the
-#                 files of image/files-FORMATk.txt (build/linux/manifest-*k.txt),
-#                 and the CF/hard disk distribution in build/linux/cf
-#   make check    build without the branding patches, in build/linux/reference,
-#                 and compare the binaries and generated message files with
-#                 the M1 reference build (docs/m1/reference-build.sha256)
-#   make test     boot a copy of each image with a test AUTOEXEC.BAT and
-#                 program in QEMU and check its serial output (tests/smoke),
-#                 and test the utilities (tests/utils); make test-1440 (or
-#                 test-1200, test-720, test-360) boots just one image, and
-#                 make test-utils runs just the utility tests; make
-#                 test-extras tests the utilities of issue #17
-#                 (tests/extras), and make test-floppy-360 (and so on)
-#                 each format's files with a data disk in B: (tests/floppy); make
-#                 test-fc compares FC with Microsoft's (tests/fc); make
-#                 test-fdisk runs FDISK on disposable hard disk images
-#                 (tests/fdisk), and make test-install installs GR-DOS on
-#                 one (FDISK, FORMAT and SYS) and boots it; make
-#                 test-deploy-cf tests scripts/deploy-cf, the CF card
-#                 installer, on disk images (issue #14); make test-dist16
-#                 tests scripts/dist16 offline (tests/dist16)
-#   make dist16-resolve  find the *16 programs on GitHub again and rewrite
-#                 dist16/lock, which pins the ones the build fetches;
-#                 make dist16-check only shows what that would change
-#                 (docs/dist16.md, issue #36)
-#   make run-dosbox  start DOSBox-X with the full distribution in C:\DOS,
-#                 the only directory on PATH, and D: a scratch directory,
-#                 build/linux/dosbox/D, for trying the command line tools
-#                 on DOSBox-X's kernel and shell, not GR-DOS's
-#                 (docs/run-dosbox.md); DOSBOX=, DOSBOX_ARGS=
-#   make fc-expect  write the FC tests' expected output with Microsoft's
-#                 FC.EXE of the M1 reference build
-#   make fdisk-expect  write the FDISK tests' expected screens and disks
-#                 with Microsoft's FDISK.EXE of the M1 reference build
-#   make dist     write the release assets to build/linux/release: the four
-#                 images, a ZIP of the binaries, README, build details and
-#                 logs, and SHA256SUMS; the ZIP's tree is build/linux/dist
-#   make clean    remove build/linux (fetched tools in build/tools are kept)
+# GR-DOS Linux build (decisions 11 and 19). `make help` lists the targets
+# and variables (HELP, below; issue #43).
 #
 # Needs Perl 5.42 as `perl` on PATH, a C compiler and make (to build JWasm),
 # git, curl and xz; mtools for the image and qemu-system-i386 for the test,
@@ -248,7 +207,7 @@ TEST_FORMATS := $(addprefix test-,$(FORMATS))
 TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
-test: test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-fdisk test-install \
+test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-fdisk test-install \
 	test-deploy-cf
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
@@ -416,9 +375,78 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 clean:
 	rm -rf $(BUILD)
 
+# What make help prints (issue #43): every .PHONY target but those in
+# HELP_INTERNAL, by name or as a NAME-like placeholder, which test-help
+# checks. make help builds, fetches and runs nothing.
+define HELP
+GR-DOS build. Usage: make [TARGET] [VARIABLE=value ...]
+
+Build
+  make, make all           build the boot sector, IO.SYS, MSDOS.SYS,
+                           COMMAND.COM, the utilities, the four floppy
+                           images (build/linux/gr-dos-*k.img) and the
+                           CF/hard disk distribution (build/linux/cf)
+  make check               build without the branding patches and compare
+                           with Microsoft's MS-DOS 4.00 reference build
+  make dist                package the release assets in build/linux/release
+  make clean               remove build/linux (build/tools is kept)
+  make run-dosbox          try the tools in DOSBox-X, with C:\DOS as a CF
+                           install has it (needs dosbox-x; docs/run-dosbox.md)
+  make help                this list
+
+Tests (make test runs them all; most boot GR-DOS in QEMU)
+  make test                the whole suite
+  make test-FORMAT         boot one floppy image (FORMAT: $(FORMATS))
+  make test-floppy-FORMAT  boot one format's files, with a data disk in B:
+  make test-sys-FORMAT     FORMAT and SYS a blank disk of the format, boot it
+  make test-utils          the utilities, DISKCOPY and FORMAT /S to B:
+  make test-extras         the utilities of issue #17, APPEND to XCOPY
+  make test-fc             FC, against Microsoft's FC's output
+  make test-fdisk          FDISK on disposable hard disk images, against
+  make test-fdisk-NAME       Microsoft's FDISK; or one (a tests/fdisk directory)
+  make test-install        install GR-DOS on a blank hard disk and boot it;
+  make test-install-SIZE     or one size (a tests/install directory)
+  make test-deploy-cf      scripts/deploy-cf on disk images; or one case
+  make test-deploy-cf-CASE   (CASE: $(DEPLOY_CF_TESTS))
+  make test-dist16         scripts/dist16 against a fake GitHub (offline)
+  make test-help           check this list against the Makefile's targets
+
+Maintenance
+  make dist16-resolve      find the *16 programs on GitHub again, and rewrite
+                           dist16/lock (docs/dist16.md)
+  make dist16-check        show what dist16-resolve would change
+  make fc-expect           rewrite tests/fc's expected output with
+                           Microsoft's FC.EXE (FC_REFERENCE)
+  make fdisk-expect        rewrite tests/fdisk's expected screens and disks
+                           with Microsoft's FDISK.EXE (FDISK_REFERENCE)
+
+Variables
+  LIBC16_ROOT=../libc16    build against a libc16 checkout, built with its
+                           own make, not the pinned release
+  DOSBOX=, DOSBOX_ARGS=    run-dosbox's DOSBox-X, and arguments for it
+  FC_REFERENCE=, FDISK_REFERENCE=
+                           Microsoft's programs for fc-expect and fdisk-expect
+                           (default: the M1 reference build, in build/m1)
+endef
+
+# .PHONY targets that are not for users.
+HELP_INTERNAL := check-tree
+
+help:
+	$(info $(HELP))
+	@:
+
+# Every .PHONY target is in make help, or in HELP_INTERNAL.
+test-help: scripts/check-help
+	mkdir -p $(TESTS)
+	$(MAKE) --no-print-directory -s help > $(TESTS)/help.txt
+	scripts/check-help $(TESTS)/help.txt 'FORMAT=$(FORMATS)' 'NAME=$(FDISK_TESTS)' \
+	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' $(HELP_INTERNAL) -- \
+	  $$($(MAKE) --no-print-directory -pRrq : 2>/dev/null | sed -n 's/^\.PHONY: //p')
+
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check run-dosbox
+	test-dist16 dist16-resolve dist16-check run-dosbox help test-help
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.

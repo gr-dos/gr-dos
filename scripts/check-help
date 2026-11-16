@@ -1,0 +1,68 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Check make help against the Makefile's .PHONY targets
+
+=head1 SYNOPSIS
+
+ scripts/check-help HELP.TXT [WORD=VALUES]... [INTERNAL]... -- PHONY...
+
+=head1 DESCRIPTION
+
+Used by C<make test-help> (issue #43). F<HELP.TXT> is the output of
+C<make help>. Its entries are the C<make NAME> words at the start of a
+line (after two spaces), several separated by commas. A NAME ending in an
+upper-case WORD, such as C<test-fdisk-NAME>, stands for one target for
+each of WORD's VALUES (separated by spaces), given as C<WORD=VALUES>.
+
+Fails unless every PHONY target, but the INTERNAL ones, is an entry; and
+every entry is a PHONY target, so a renamed or removed one is noticed too.
+
+=cut
+
+my $help = shift // die "usage: scripts/check-help HELP.TXT [WORD=VALUES]... [INTERNAL]... -- PHONY...\n";
+my(%values, %internal, @phony);
+my $seen = 0;
+for (@ARGV) {
+  if($seen) { push @phony, $_ }
+  elsif($_ eq '--') { $seen = 1 }
+  elsif(/^([A-Z]+)=(.*)$/s) { $values{$1} = [ split ' ', $2 ] }
+  else { $internal{$_} = 1 }
+}
+die "scripts/check-help: no -- before the .PHONY targets\n" unless $seen;
+die "scripts/check-help: no .PHONY targets (make -p found none)\n" unless @phony;
+
+open my $fh, '<', $help or die "$help: $!\n";
+my %listed;
+my $failed = 0;
+while(my $line = <$fh>) {
+  next unless $line =~ /^  (make\b.*?)(?:\s{2,}|\s*$)/;
+  for my $entry (split /,\s*/, $1) {
+    my($name) = $entry =~ /^make(?:\s+(\S+))?$/ or die "$help: not a make entry: $entry\n";
+    next unless defined $name;                  # "make" alone, the default
+    if($name =~ /^([a-z0-9][a-z0-9-]*-)([A-Z]+)$/) {
+      my($prefix, $word) = ($1, $2);
+      my $v = $values{$word} or die "$help: $name: no $word= values given\n";
+      $listed{"$prefix$_"} = $name for @$v;
+    } else {
+      $listed{$name} = $name;
+    }
+  }
+}
+die "$help: no make entries\n" unless %listed;
+
+my %phony = map { $_ => 1 } @phony;
+for my $t (sort keys %phony) {
+  next if $internal{$t} || $listed{$t};
+  say "make help does not list $t (add it to HELP, or to HELP_INTERNAL)";
+  $failed++;
+}
+for my $t (sort keys %listed) {
+  next if $phony{$t};
+  say "make help lists $t (as $listed{$t}), which is not a .PHONY target";
+  $failed++;
+}
+say $failed ? "make help: $failed problem(s)" : 'make help: lists every target';
+exit($failed ? 1 : 0);
