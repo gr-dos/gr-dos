@@ -26,8 +26,13 @@
 ^Files compare OK$
 ^ Volume in drive B is GRDATA2 +$
 
+# KEYB GR installs the German layout, which KEYB then reports; with no
+# DISPLAY.SYS, CON has no code page to give
+^Current keyboard code: GR  code page: 437$
+^Active code page not available from CON device$
+
 # SHARE (silent), GRAFTABL, GRAPHICS (which finds GRAPHICS.PRO in A:\, its
-# own directory) and APPEND
+# own directory), APPEND and NLSFUNC (silent)
 ^== FLOPPY-1200$
 ^Previous Code Page: None$
 ^Active Code Page: 437$
@@ -35,5 +40,5 @@
 ^== FILES$
 
 # The files of A:, the format's with COMP.IN, and the free space
-^ +32 File\(s\) +702464 bytes free$
+^ +36 File\(s\) +643584 bytes free$
 ^GRDOS-TEST-END$

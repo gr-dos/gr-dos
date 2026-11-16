@@ -1,0 +1,19 @@
+# Lines the country test (country.bat) must write to COM1 with
+# COUNTRY=049,,A:\NOFILE.SYS (scripts/smoke-test): the file is missing, so
+# DOS keeps the United States settings (and says so on the screen).
+
+^GRDOS-TEST-BEGIN$
+^== COUNTRY$
+^COUNTRY 001 DATE 0 TIME 0 CURRENCY "\$" FORMAT 0 DIGITS 2$
+^SEPARATORS THOUSANDS "," DECIMAL "\." DATE "-" TIME ":" LIST ","$
+^CODEPAGE ACTIVE 437 SYSTEM 437$
+^UPCASE 84 8E$
+^Current date is \w{3} \d\d-\d\d-\d{4}$
+^Enter new date \(mm-dd-yy\): $
+^Current time is +\d+:\d\d:\d\d\.\d\d[ap]$
+^NLSINFO  COM +544 \d\d-\d\d-\d\d +\d+:\d\d[ap]$
+^== NLSFUNC$
+^Active code page: 437$
+^Active code page: 850$
+^CODEPAGE ACTIVE 850 SYSTEM 437$
+^GRDOS-TEST-END$

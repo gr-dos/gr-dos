@@ -150,10 +150,12 @@
 ^  A:\\SORT\.TXT is currently being printed$
 ^Invalid switch -  /X $
 
-# KEYB and NLSFUNC: GR-DOS has no KEYBOARD.SYS or COUNTRY.SYS
+# KEYB before it is installed; KEYB UK then loads the United Kingdom's
+# layout from A:\KEYBOARD.SYS, silently, and stays resident (tests/keyb
+# types at it)
 ^== KEYB$
 ^KEYB has not been installed$
-^Bad or missing Keyboard Definition File$
+^Active code page not available from CON device$
 ^== NLSFUNC$
 ^NLSFUNC already installed$
 
@@ -173,6 +175,7 @@
 ^  [0-9A-F]{6}      GRAFTABL     [0-9A-F]{6}     Program +$
 ^  [0-9A-F]{6}      GRAPHICS     [0-9A-F]{6}     Program +$
 ^  [0-9A-F]{6}      PRINT        [0-9A-F]{6}     Program +$
+^  [0-9A-F]{6}      KEYB         [0-9A-F]{6}     Program +$
 ^  [0-9A-F]{6}      NLSFUNC      [0-9A-F]{6}     Program +$
 ^  [0-9A-F]{6}      IFSFUNC      [0-9A-F]{6}     Program +$
 

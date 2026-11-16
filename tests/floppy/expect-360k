@@ -22,9 +22,12 @@
 ^Bad command or file name$
 ^Bad command or file name$
 ^ Volume in drive B is GRDATA +$
+^Bad command or file name$
+^Bad command or file name$
 
-# SHARE, GRAFTABL, GRAPHICS and APPEND (twice) are not on this disk
+# SHARE, GRAFTABL, GRAPHICS, APPEND (twice) and NLSFUNC are not on this disk
 ^== FLOPPY-1200$
+^Bad command or file name$
 ^Bad command or file name$
 ^Bad command or file name$
 ^Bad command or file name$

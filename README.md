@@ -80,11 +80,11 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `ATTRIB.EXE`, `MORE.COM`, `FIND.EXE`, `FC.EXE`, `DEBUG.COM`, `MEM.EXE`, `MODE.COM` | ✓ | ✓ | ✓ |
 | `TICO.EXE`, the tico16 text editor, v0.02 | ✓ | ✓ | ✓ |
 | `XCOPY.EXE`, `COMP.COM`, `DISKCOMP.COM`, `LABEL.COM`, `TREE.COM`, `SORT.EXE`, `EDLIN.COM`, `PRINT.COM`, `ASSIGN.COM`, `RECOVER.COM` | | ✓ | ✓ |
-| `APPEND.EXE`, `SHARE.EXE`, `EXE2BIN.EXE`, `GRAFTABL.COM`, `GRAPHICS.COM`, `GRAPHICS.PRO` | | | ✓ |
+| `KEYB.COM`, with `COUNTRY.SYS` and `KEYBOARD.SYS` ([`docs/country-keyboard.md`](docs/country-keyboard.md)) | | ✓ | ✓ |
+| `APPEND.EXE`, `SHARE.EXE`, `EXE2BIN.EXE`, `GRAFTABL.COM`, `GRAPHICS.COM`, `GRAPHICS.PRO`, `NLSFUNC.EXE` | | | ✓ |
 | `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
 
-The 360 KB disk's files are frozen. KEYB, NLSFUNC, FASTOPEN and IFSFUNC
-are on C: only. `image/files-360k.txt` (and so on) lists each image's
+The 360 KB disk's files are frozen. FASTOPEN and IFSFUNC are on C: only. `image/files-360k.txt` (and so on) lists each image's
 files in order, and `make` checks the image against it.
 `build/linux/manifest-360k.txt` (and so on) lists them with their checksums. To
 build one image from a built tree, choose the format with `--format` (1440
@@ -121,7 +121,9 @@ on), FORMAT, SYS and DISKCOPY on blank, disposable images in drive B:. It
 tests the commands of [`docs/m5-utilities.md`](docs/m5-utilities.md)
 (`make test-extras`), and boots each format's files with a data disk in B:
 (`make test-floppy-360` and so on). It
-compares FC's output with Microsoft's FC.EXE's (`make test-fc`), runs FDISK on disposable hard disk images against Microsoft's build of
+compares FC's output with Microsoft's FC.EXE's (`make test-fc`), boots
+with `COUNTRY=` in CONFIG.SYS (`make test-country`), types through KEYB's
+layouts (`make test-keyb`), runs FDISK on disposable hard disk images against Microsoft's build of
 it (`make test-fdisk`), and installs GR-DOS on a blank hard disk and boots
 it (`make test-install`). It provisions disk images of 512 MB to 8 GB with
 `scripts/deploy-cf`, boots them, and updates them, checking that every
@@ -160,7 +162,7 @@ gr-dos-VERSION/
 │   │   EXE2BIN.EXE, FASTOPEN.EXE, GRAFTABL.COM, GRAPHICS.COM,
 │   │   IFSFUNC.EXE, KEYB.COM, LABEL.COM, NLSFUNC.EXE, PRINT.COM,
 │   │   RECOVER.COM, SHARE.EXE, SORT.EXE, TREE.COM, XCOPY.EXE,
-│   │   GRAPHICS.PRO
+│   │   GRAPHICS.PRO, COUNTRY.SYS, KEYBOARD.SYS
 │   ├── CRCSUM.EXE, DF.EXE, DIFF16.EXE, LESS.EXE, MD5SUM.EXE, TAR.EXE,
 │   │   TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
 │   └── AUTOEXEC.BAT
@@ -209,6 +211,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   Linux, and updating C: only.
 - [`docs/m5-utilities.md`](docs/m5-utilities.md): the other assembly
   utilities, each format's files, and their tests.
+- [`docs/country-keyboard.md`](docs/country-keyboard.md): COUNTRY.SYS and
+  KEYBOARD.SYS, the countries and layouts, configuration and limits.
 - [`docs/dist16.md`](docs/dist16.md): the `*16` programs, how they are
   found, pinned and checked, and how to add or exclude one.
 - [`docs/run-dosbox.md`](docs/run-dosbox.md): `make run-dosbox`, the

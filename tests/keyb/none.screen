@@ -1,0 +1,25 @@
+
+A:\>KEYB
+KEYB has not been installed
+Active code page not available from CON device
+
+A:\>KEYB XX
+Invalid keyboard code specified
+
+A:\>KEYB PO
+
+A:\>KEYB
+Current keyboard code: PO  code page: 850
+Active code page not available from CON device
+
+A:\>
+
+
+
+
+
+
+
+
+
+

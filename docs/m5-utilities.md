@@ -50,10 +50,10 @@ message retriever and parser in assembly. Issue #17 is about the assembly
 sources; porting these is C work, like that of [M4](m4-utilities.md) and
 [FC](fc.md), and is left for a later issue.
 
-Two built commands need data files that GR-DOS does not build yet, from
-`v4.0/src/DEV`: KEYB needs `KEYBOARD.SYS` (`DEV/KEYBOARD`), and NLSFUNC's
-code page switching (`CHCP`) needs `COUNTRY.SYS` (`DEV/COUNTRY`). Both
-programs run and report the missing file as MS-DOS 4.00 does. GRAPHICS
+Two built commands need data files from `v4.0/src/DEV`: KEYB needs
+`KEYBOARD.SYS` (`DEV/KEYBOARD`), and NLSFUNC's code page switching
+(`CHCP`) needs `COUNTRY.SYS` (`DEV/COUNTRY`). GR-DOS builds both since
+issue #23 ([country-keyboard.md](country-keyboard.md)). GRAPHICS
 needs its printer profile, `GRAPHICS.PRO`, which is a text file in the
 source and is distributed with it.
 
@@ -168,21 +168,22 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 - **360 KB:** frozen by issue #17. It keeps its 17 files: IO.SYS,
   MSDOS.SYS and COMMAND.COM, the M4 utilities, TICO.EXE and AUTOEXEC.BAT.
 - **720 KB:** those, and the everyday file and disk commands: XCOPY, COMP,
-  DISKCOMP, LABEL, TREE, SORT, EDLIN, PRINT, ASSIGN and RECOVER.
+  DISKCOMP, LABEL, TREE, SORT, EDLIN, PRINT, ASSIGN and RECOVER; and KEYB
+  with COUNTRY.SYS and KEYBOARD.SYS (issue #23,
+  [country-keyboard.md](country-keyboard.md)).
 - **1.2 MB and 1.44 MB:** those, and the rest that work from a floppy:
-  APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and its GRAPHICS.PRO.
-  Everything that is useful on a floppy fits on 1.2 MB, so the two have the
-  same files.
-- **No floppy:** KEYB and NLSFUNC, which need KEYBOARD.SYS and COUNTRY.SYS;
-  FASTOPEN, which works on hard disks only; and IFSFUNC, which needs an
-  installable file system driver, and there is none.
+  APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and its GRAPHICS.PRO, and
+  NLSFUNC. Everything that is useful on a floppy fits on 1.2 MB, so the two
+  have the same files.
+- **No floppy:** FASTOPEN, which works on hard disks only, and IFSFUNC,
+  which needs an installable file system driver, and there is none.
 
 | Image | Files | Bytes free |
 |---|---:|---:|
 | 360 KB | 17 | 17,408 |
-| 720 KB | 27 | 282,624 |
-| 1.2 MB | 33 | 703,488 |
-| 1.44 MB | 33 | 947,200 |
+| 720 KB | 30 | 230,400 |
+| 1.2 MB | 37 | 644,608 |
+| 1.44 MB | 37 | 888,320 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's
@@ -194,7 +195,7 @@ image's files with their size, attributes, time and SHA-256.
 ### C: and the release
 
 `ALL_FILES` is everything: the M4 utilities, TICO.EXE, all 19 commands,
-GRAPHICS.PRO, the other `*16` programs ([dist16.md](dist16.md), since
+GRAPHICS.PRO, COUNTRY.SYS and KEYBOARD.SYS (issue #23), the other `*16` programs ([dist16.md](dist16.md), since
 issue #36) and AUTOEXEC.BAT. `scripts/deploy-cf` installs all of it but
 AUTOEXEC.BAT in `C:\DOS` (`build/linux/cf`). Its manifest is that of a
 1.44 MB image of the same files, so each file is stamped as on the

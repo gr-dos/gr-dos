@@ -1,0 +1,100 @@
+# KEYB and KEYBOARD.SYS (issue #23), on the 1.44 MB release image: keys
+# are pressed as on a US keyboard (QEMU's sendkey sends their scan codes),
+# KEYB translates them, and the command line shows what it made of them.
+# CLS first, so that each screen has none of the earlier ones. Ctrl+Alt+F1
+# is KEYB's US layout, and Ctrl+Alt+F2 the one loaded; commands are typed
+# with the US layout, as their letters can move. Esc cancels a line that
+# COMMAND.COM is not to run. A floppy boot: the hard disk is not used.
+disk 1M
+unchanged
+wait A:\\>
+
+# Before KEYB is installed; a language it does not know; Portugal, whose
+# code pages are 850 and 860, not 437: with no DISPLAY.SYS, CON cannot
+# say which is active, so KEYB takes Portugal's first
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type KEYB
+key ret
+type KEYB XX
+key ret
+type KEYB PO
+key ret
+type KEYB
+key ret
+screen none
+
+# Germany (QWERTZ), loaded in place of Portugal: Y and Z swapped; the
+# keys right of the letters are umlauts, the one right of 0 is sharp s;
+# AltGr (right Alt) Q is @, AltGr 7 and 0 are braces; the key right of
+# sharp s is the dead acute accent, and with Shift the dead grave accent;
+# the key left of 1 is ^, not a dead key. A dead key and a space is the
+# accent alone (an apostrophe in code page 437), and with a letter that
+# has no accented form, a beep, the accent and the letter. The key right
+# of left Shift is < and >, on a line of its own.
+type CLS
+key ret
+key ctrl-alt-f1
+type KEYB GR
+key ret
+key ctrl-alt-f1
+type KEYB
+key ret
+key ctrl-alt-f2
+type ECHO
+key spc z y minus shift-2 shift-7 semicolon apostrophe bracket_left shift-bracket_left
+key spc alt_r-q alt_r-7 alt_r-0 grave_accent
+key spc equal e shift-equal a equal spc equal x
+key ret
+key less shift-less esc
+screen gr
+
+# Switching: Ctrl+Alt+F1, the US layout, then Ctrl+Alt+F2, Germany's
+key ctrl-alt-f1
+type CLS
+key ret
+type ECHO
+key spc z y minus semicolon shift-2
+key ret
+key ctrl-alt-f2
+type ECHO
+key spc z y minus semicolon shift-2
+key ret
+key ctrl-alt-f1
+type KEYB
+key ret
+screen switch
+
+# France (AZERTY), loaded in place of Germany: A and Q, Z and W swapped, M
+# right of L, and the digits row unshifted is & e-acute " ' ( and so on;
+# the key right of P is the dead circumflex
+type CLS
+key ret
+type KEYB FR
+key ret
+key ctrl-alt-f1
+type KEYB
+key ret
+key ctrl-alt-f2
+type ECHO
+key spc q a w z semicolon m 1 2 3 4 5 shift-1 shift-2
+key spc bracket_left e bracket_left o
+key ret
+key ctrl-alt-f1
+screen fr
+
+# The United Kingdom: Shift 2 is ", Shift 3 the pound sign, Shift ' is @
+# and the key left of Enter is #, with Shift ~
+type CLS
+key ret
+type KEYB UK
+key ret
+type ECHO
+key spc shift-2 shift-3 shift-apostrophe backslash shift-backslash
+key ret
+key ctrl-alt-f1
+type KEYB
+key ret
+screen uk
+quit

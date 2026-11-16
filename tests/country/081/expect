@@ -1,0 +1,20 @@
+# Lines the country test (country.bat) must write to COM1 with
+# COUNTRY=081 (scripts/smoke-test): Japan, in its default code page, 932,
+# with the year first. The currency is the yen sign, 5Ch in code page 932.
+# COUNTRY.SYS has no Japan in code page 850, so CHCP 850 is refused.
+
+^GRDOS-TEST-BEGIN$
+^== COUNTRY$
+^COUNTRY 081 DATE 2 TIME 1 CURRENCY "\\" FORMAT 0 DIGITS 0$
+^SEPARATORS THOUSANDS "," DECIMAL "\." DATE "-" TIME ":" LIST ","$
+^CODEPAGE ACTIVE 932 SYSTEM 437$
+^Current date is \w{3} \d{4}-\d\d-\d\d$
+^Enter new date \(yy-mm-dd\): $
+^Current time is +\d+:\d\d:\d\d\.\d\d$
+^NLSINFO  COM +544 \d\d-\d\d-\d\d +\d+:\d\d$
+^== NLSFUNC$
+^Active code page: 932$
+^Invalid code page$
+^Active code page: 932$
+^CODEPAGE ACTIVE 932 SYSTEM 437$
+^GRDOS-TEST-END$
