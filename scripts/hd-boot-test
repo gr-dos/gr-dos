@@ -27,7 +27,9 @@ then types C<TEXT> and Enter: so the test shows that the AUTOEXEC.BATs have
 finished and DOS is at its prompt.  The run ends at the serial line
 C<GRDOS-TEST-END>, or after C<--timeout> seconds (default 60).
 
-The output, without carriage returns, is saved as F<OUTDIR/serial.txt>.
+The output, without carriage returns, is saved as F<OUTDIR/serial.txt>,
+and the text screen as the run ends as F<OUTDIR/screen.txt>: CONFIG.SYS's
+messages are only there.
 Each line of C<EXPECT> is a Perl regular expression that must match a line
 of the output, in order; a line C<count N REGEX> requires exactly C<N>
 matching lines anywhere.  Blank lines and lines starting with C<#> are
@@ -74,17 +76,21 @@ package Monitor {
   }
 }
 
-# The last non-blank line of the 80x25 text screen.
-sub last_line ($mon) {
+# The 80x25 text screen's rows, without trailing blanks.
+sub screen_rows ($mon) {
   my $out = $mon->cmd('xp /2000hx 0xb8000');
   my @cells;
   for my $line (split /\r?\n/, $out) {
     next unless $line =~ /^[0-9a-f]+:((?:\s+0x[0-9a-f]{4})+)\s*$/;
     push @cells, map { hex } $1 =~ /0x([0-9a-f]{4})/g;
   }
-  my @rows = map { join('', map { my $c = $_ & 0x7F; $c >= 32 ? chr $c : ' ' } @cells[$_ * 80 .. $_ * 80 + 79]) =~ s/ +\z//r }
+  return map { join('', map { my $c = ($_ // 0) & 0x7F; $c >= 32 ? chr $c : ' ' } @cells[$_ * 80 .. $_ * 80 + 79]) =~ s/ +\z//r }
     0 .. 24;
-  my($last) = grep { /\S/ } reverse @rows;
+}
+
+# The last non-blank line of the screen.
+sub last_line ($mon) {
+  my($last) = grep { /\S/ } reverse screen_rows($mon);
   return $last // '';
 }
 
@@ -166,6 +172,14 @@ sub main (@args) {
       }
     }
     sleep 0.25;
+  }
+  # The screen as the run ended: CONFIG.SYS's messages are only there.
+  if(waitpid($pid, 1) != $pid) {
+    my @rows = eval { screen_rows($mon) };
+    if(open my $sfh, '>', "$outdir/screen.txt") {
+      print $sfh map { "$_\n" } @rows;
+      close $sfh;
+    }
   }
   kill 'TERM', $pid;
   waitpid $pid, 0;

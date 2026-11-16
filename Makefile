@@ -227,7 +227,7 @@ TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
-	test-keyb test-grver test-fdisk test-install test-deploy-cf
+	test-keyb test-grver test-fdisk test-install test-deploy-cf test-config-include
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
 test-dist16: scripts/dist16 tests/dist16/run
@@ -371,6 +371,12 @@ $(TEST_DEPLOY_CF): test-deploy-cf-%: $(CF)/manifest.txt scripts/deploy-cf script
 	scripts/hd-boot-test scripts/partition-table dist16/lock
 	scripts/deploy-cf-test $* $(TESTS)/deploy-cf-$*
 
+# CONFIG.SYS's INCLUDE= (scripts/config-include-test, issue #49): a 512 MB
+# CF install, booted with each scenario's C:\CONFIG.SYS and files on D:.
+test-config-include: $(CF)/manifest.txt $(TESTS)/NLSINFO.COM scripts/config-include-test \
+	scripts/deploy-cf scripts/hd-boot-test
+	scripts/config-include-test $(TESTS)/NLSINFO.COM $(TESTS)/config-include
+
 fdisk-expect: $(DISK_TEST) $(FDISK_REFERENCE)
 	for t in $$(grep -L '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))) \
 	         $$(grep -l '^sectors ' $(addsuffix /script,$(addprefix tests/fdisk/,$(FDISK_TESTS)))); do \
@@ -467,6 +473,7 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-install-SIZE     or one size (a tests/install directory)
   make test-deploy-cf      scripts/deploy-cf on disk images; or one case
   make test-deploy-cf-CASE   (CASE: $(DEPLOY_CF_TESTS))
+  make test-config-include  CONFIG.SYS's INCLUDE=, on a CF install's image
   make test-dist16         scripts/dist16 against a fake GitHub (offline)
   make test-help           check this list against the Makefile's targets
 
@@ -506,7 +513,7 @@ test-help: scripts/check-help
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
 	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb \
-	test-grver test-grver-grdos test-grver-msdos msdos-core
+	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.

@@ -1,0 +1,248 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Basename qw( dirname );
+use File::Copy qw( copy );
+
+# ABSTRACT: Test CONFIG.SYS's INCLUDE= on a CF install's disk image
+
+=head1 SYNOPSIS
+
+ scripts/config-include-test NLSINFO.COM OUTDIR [SCENARIO...]
+
+=head1 DESCRIPTION
+
+Tests GR-DOS's C<INCLUDE=> in F<CONFIG.SYS> (issue #49,
+F<docs/config-include.md>) on a 512 MB CF install made by
+F<scripts/deploy-cf> in C<OUTDIR>, never on a block device.  Each scenario
+writes its own F<C:\CONFIG.SYS> and files on D: with mtools, boots a copy
+of the image in QEMU (F<scripts/hd-boot-test>), and checks:
+
+=over 4
+
+=item *
+
+what F<D:\AUTOEXEC.BAT> reports to COM1: the country DOS has
+(F<NLSINFO.COM>, from the country tests), C<BREAK>, and C<MEM /PROGRAM>,
+which shows an C<INSTALL=>ed FASTOPEN;
+
+=item *
+
+the screen after the boot, where F<CONFIG.SYS>'s messages are: those that
+must be there, and those that must not.
+
+=back
+
+C<base> has its settings in F<C:\CONFIG.SYS> itself; C<include> has the
+same ones in F<D:\CONFIG.SYS>, and must leave DOS exactly as much memory
+(C<MEM>'s largest executable program size): the include has no resident
+cost.  The others are an C<INCLUDE=> between other lines, and the failures:
+no such file, no such drive, a drive not ready, a nested C<INCLUDE=>, a file too big, a ^Z,
+no final line end, and an empty file.  With SCENARIOs, only those run.
+
+=cut
+
+my $root = dirname(dirname(__FILE__));
+my $tool = "$root/scripts/deploy-cf";
+my $failed = 0;
+
+sub ok ($cond, $what) {
+  $cond = !!$cond;
+  say $cond ? "ok - $what" : "NOT OK - $what";
+  $failed++ unless $cond;
+  return $cond;
+}
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "unable to write $path: $!";
+  print $fh $data;
+  close $fh or die "unable to write $path: $!";
+}
+
+sub run (@cmd) {
+  say '+ ', join ' ', @cmd;
+  my $pid = open my $fh, '-|' // die "fork: $!";
+  if(!$pid) {
+    open STDERR, '>&', \*STDOUT or die "dup: $!";
+    exec @cmd or die "exec $cmd[0]: $!";
+  }
+  local $/;
+  my $out = <$fh> // '';
+  close $fh;
+  print $out =~ s/^/  | /mgr;
+  return ($? >> 8, $out);
+}
+
+sub must (@cmd) {
+  my($rc, $out) = run(@cmd);
+  die "failed: @cmd\n" if $rc;
+  return $out;
+}
+
+sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
+
+# DOS lines.
+sub dos (@lines) { join '', map { "$_\r\n" } @lines }
+
+my $country = 'COUNTRY=049,,C:\DOS\COUNTRY.SYS';
+my $install = 'INSTALL=C:\DOS\FASTOPEN.EXE C:';
+my @settings = ('BREAK=ON', $country, $install);
+# What D:\AUTOEXEC.BAT reports with @settings in effect.
+my @effect = ('^COUNTRY 049 ', '^BREAK is on$', '^  [0-9A-F]{6}      FASTOPEN     [0-9A-F]{6}     Program +$');
+my @no_effect = ('^COUNTRY 001 ', '^BREAK is off$');
+my @base = ('FILES=20', 'BUFFERS=20');
+
+# Each scenario: C:\CONFIG.SYS's lines, D:'s files, the lines COM1 must
+# have (in order), and the lines the screen must and must not have.
+my %scenarios = (
+  base => {
+    config => [@base, @settings],
+    serial => [@effect],
+    screen_not => ['include', 'Error in CONFIG.SYS'],
+  },
+  include => {
+    config => [@base, 'INCLUDE=D:\CONFIG.SYS'],
+    files  => { 'CONFIG.SYS' => dos(@settings) },
+    serial => [@effect],
+    screen_not => ['include', 'Error in CONFIG.SYS'],
+  },
+  # Lower case, blanks, and the included lines between C:'s: COUNTRY= is
+  # set three times, and the last, after the INCLUDE=, wins.
+  order => {
+    config => [@base, 'COUNTRY=044,,C:\DOS\COUNTRY.SYS', '  include = d:\config.sys', 'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
+    files  => { 'CONFIG.SYS' => dos(@settings) },
+    serial => ['^COUNTRY 033 ', '^BREAK is on$', $effect[2]],
+    screen_not => ['include', 'Error in CONFIG.SYS'],
+  },
+  missing => {
+    config => [@base, 'INCLUDE=D:\NOPE.SYS', 'BREAK=ON'],
+    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
+    screen => ['^Cannot include D:\\\\NOPE\.SYS$'],
+    screen_not => ['Error in CONFIG.SYS'],
+  },
+  nodrive => {
+    config => [@base, 'INCLUDE=Q:\CONFIG.SYS', 'BREAK=ON'],
+    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
+    screen => ['^Cannot include Q:\\\\CONFIG\.SYS$'],
+  },
+  # A: is QEMU's floppy drive, with no disk: not ready, which SYSINIT's
+  # critical error handler fails.
+  notready => {
+    config => [@base, 'INCLUDE=A:\CONFIG.SYS', 'BREAK=ON'],
+    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
+    screen => ['^Cannot include A:\\\\CONFIG\.SYS$'],
+  },
+  nested => {
+    config => [@base, 'INCLUDE=D:\CONFIG.SYS'],
+    files  => { 'CONFIG.SYS' => dos('INCLUDE=D:\OTHER.SYS', @settings), 'OTHER.SYS' => dos('BREAK=OFF') },
+    serial => [@effect],
+    screen => ['^Unrecognized command in CONFIG\.SYS$', '^Error in CONFIG\.SYS line 3$'],
+  },
+  toobig => {
+    config => [@base, 'INCLUDE=D:\BIG.SYS', 'BREAK=ON'],
+    files  => { 'BIG.SYS' => dos('BREAK=OFF', map { 'REM ' . ('x' x 70) } 1 .. 500) },
+    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
+    screen => ['^Cannot include D:\\\\BIG\.SYS$'],
+  },
+  ctrlz => {
+    config => [@base, 'INCLUDE=D:\CONFIG.SYS', 'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
+    files  => { 'CONFIG.SYS' => dos(@settings) . "\x1ABREAK=OFF\r\nGARBAGE\r\n" },
+    serial => ['^COUNTRY 033 ', '^BREAK is on$', $effect[2]],
+    screen_not => ['include', 'Error in CONFIG.SYS'],
+  },
+  noeol => {
+    config => [@base, 'INCLUDE=D:\CONFIG.SYS', 'COUNTRY=033,,C:\DOS\COUNTRY.SYS'],
+    files  => { 'CONFIG.SYS' => 'BREAK=ON' },
+    serial => ['^COUNTRY 033 ', '^BREAK is on$'],
+    screen_not => ['include', 'Error in CONFIG.SYS'],
+  },
+  empty => {
+    config => [@base, 'INCLUDE=D:\CONFIG.SYS', 'BREAK=ON'],
+    files  => { 'CONFIG.SYS' => '' },
+    serial => ['^COUNTRY 001 ', '^BREAK is on$'],
+    screen_not => ['include', 'Error in CONFIG.SYS'],
+  },
+);
+my @order = qw( base include order missing nodrive notready nested toobig ctrlz noeol empty );
+
+# The largest executable program size MEM reports.
+sub largest ($serial) { $serial =~ /^ *(\d+) largest executable program size$/m ? $1 : undef }
+
+sub scenario ($name, $template, $r, $nlsinfo, $out) {
+  my $s = $scenarios{$name};
+  my $dir = "$out/$name";
+  system('rm', '-rf', $dir) == 0 && mkdir $dir or die "unable to create $dir\n";
+  my $img = "$dir/disk.img";
+  must('cp', '--sparse=always', $template, $img);
+  my $c = at($img, $r->{sys_start});
+  my $d = at($img, $r->{logical}[0][1]);
+  spew("$dir/CONFIG.SYS", dos($s->{config}->@*));
+  must('mcopy', '-o', '-i', $c, "$dir/CONFIG.SYS", '::CONFIG.SYS');
+  my %files = (($s->{files} // {})->%*, 'AUTOEXEC.BAT' => dos('@ECHO OFF', 'ECHO GRDOS-TEST-BEGIN>AUX',
+    'D:\NLSINFO>AUX', 'BREAK>AUX', 'MEM /PROGRAM>AUX', 'ECHO GRDOS-TEST-END>AUX'));
+  mkdir "$dir/d" or die "mkdir: $!";
+  for my $f (sort keys %files) {
+    spew("$dir/d/$f", $files{$f});
+    must('mcopy', '-o', '-i', $d, "$dir/d/$f", "::$f");
+  }
+  must('mcopy', '-o', '-i', $d, $nlsinfo, '::NLSINFO.COM');
+  spew("$dir/expect", join "\n", '^GRDOS-TEST-BEGIN$', $s->{serial}->@*, '^GRDOS-TEST-END$', '');
+  my($rc) = run("$root/scripts/hd-boot-test", '--chs', '993/16/63', '--timeout', 120, $img, "$dir/expect",
+    "$dir/boot");
+  ok($rc == 0, "$name: boots, with what COM1 must show");
+  my $screen = -f "$dir/boot/screen.txt" ? slurp("$dir/boot/screen.txt") : '';
+  print $screen =~ s/^/  screen| /mgr;
+  for my $re (($s->{screen} // [])->@*) {
+    ok(scalar($screen =~ /$re/m), "$name: the screen has /$re/");
+  }
+  for my $re (($s->{screen_not} // [])->@*) {
+    ok(scalar($screen !~ /$re/mi), "$name: the screen has no /$re/");
+  }
+  unlink $img unless $failed;
+  return -f "$dir/boot/serial.txt" ? slurp("$dir/boot/serial.txt") : '';
+}
+
+sub main (@args) {
+  my($nlsinfo, $out, @want) = @args;
+  die "usage: $0 NLSINFO.COM OUTDIR [SCENARIO...]\n" unless defined $out;
+  @want = @order unless @want;
+  $scenarios{$_} or die "no scenario $_\n" for @want;
+  my $dist = "$root/build/linux/cf";
+  -f "$dist/manifest.txt" or die "$dist: no distribution (run make)\n";
+  system('rm', '-rf', $out) == 0 && system('mkdir', '-p', $out) == 0 or die "unable to create $out\n";
+
+  my $template = "$out/template.img";
+  open my $fh, '>', $template or die "unable to create $template: $!";
+  truncate $fh, 993 * 16 * 63 * 512 or die "truncate: $!";
+  close $fh;
+  must($tool, 'provision', '--confirm', 'template.img', $template);
+  # The layout record, sector 1.
+  open my $rfh, '<:raw', $template or die "unable to read $template: $!";
+  sysseek $rfh, 512, 0;
+  sysread $rfh, my $rec, 512;
+  close $rfh;
+  my %r;
+  @r{qw( sys_start sys_len )} = $rec =~ /^system (\d+) (\d+)$/m;
+  $r{logical} = [map { [split ' '] } $rec =~ /^logical (\d+ \d+ \d+)$/mg];
+  die "no layout record\n" unless $r{sys_start} && $r{logical}->@*;
+
+  my %serial;
+  $serial{$_} = scenario($_, $template, \%r, $nlsinfo, $out) for @want;
+  if(defined $serial{base} && defined $serial{include}) {
+    my($b, $i) = (largest($serial{base}), largest($serial{include}));
+    ok(defined $b && defined $i && $b == $i,
+      'include: the same free memory as base (' . ($b // '?') . ' and ' . ($i // '?') . ' bytes)');
+  }
+  unlink $template unless $failed;
+  say $failed ? "config-include-test: $failed FAILED" : 'config-include-test: passed';
+  return $failed ? 1 : 0;
+}
+
+exit main(@ARGV);
