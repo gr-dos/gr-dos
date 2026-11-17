@@ -113,8 +113,19 @@ EGA_OBJS     := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/DIS
 LCD_OBJS     := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/DISPLAY/LCD/LCD.LNK))
 CP_FILES     := DEV/DISPLAY/DISPLAY.SYS DEV/DISPLAY/EGA/EGA.CPI DEV/DISPLAY/LCD/LCD.CPI
 
+# Code page switching for the printer (issue #25, docs/printer.md):
+# PRINTER.SYS, the LPTn driver that CONFIG.SYS loads, and the printer fonts
+# MODE's CP PREPARE gives it: 4201.CPI (IBM Proprinter), 4208.CPI (IBM
+# Proprinter X24 and XL24) and 5202.CPI (IBM Quietwriter III). PRINTER.SYS
+# and 5202.CPI are linked and converted with EXE2BIN; 4201.CPI and 4208.CPI
+# are binary files in the source, copied as is (CPY.BAT), like GRAPHICS.PRO.
+PRINTER_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/PRINTER/PRINTER.LNK))
+P5202_OBJS   := $(SRC)/DEV/PRINTER/5202/5202.OBJ
+PRT_FILES    := DEV/PRINTER/PRINTER.SYS DEV/PRINTER/5202/5202.CPI
+PRT_COPIED   := DEV/PRINTER/4201/4201.CPI DEV/PRINTER/4208/4208.CPI
+
 OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM \
-	$(UTILITIES) $(EXTRA_UTILITIES) $(NLS_FILES) $(CP_FILES)
+	$(UTILITIES) $(EXTRA_UTILITIES) $(NLS_FILES) $(CP_FILES) $(PRT_FILES) $(PRT_COPIED)
 
 # The message files of utility $(1): X.CL$(c) for each c of $(2), and X.CTL.
 utility_messages = $(foreach c,$(2),CMD/$(1)/$(1).CL$(c)) CMD/$(1)/$(1).CTL
@@ -141,7 +152,8 @@ MESSAGES := BOOT/BOOT.CL1 \
 	$(call utility_messages,RECOVER,1 2 A) $(call utility_messages,SHARE,1 2 A) \
 	$(call utility_messages,SORT,1 2 A) $(call utility_messages,TREE,1 2 A) \
 	$(call utility_messages,XCOPY,1 2 A) \
-	$(foreach c,1 2 A,DEV/DISPLAY/DISPLAY.CL$(c)) DEV/DISPLAY/DISPLAY.CTL
+	$(foreach c,1 2 A,DEV/DISPLAY/DISPLAY.CL$(c)) DEV/DISPLAY/DISPLAY.CTL \
+	$(foreach c,1 2 A,DEV/PRINTER/PRINTER.CL$(c)) DEV/PRINTER/PRINTER.CTL
 
 # ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are built with Open Watcom C,
 # not Microsoft C 5.1, so they are not compared. CONVERT makes CHKDSK.EXE
@@ -149,7 +161,8 @@ MESSAGES := BOOT/BOOT.CL1 \
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
 	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE %/FDISK.EXE %/FC.EXE,$(UTILITIES)) \
 	CMD/CHKDSK/CHKDSK.EXE CMD/FDISK/FDBOOT.BIN CMD/FDISK/FDBOOT.INC \
-	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE DEV/COUNTRY/MKCNTRY.EXE $(NLS_FILES) $(CP_FILES)
+	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE DEV/COUNTRY/MKCNTRY.EXE $(NLS_FILES) $(CP_FILES) \
+	$(PRT_FILES)
 
 # Floppy formats, by size in KB (scripts/mkimage --format); 1440 is the
 # default.
@@ -590,8 +603,9 @@ $(BUILD)/tree.stamp: $(shell find v4.0/src -type f) $(PATCHES) scripts/prepare-d
 	rm -rf $(BUILD)/upstream
 	touch $@
 
-# GRAPHICS's printer profile is a source file, copied as is into the tree.
-$(GRAPHICS_PRO): $(BUILD)/tree.stamp
+# GRAPHICS's printer profile is a source file, copied as is into the tree,
+# as are the 4201 and 4208 printer fonts.
+$(GRAPHICS_PRO) $(addprefix $(SRC)/,$(PRT_COPIED)): $(BUILD)/tree.stamp
 
 # Message files (BUILDMSG/NOSRVBLD); the case aliases cover their references too.
 # FDISK's menus are C (MENUBLD), and FDISK5.CL1 the messages of its boot record.
@@ -605,6 +619,7 @@ $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/menubld sc
 	done
 	scripts/buildmsg $(MSG) $(SRC)/CMD/LABEL/LABL.SKL
 	scripts/buildmsg $(MSG) $(SRC)/DEV/DISPLAY/DISPLAY.SKL
+	scripts/buildmsg $(MSG) $(SRC)/DEV/PRINTER/PRINTER.SKL
 	for u in SHARE IFSFUNC; do \
 	  cp $(SRC)/DOS/MSDOS.SKL $(SRC)/CMD/$$u/ && scripts/buildmsg --nosrvbld $(MSG) $(SRC)/CMD/$$u/MSDOS.SKL || exit 1; \
 	done
@@ -655,10 +670,13 @@ $(SRC)/DEV/COUNTRY/MKCNTRY.EXE: $(MKCNTRY_OBJS)
 $(SRC)/DEV/DISPLAY/DISPLAY.EXE: $(DISPLAY_OBJS)
 $(SRC)/DEV/DISPLAY/EGA/CPI-HEAD.EXE: $(EGA_OBJS)
 $(SRC)/DEV/DISPLAY/LCD/FONT-R3.EXE: $(LCD_OBJS)
+$(SRC)/DEV/PRINTER/PRINTER.EXE: $(PRINTER_OBJS)
+$(SRC)/DEV/PRINTER/5202/5202.EXE: $(P5202_OBJS)
 
 EXES := $(addprefix $(SRC)/,BOOT/MSBOOT.EXE BIOS/MSLOAD.EXE BIOS/MSBIO.EXE DOS/MSDOS.EXE \
 	CMD/COMMAND/COMMAND.EXE CMD/FDISK/FDBOOT.EXE DEV/KEYBOARD/KEYBOARD.EXE DEV/COUNTRY/MKCNTRY.EXE \
-	DEV/DISPLAY/DISPLAY.EXE DEV/DISPLAY/EGA/CPI-HEAD.EXE DEV/DISPLAY/LCD/FONT-R3.EXE) \
+	DEV/DISPLAY/DISPLAY.EXE DEV/DISPLAY/EGA/CPI-HEAD.EXE DEV/DISPLAY/LCD/FONT-R3.EXE \
+	DEV/PRINTER/PRINTER.EXE DEV/PRINTER/5202/5202.EXE) \
 	$(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)) $(EXTRA_DIRS),$(SRC)/CMD/$(u)/$(u).EXE)
 
 # The programs CONVERT makes into .COM files are linked as Microsoft LINK
@@ -770,6 +788,16 @@ $(SRC)/DEV/DISPLAY/EGA/EGA.CPI: $(SRC)/DEV/DISPLAY/EGA/CPI-HEAD.EXE $(EGA_OBJS) 
 	scripts/exe2bin --size $(size) $< $@
 
 $(SRC)/DEV/DISPLAY/LCD/LCD.CPI: $(SRC)/DEV/DISPLAY/LCD/FONT-R3.EXE $(LCD_OBJS) scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --size $(size) $< $@
+
+# PRINTER.SYS, like DISPLAY.SYS, with base segment 0 (ZERO.DAT,
+# DEV/PRINTER/MAKEFILE); 5202.CPI from offset 0.
+$(SRC)/DEV/PRINTER/PRINTER.SYS: $(SRC)/DEV/PRINTER/PRINTER.EXE $(PRINTER_OBJS) scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --base 0 --size $(size) $< $@
+
+$(SRC)/DEV/PRINTER/5202/5202.CPI: $(SRC)/DEV/PRINTER/5202/5202.EXE $(P5202_OBJS) scripts/exe2bin \
 	scripts/mslink-layout
 	scripts/exe2bin --size $(size) $< $@
 
