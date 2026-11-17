@@ -102,8 +102,19 @@ KEYBOARD_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/KE
 MKCNTRY_OBJS  := $(SRC)/DEV/COUNTRY/MKCNTRY.OBJ
 NLS_FILES     := DEV/COUNTRY/COUNTRY.SYS DEV/KEYBOARD/KEYBOARD.SYS
 
+# Code page switching for the screen (issue #24, docs/codepage.md):
+# DISPLAY.SYS, the CON driver that CONFIG.SYS loads, and the fonts MODE's
+# CP PREPARE gives it, EGA.CPI (EGA and VGA) and LCD.CPI (the IBM PC
+# Convertible's LCD). Each is linked from its .LNK and converted with
+# EXE2BIN; the fonts' first module is their file header, CPI-HEAD or
+# FONT-R3.
+DISPLAY_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/DISPLAY/DISPLAY.LNK))
+EGA_OBJS     := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/DISPLAY/EGA/EGA.LNK))
+LCD_OBJS     := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/DISPLAY/LCD/LCD.LNK))
+CP_FILES     := DEV/DISPLAY/DISPLAY.SYS DEV/DISPLAY/EGA/EGA.CPI DEV/DISPLAY/LCD/LCD.CPI
+
 OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM \
-	$(UTILITIES) $(EXTRA_UTILITIES) $(NLS_FILES)
+	$(UTILITIES) $(EXTRA_UTILITIES) $(NLS_FILES) $(CP_FILES)
 
 # The message files of utility $(1): X.CL$(c) for each c of $(2), and X.CTL.
 utility_messages = $(foreach c,$(2),CMD/$(1)/$(1).CL$(c)) CMD/$(1)/$(1).CTL
@@ -129,7 +140,8 @@ MESSAGES := BOOT/BOOT.CL1 \
 	$(call utility_messages,NLSFUNC,1 2 A) $(call utility_messages,PRINT,1 2 A B C D) \
 	$(call utility_messages,RECOVER,1 2 A) $(call utility_messages,SHARE,1 2 A) \
 	$(call utility_messages,SORT,1 2 A) $(call utility_messages,TREE,1 2 A) \
-	$(call utility_messages,XCOPY,1 2 A)
+	$(call utility_messages,XCOPY,1 2 A) \
+	$(foreach c,1 2 A,DEV/DISPLAY/DISPLAY.CL$(c)) DEV/DISPLAY/DISPLAY.CTL
 
 # ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are built with Open Watcom C,
 # not Microsoft C 5.1, so they are not compared. CONVERT makes CHKDSK.EXE
@@ -137,7 +149,7 @@ MESSAGES := BOOT/BOOT.CL1 \
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
 	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE %/FDISK.EXE %/FC.EXE,$(UTILITIES)) \
 	CMD/CHKDSK/CHKDSK.EXE CMD/FDISK/FDBOOT.BIN CMD/FDISK/FDBOOT.INC \
-	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE DEV/COUNTRY/MKCNTRY.EXE $(NLS_FILES)
+	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE DEV/COUNTRY/MKCNTRY.EXE $(NLS_FILES) $(CP_FILES)
 
 # Floppy formats, by size in KB (scripts/mkimage --format); 1440 is the
 # default.
@@ -178,19 +190,22 @@ FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
 # in B: (docs/m5-utilities.md, image/files-*k.txt). The 720 KB disk gets
 # the everyday file and disk commands, and KEYB with KEYBOARD.SYS and
 # COUNTRY.SYS (issue #23); 1.2 MB and 1.44 MB add the rest that work from
-# a floppy. FASTOPEN works on hard disks only and IFSFUNC only with an
-# installable file system, so they are on C: alone.
+# a floppy, and DISPLAY.SYS with EGA.CPI (DISPLAY, issue #24), for the EGA
+# and VGA of the AT-class machines that boot from them. FASTOPEN works on
+# hard disks only and IFSFUNC only with an installable file system, so they
+# are on C: alone, as is LCD.CPI, for the PC Convertible's LCD alone.
 extra = $(call dist,$(foreach u,$(1),$(filter $(SRC)/CMD/$(u)/%,$(addprefix $(SRC)/,$(EXTRA_UTILITIES)))))
 FLOPPY_720  := XCOPY COMP DISKCOMP LABEL TREE SORT EDLIN PRINT ASSIGN RECOVER KEYB
-FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS NLSFUNC
+FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS NLSFUNC DISPLAY
 FLOPPY_1440 := $(FLOPPY_1200)
 # GRAPHICS reads its printer profile, GRAPHICS.PRO, from its own directory.
 # A floppy with KEYB has the data files, in its root, where KEYB and
-# COUNTRY= look for them by default.
+# COUNTRY= look for them by default, and one with DISPLAY.SYS, EGA.CPI.
 GRAPHICS_PRO := $(SRC)/CMD/GRAPHICS/GRAPHICS.PRO
 NLS_DATA     := $(addprefix $(SRC)/,$(NLS_FILES))
+CP_DATA      := $(addprefix $(SRC)/,$(CP_FILES))
 extra_files = $(call extra,$(1)) $(if $(filter GRAPHICS,$(1)),$(GRAPHICS_PRO)) \
-	$(if $(filter KEYB,$(1)),$(NLS_DATA))
+	$(if $(filter KEYB,$(1)),$(NLS_DATA)) $(if $(filter DISPLAY,$(1)),$(filter-out %/LCD.CPI,$(CP_DATA)))
 FILES_360  := $(FILES)
 FILES_720  := $(PROGRAMS) $(call extra_files,$(FLOPPY_720)) $(BUILD)/image/AUTOEXEC.BAT
 FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(BUILD)/image/AUTOEXEC.BAT
@@ -202,9 +217,10 @@ GRVER := $(BUILD)/grver/GRVER.EXE
 
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
 # programs, then all of issue #17's in CMD's order, GRAPHICS.PRO,
-# COUNTRY.SYS and KEYBOARD.SYS, GRVER, and the other *16 programs.
+# COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI and LCD.CPI, GRVER,
+# and the other *16 programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(GRAPHICS_PRO) \
-	$(NLS_DATA) $(GRVER) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
+	$(NLS_DATA) $(CP_DATA) $(GRVER) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
 
 # GR-DOS's own file names, which no *16 program may have, even with
 # another extension (COMMAND.COM would run only one of them).
@@ -230,7 +246,7 @@ TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
-	test-keyb test-grver test-fdisk test-install test-deploy-cf test-config-include
+	test-keyb test-codepage test-grver test-fdisk test-install test-deploy-cf test-config-include
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
 test-dist16: scripts/dist16 tests/dist16/run
@@ -308,6 +324,25 @@ test-country: $(TEST_COUNTRY)
 
 $(TEST_COUNTRY): test-country-%: $(TESTS)/country-%.img
 	scripts/smoke-test $< tests/country/$*/expect $(TESTS)/country-$*
+
+# The code page tests (tests/codepage, issue #24): each boots a 1.44 MB
+# image whose CONFIG.SYS is tests/codepage/NAME/config.sys, with
+# DISPLAY.SYS, the fonts, MODE, KEYB, NLSFUNC and their data, and checks
+# the code page CON reports and the font in the display's memory
+# (tests/codepage/cpinfo.asm) through MODE's CP commands, KEYB and CHCP
+# (tests/codepage/NAME/expect); and test-codepage-screen reads DISPLAY.SYS'
+# messages at boot from the screen, and types through KEYB GR in code
+# pages 850 and 437 (scripts/disk-test).
+CODEPAGE_TESTS := $(sort $(patsubst tests/codepage/%/expect,%,$(wildcard tests/codepage/*/expect)))
+TEST_CODEPAGE  := $(addprefix test-codepage-,$(CODEPAGE_TESTS))
+
+test-codepage: $(TEST_CODEPAGE) test-codepage-screen
+
+$(TEST_CODEPAGE): test-codepage-%: $(TESTS)/codepage-%.img
+	scripts/smoke-test $< tests/codepage/$*/expect $(TESTS)/codepage-$*
+
+test-codepage-screen: $(TESTS)/codepage-screen.img scripts/disk-test
+	scripts/disk-test $< tests/codepage/screen $(TESTS)/codepage-screen
 
 # GRVER's tests (tests/grver, issue #46): its output and exit status, and
 # FAKEID's imitations of the identification call's answer, on GR-DOS; and
@@ -479,6 +514,9 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-country        CONFIG.SYS's COUNTRY=, with COUNTRY.SYS; or one
   make test-country-COUNTRY  (COUNTRY: $(COUNTRY_TESTS))
   make test-keyb           KEYB's layouts, typed at the 1.44 MB image's prompt
+  make test-codepage       DISPLAY.SYS, MODE's code pages, KEYB and CHCP; or
+  make test-codepage-SETUP   one (SETUP: $(CODEPAGE_TESTS)), or the
+  make test-codepage-screen  boot messages and KEYB GR, read from the screen
   make test-grver          GRVER and the kernel's identification call, on
   make test-grver-grdos,     GR-DOS and on MS-DOS 4.00; or one of them
   make test-grver-msdos
@@ -522,13 +560,15 @@ test-help: scripts/check-help
 	mkdir -p $(TESTS)
 	$(MAKE) --no-print-directory -s help > $(TESTS)/help.txt
 	scripts/check-help $(TESTS)/help.txt 'FORMAT=$(FORMATS)' 'NAME=$(FDISK_TESTS)' \
-	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' 'COUNTRY=$(COUNTRY_TESTS)' $(HELP_INTERNAL) -- \
+	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' 'COUNTRY=$(COUNTRY_TESTS)' 'SETUP=$(CODEPAGE_TESTS)' \
+	  $(HELP_INTERNAL) -- \
 	  $$($(MAKE) --no-print-directory -pRrq : 2>/dev/null | sed -n 's/^\.PHONY: //p')
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
 	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb \
-	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include
+	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
+	test-codepage-screen
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -564,6 +604,7 @@ $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/menubld sc
 	  scripts/buildmsg $(MSG) $(SRC)/CMD/$$u/$$u.SKL || exit 1; \
 	done
 	scripts/buildmsg $(MSG) $(SRC)/CMD/LABEL/LABL.SKL
+	scripts/buildmsg $(MSG) $(SRC)/DEV/DISPLAY/DISPLAY.SKL
 	for u in SHARE IFSFUNC; do \
 	  cp $(SRC)/DOS/MSDOS.SKL $(SRC)/CMD/$$u/ && scripts/buildmsg --nosrvbld $(MSG) $(SRC)/CMD/$$u/MSDOS.SKL || exit 1; \
 	done
@@ -611,9 +652,13 @@ $(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)) $(EXTRA_DIRS),\
 $(SRC)/CMD/FDISK/FDBOOT.EXE:    $(SRC)/CMD/FDISK/FDBOOT.OBJ
 $(SRC)/DEV/KEYBOARD/KEYBOARD.EXE: $(KEYBOARD_OBJS)
 $(SRC)/DEV/COUNTRY/MKCNTRY.EXE: $(MKCNTRY_OBJS)
+$(SRC)/DEV/DISPLAY/DISPLAY.EXE: $(DISPLAY_OBJS)
+$(SRC)/DEV/DISPLAY/EGA/CPI-HEAD.EXE: $(EGA_OBJS)
+$(SRC)/DEV/DISPLAY/LCD/FONT-R3.EXE: $(LCD_OBJS)
 
 EXES := $(addprefix $(SRC)/,BOOT/MSBOOT.EXE BIOS/MSLOAD.EXE BIOS/MSBIO.EXE DOS/MSDOS.EXE \
-	CMD/COMMAND/COMMAND.EXE CMD/FDISK/FDBOOT.EXE DEV/KEYBOARD/KEYBOARD.EXE DEV/COUNTRY/MKCNTRY.EXE) \
+	CMD/COMMAND/COMMAND.EXE CMD/FDISK/FDBOOT.EXE DEV/KEYBOARD/KEYBOARD.EXE DEV/COUNTRY/MKCNTRY.EXE \
+	DEV/DISPLAY/DISPLAY.EXE DEV/DISPLAY/EGA/CPI-HEAD.EXE DEV/DISPLAY/LCD/FONT-R3.EXE) \
 	$(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)) $(EXTRA_DIRS),$(SRC)/CMD/$(u)/$(u).EXE)
 
 # The programs CONVERT makes into .COM files are linked as Microsoft LINK
@@ -711,6 +756,20 @@ $(foreach u,$(EXE2BIN),$(SRC)/CMD/$(u)/$(u).COM): %.COM: %.EXE scripts/exe2bin s
 
 # KEYBOARD.SYS: the tables, from offset 0 (DEV/KEYBOARD/MAKEFILE).
 $(SRC)/DEV/KEYBOARD/KEYBOARD.SYS: $(SRC)/DEV/KEYBOARD/KEYBOARD.EXE $(KEYBOARD_OBJS) scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --size $(size) $< $@
+
+# DISPLAY.SYS: its segment relocations take base segment 0, ZERO.DAT's
+# answer to EXE2BIN's prompt (DEV/DISPLAY/MAKEFILE). The fonts have none.
+$(SRC)/DEV/DISPLAY/DISPLAY.SYS: $(SRC)/DEV/DISPLAY/DISPLAY.EXE $(DISPLAY_OBJS) scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --base 0 --size $(size) $< $@
+
+$(SRC)/DEV/DISPLAY/EGA/EGA.CPI: $(SRC)/DEV/DISPLAY/EGA/CPI-HEAD.EXE $(EGA_OBJS) scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --size $(size) $< $@
+
+$(SRC)/DEV/DISPLAY/LCD/LCD.CPI: $(SRC)/DEV/DISPLAY/LCD/FONT-R3.EXE $(LCD_OBJS) scripts/exe2bin \
 	scripts/mslink-layout
 	scripts/exe2bin --size $(size) $< $@
 
@@ -910,6 +969,44 @@ $(TESTS)/country-$(1).img: $(CORE) $(call country_files,$(1)) scripts/mkimage sc
 	scripts/mkimage $$@ $(SRC) $(call country_files,$(1))
 endef
 $(foreach t,$(COUNTRY_TESTS),$(eval $(call country_test_image,$(t))))
+
+# The code page tests' disks: the system files, the scenario's CONFIG.SYS,
+# the test program and AUTOEXEC.BAT, and the programs and data they use.
+$(TESTS)/CPINFO.COM: tests/codepage/cpinfo.asm $(TOOLS)
+	mkdir -p $(@D)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
+	  && wasm -q -fo=$(@D)/CPINFO.OBJ $< \
+	  && wlink option quiet format dos com name $@ file $(@D)/CPINFO.OBJ
+
+$(TESTS)/autoexec-codepage/AUTOEXEC.BAT: tests/codepage/codepage.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/codepage-%/CONFIG.SYS: tests/codepage/%/config.sys
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+codepage_files = $(TESTS)/codepage-$(1)/CONFIG.SYS $(TESTS)/CPINFO.COM $(CP_DATA) \
+	$(addprefix $(SRC)/,CMD/MODE/MODE.COM CMD/KEYB/KEYB.COM CMD/NLSFUNC/NLSFUNC.EXE) $(NLS_DATA) \
+	$(TESTS)/autoexec-codepage/AUTOEXEC.BAT
+
+define codepage_test_image
+$(TESTS)/codepage-$(1).img: $(CORE) $(call codepage_files,$(1)) scripts/mkimage scripts/check-image
+	scripts/mkimage $$@ $(SRC) $(call codepage_files,$(1))
+endef
+$(foreach t,$(CODEPAGE_TESTS),$(eval $(call codepage_test_image,$(t))))
+
+# The screen test's disk: its own CONFIG.SYS and AUTOEXEC.BAT, which does
+# not send the output to AUX, with DISPLAY.SYS, EGA.CPI, MODE and KEYB.
+$(TESTS)/codepage-screen/AUTOEXEC.BAT: tests/codepage/screen/autoexec.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+CODEPAGE_SCREEN_FILES := $(TESTS)/codepage-screen/CONFIG.SYS $(TESTS)/codepage-screen/AUTOEXEC.BAT \
+	$(filter-out %/LCD.CPI,$(CP_DATA)) $(addprefix $(SRC)/,CMD/MODE/MODE.COM CMD/KEYB/KEYB.COM DEV/KEYBOARD/KEYBOARD.SYS)
+
+$(TESTS)/codepage-screen.img: $(CORE) $(CODEPAGE_SCREEN_FILES) scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(CODEPAGE_SCREEN_FILES)
 
 # GRVER's test disks: GRVER, FAKEID and the batch files, with GR-DOS's
 # system files or MS-DOS 4.00's. The reference build is make check's; its
