@@ -31,8 +31,10 @@ and WHICH from `gr-dos`, and TICO from `tico-edit`. It leaves these out:
 | `gr-dos/patch16`, `perl16`, `term16` | unavailable: no release yet |
 
 Each program goes in `C:\DOS` and the ZIP's `BIN`, after GR-DOS's own
-commands. The ZIP's `README.txt` lists each one with its repository and
-release, and ends with each one's license. TICO.EXE is the only one on the
+commands. The ZIP's `README.txt` lists each one with its repository,
+release and license, and ends with each one's license text. A program
+under a license that requires its source, such as the GPL, also brings
+that source ([Source licenses](#source-licenses)). TICO.EXE is the only one on the
 boot floppies. It was there before issue #36, and it is pinned, so the
 360 KB disk's files stay frozen ([M5](m5-utilities.md#floppies)). No floppy
 gains a `*16` program automatically. Adding one to a floppy is a separate
@@ -104,9 +106,13 @@ A repository's release is shipped when it has:
    pinned as it is.
 5. **A license at the release's commit**, not at `main`'s
    (`GET /repos/R/license?ref=COMMIT`), under one of the licenses in
-   `dist16/config`: MIT, BSD-2-Clause, BSD-3-Clause, ISC, Zlib and 0BSD.
-   All of these only require their notice to be kept, and the ZIP's README
-   keeps it. A license added after a release counts from the next release.
+   `dist16/config`. The `license` ones, MIT, BSD-2-Clause, BSD-3-Clause,
+   ISC, Zlib and 0BSD, only require their notice to be kept, and the ZIP's
+   README keeps it. A `source-license` one, GPL-2.0-or-later or
+   GPL-1.0-or-later, also needs
+   the program's corresponding source, which the release must provide as
+   [Source licenses](#source-licenses) says. A license added after a
+   release counts from the next release.
 
 A repository that fails is reported, and recorded in the lock as a `skip`
 line with the reason, so the lock shows why a program is missing:
@@ -116,6 +122,7 @@ included     gr-dos/which16 v0.03 which.exe as WHICH.EXE, MIT (ignored: which.co
 excluded     gr-dos/libc16: a C runtime library, not a DOS program
 unavailable  gr-dos/term16: no release
 failed       gr-dos/foo16: v0.01: license GPL-3.0 is not one dist16/config allows
+failed       gr-dos/bar16: v0.01: license GPL-2.0 needs the program's source, but there is no dist16.source at its commit
 note         tico-edit/tico16 is pinned at v0.02; the latest release is v0.03
 ```
 
@@ -128,14 +135,162 @@ same GitHub state always gives the same lock. Each program line holds:
 program REPO TAG COMMIT ASSET NAME SIZE SHA256 SPDX LICENSE LICENSE_SHA256
 ```
 
+A program under a source license is followed by its source, its further
+notices and its linked libraries' source (below):
+
+```text
+source REPO ASSET SIZE SHA256 BUILD
+notice REPO PATH SHA256
+depend REPO DEP TAG COMMIT ASSET SIZE SHA256 SPDX LICENSE LICENSE_SHA256
+```
+
+The build checks the lock against `dist16/config` when it reads it: a
+program under a `source-license` with no `source` line, or a `source`
+line under a permissive license, is refused, never shipped as if it were
+permissively licensed.
+
 `fetch` downloads each asset from
 `https://github.com/REPO/releases/download/TAG/ASSET`, and each license
 from `https://raw.githubusercontent.com/REPO/COMMIT/LICENSE`. It checks
 both against the lock, keeps them in `build/tools/dist16`, and copies them
-to `build/linux/dist16` (licenses in `licenses/NAME.txt`). A verified file
+to `build/linux/dist16` (licenses in `licenses/NAME.txt`; source archives
+in `source/NAME`, and `SOURCES.TXT`). A verified file
 in the cache is not downloaded again, so a rebuild needs no network, and
 CI caches `build/tools` by the lock's hash. A file that does not match is a
 build error, and is never used.
+
+## Source licenses
+
+Issue #56 lets the full distribution include programs under the GNU GPL.
+Two families are allowed:
+
+| License | GitHub reports | For |
+|---|---|---|
+| `GPL-2.0-or-later` | `GPL-2.0` | [gr-dos/patch16](https://github.com/gr-dos/patch16), GNU patch 2.2, linked with libc16 (MIT) |
+| `GPL-1.0-or-later` | `GPL-1.0` | [gr-dos/perl16](https://github.com/gr-dos/perl16), whose Perl 3.044 is GPL version 1 or later |
+
+`dist16/config` lists them apart from the permissive licenses:
+
+```text
+license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD
+source-license GPL-2.0-or-later GPL-1.0-or-later
+```
+
+Both are under the same contract, below. The `-only` forms are not
+allowed, and neither is any other GPL version: a program needs a config
+change, reviewed, to add one.
+
+GR-DOS is an **aggregation of separately licensed programs**. Shipping a
+GPL program beside the others, in `C:\DOS` or the ZIP, does not relicense
+the GR-DOS kernel, its utilities, its MIT `*16` programs or GR-DOS as a
+whole, and is not a claim that the distribution is wholly MIT licensed.
+No floppy gains a GPL program: the floppies' files are chosen by the
+Makefile's `FLOPPY_*` lists, and `image/files-*k.txt` must not change.
+
+### The release's dist16.source
+
+GitHub reports a license's family, `GPL-2.0` for the text of the GPL
+version 2 and `GPL-1.0` for version 1's: not whether the program is
+`-only` or `-or-later`, and not where its source is. So a program whose
+license GitHub finds in a `source-license` family ships only if its
+repository has a `dist16.source` at the release's commit:
+
+```text
+# patch16's corresponding source, for GR-DOS (docs/dist16.md there)
+license GPL-2.0-or-later
+source patch16-0.01-src.tar.gz
+build BUILDING.md
+notice AUTHORS
+depends gr-dos/libc16 v0.07 libc16-0.07-src.zip
+```
+
+| Directive | Meaning |
+|---|---|
+| `license SPDX` | the exact license, one of `dist16/config`'s `source-license`s, in GitHub's family |
+| `source ASSET` | the asset of the same release that is the program's complete source: a `.zip`, `.tar.gz` or `.tgz` |
+| `build PATH` | the build instructions and scripts, a file in that archive |
+| `notice PATH` | a further notice to keep, at the commit and in the archive (any number) |
+| `depends REPO TAG ASSET` | a library linked into the program: its release, and that release's asset with its source (any number) |
+
+`resolve` checks all of it, and a program fails, and is left out with the
+reason, if anything is missing, unverifiable or contradictory:
+
+- **No manifest**, or a malformed one: a GPL program is never treated as
+  permissively licensed.
+- **The license.** `dist16.source`'s license must be in GitHub's family
+  (`GPL-2.0` for `GPL-2.0-or-later`, `GPL-1.0` for
+  `GPL-1.0-or-later`) and in `dist16/config`. A GitHub `GPL-3.0`, a
+  manifest saying `MIT`, `GPL-2.0-only` or `GPL-1.0-only`, or one whose
+  version is not the license file's (`GPL-2.0-or-later` over GPL version
+  1's text, or the reverse), fails.
+- **The license text is the program's own.** The lock pins the license
+  file GitHub found at the commit (`COPYING`), by SHA-256, and the source
+  archive must hold the same file. That text is what the ZIP's README and
+  `SOURCES.TXT` carry: a GPL version 1 program keeps the version 1 text,
+  never a substituted version 2 notice.
+- **The source is this release's.** The archive must be an asset of the
+  release, checked against GitHub's size and digest like the program,
+  and must hold, under one top directory, the same `dist16.source` and
+  license file as the commit, and the `build` file. A link to a branch,
+  or GitHub's generated archive (which is not byte-stable), is not
+  accepted.
+- **Statically linked libraries.** Each `depends` release must exist,
+  and its license (at its tag's commit) must be one `dist16/config`
+  allows. Its source asset is checked the same way, and must hold its
+  license file. Section 3 of both GPL versions covers the source of every
+  module the program contains, other than the system's or compiler's own
+  standard libraries.
+- **No Open Watcom runtime.** Using Open Watcom as a compiler and linker
+  does not bring its license with it, but linking its C runtime would.
+  An `.exe` under a source license that carries Open Watcom's runtime
+  banner (`WATCOM C/C++ Run Time`) fails: it must be linked only with
+  libraries its manifest names. patch16 is linked with libc16, as
+  GR-DOS's own C utilities are.
+
+### Where the source goes
+
+- **The release ZIP** holds each archive, the program's and its
+  libraries', in `SOURCE/NAME/` (`SOURCE/PATCH16/patch16-0.01-src.tar.gz`),
+  so everyone who gets the ZIP gets the source with it. `README.txt` has a
+  *Corresponding source* section naming each archive by its GitHub URL,
+  SHA-256 and place in the ZIP, and the program's license (the full GPL
+  text, of the version its project ships), its notices and its libraries' licenses at the end.
+- **A CF card or hard disk** (`scripts/deploy-cf`) has `C:\DOS\SOURCES.TXT`,
+  the same section with the license texts, but not the archives: the CF
+  files are DOS 8.3 names, staged through a 1.44 MB image. It tells the
+  reader to get them from the ZIP of the same release, or from GitHub at
+  the pinned URLs, and check them with `sha256sum`. Both are release
+  assets, kept with the release, not files on a branch. If you hand on a
+  card, hand on the ZIP with it, or be ready to provide its `SOURCE`
+  directory.
+- `SOURCES.TXT` and `SOURCE` exist only when some program is under a
+  source license; no program may be named `SOURCES`.
+
+`make dist` runs `scripts/dist16 check-dist` on the ZIP's tree, and `make`
+on the CF files: each program under a source license must be there with
+every archive the lock pins, and its license texts in full, in
+`README.txt` and `SOURCES.TXT`, and nothing else in `SOURCE`. The CF
+tests (`make test-deploy-cf`) check that `C:\DOS\SOURCES.TXT` is
+installed unchanged, or absent when there is no such program.
+
+### patch16
+
+Nothing in the build names patch16: like any `gr-dos/*16`, it is found
+on GitHub, and today it has no release (`skip gr-dos/patch16 unavailable
+no release`). Before it can ship, its release needs:
+
+1. `dist16.source` at the release's commit, as above, with its `COPYING`
+   (the GPL version 2), and any further notice GNU patch's terms ask to
+   keep;
+2. a source archive asset of the tree at that commit (for example
+   `git archive --prefix=patch16-VERSION/`), with its build scripts;
+3. a source asset for the libc16 release it is linked with: libc16's
+   release ZIP holds its headers and libraries, not its C source, so a
+   libc16 release must add one, such as `libc16-VERSION-src.zip`.
+
+Then `make dist16-resolve` adds it to `dist16/lock`, which is reviewed
+and committed in its own change (issue #56), with the floppy manifests
+unchanged.
 
 ## Updating, and reviewing an update
 
@@ -218,6 +373,29 @@ downloads and raw files. It needs no network. It covers:
   with one name.
 - **Licenses:** none at the release's commit, one not allowed, and one
   GitHub cannot identify.
+- **Source licenses (issue #56):** a GPL-2.0-or-later and a
+  GPL-1.0-or-later program, each with its source, a notice and a linked
+  library's source, are resolved, locked, fetched (offline too), staged
+  with `SOURCES.TXT`, and packaged, and `check-dist` accepts the ZIP and
+  CF layouts. The GPL-1.0-or-later program keeps the GPL version 1 text,
+  as its project gives it. Each of these fails: no `dist16.source`, a
+  malformed one, one without `build`, a license that disagrees with
+  GitHub's (`MIT`), one `dist16/config` does not allow (`GPL-2.0-only`,
+  `GPL-1.0-only`, GitHub's `GPL-3.0`), a manifest version that is not
+  GitHub's (`GPL-2.0-or-later` for GitHub's `GPL-1.0`, and the reverse),
+  a source asset the release does not have, one that is the program, one
+  that is not a `.zip` or `.tar.gz`, one with another license file (a
+  version 2 `COPYING` for a version 1 program), manifest or no build
+  file, a source checksum mismatch, a notice missing at the commit, a
+  library with no such release or whose source is not an archive, Open
+  Watcom's runtime in the program, and a program named `SOURCES`; the
+  missing manifest, other license file and library failures are tested
+  for GPL-1.0-or-later too. `check-dist` refuses a README without the GPL
+  text, a missing library source, an unpinned file in `SOURCE`, a missing
+  `SOURCES.TXT`, and a `SOURCES.TXT` with no such program; the lock is
+  refused with a GPL program and no `source` line, a `source` line under
+  MIT, or lines out of order; and the MIT programs beside it are locked
+  as before.
 - **Architecture:** PE, NE, COFF behind a stub, a DOS extender, no MZ
   header, a malformed MZ header, and a `.COM` over 65,280 bytes (with one
   at exactly 65,280).

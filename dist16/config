@@ -21,3 +21,14 @@ include tico-edit/tico16 tag=v0.02 required
 # The licenses a shipped program may have (GitHub's SPDX identifiers):
 # permissive ones, whose notice the release ZIP's README.txt carries.
 license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD
+
+# And those that also require the program's complete corresponding source
+# to be available (issue #56): GPL-2.0-or-later for gr-dos/patch16, GNU
+# patch 2.2, and GPL-1.0-or-later for gr-dos/perl16's Perl 3 when it has a
+# release. A program under one ships only with a dist16.source manifest
+# naming its source archive, build instructions and the source of each
+# library linked into it (docs/dist16.md); its source goes in the release
+# ZIP's SOURCE, and C:\DOS\SOURCES.TXT says where to get it. GR-DOS is an
+# aggregation of separately licensed programs: this does not change the
+# license of the kernel or of any other program.
+source-license GPL-2.0-or-later GPL-1.0-or-later

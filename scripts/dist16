@@ -9,6 +9,9 @@ use File::Copy qw( copy );
 use File::Path qw( make_path remove_tree );
 use File::Temp qw( tempdir );
 use Getopt::Long qw( GetOptionsFromArray );
+use Archive::Tar ();
+use IO::Uncompress::Gunzip ();
+use IO::Uncompress::Unzip ();
 use JSON::PP ();
 
 # ABSTRACT: Find, pin and fetch the *16 programs of the full distribution
@@ -21,6 +24,8 @@ use JSON::PP ();
  scripts/dist16 [OPTIONS] list         # the DOS file names, in the lock's order
  scripts/dist16 [OPTIONS] notices DEST # each program's provenance and license
  scripts/dist16 [OPTIONS] bin-list     # README.txt lines for the ZIP's BIN
+ scripts/dist16 [OPTIONS] sources      # README.txt's corresponding source section
+ scripts/dist16 [OPTIONS] check-dist DIR DEST  # the ZIP's tree or the CF files: source, licenses
 
 =head1 DESCRIPTION
 
@@ -71,9 +76,42 @@ both included and excluded is an error.
 
 =item license SPDX...
 
-The licenses a program may have (GitHub's SPDX identifiers).
+The permissive licenses a program may have (GitHub's SPDX identifiers),
+which require only that their notice is kept.
+
+=item source-license SPDX...
+
+The licenses a program may have that also require its corresponding
+source to be available, such as C<GPL-2.0-or-later> and
+C<GPL-1.0-or-later> (issue #56). A
+program under one needs a F<dist16.source> manifest, below.
 
 =back
+
+=head2 dist16.source
+
+GitHub reports a license's family (C<GPL-2.0>), not whether it is C<-only>
+or C<-or-later>, nor where the source is. So a program whose license
+GitHub finds to be one of the C<source-license> families must have a
+F<dist16.source> file at its release's commit, one directive a line:
+
+ license GPL-2.0-or-later        # the exact SPDX identifier, in source-license
+ source patch16-0.01-src.tar.gz  # the release's asset of the complete source
+ build BUILDING.md               # how to build it, a file in that archive
+ notice AUTHORS                  # further notices to keep (any number)
+ depends gr-dos/libc16 v0.07 libc16-0.07-src.zip
+                                 # a library linked into the program: its
+                                 # release, and that release's source asset
+
+The source archive (F<.zip>, F<.tar.gz> or F<.tgz>) must hold, under one
+top directory or none, the same F<dist16.source> and license file as the
+commit, and the build file, so it is the source of that release. Each
+C<depends> archive must hold its release's license file. Each is pinned,
+by size and SHA-256, in the lock, fetched with the program, and shipped:
+in the release ZIP's F<SOURCE> directory, and described, with the license
+texts, in F<SOURCES.TXT> (C:\DOS and the ZIP's F<BIN>). A program under a
+source license may not contain Open Watcom's C runtime, which is not
+covered by its manifest.
 
 =head2 The release contract
 
@@ -87,7 +125,8 @@ extension, since COMMAND.COM would run only one of them; be a real-mode
 DOS program (an F<.exe> must have an MZ header and no NE, LE, LX or PE
 header or 32-bit extender; a F<.com> must fit in its 64 KB segment); match
 the size and SHA-256 GitHub gives; and have a license file at the
-release's commit, under one of the configured licenses.
+release's commit, under one of the configured licenses (and with a
+F<dist16.source> under a source license).
 
 =head1 OPTIONS
 
@@ -133,8 +172,19 @@ my %opt = (
 my $json = JSON::PP->new->canonical;
 my $tmp;
 
-# The lock's program fields, in order.
+# The lock's program fields, in order, and those of the lines that follow
+# a program under a source license.
 my @FIELDS = qw( repo tag commit asset name size sha256 spdx license license_sha256 );
+my @SOURCE = qw( repo asset size sha256 build );
+my @NOTICE = qw( repo path sha256 );
+my @DEPEND = qw( repo dep tag commit asset size sha256 spdx license license_sha256 );
+
+# A program under a source license has this at its release's commit.
+my $MANIFEST = 'dist16.source';
+
+# Where the build stages the source description, beside the programs; no
+# program may have its name.
+my $SOURCES = 'SOURCES.TXT';
 
 sub slurp ($path) {
   open my $fh, '<:raw', $path or die "$path: $!\n";
@@ -206,7 +256,7 @@ sub api ($path) {
 }
 
 sub read_config ($path) {
-  my %c = (discover => [], exclude => {}, include => {}, license => {}, order => []);
+  my %c = (discover => [], exclude => {}, include => {}, license => {}, source_license => {}, order => []);
   my $n = 0;
   for my $line (split /\n/, slurp($path)) {
     $n++;
@@ -238,6 +288,12 @@ sub read_config ($path) {
     } elsif($cmd eq 'license') {
       die "$where: license SPDX...\n" unless @w;
       $c{license}{$_} = 1 for @w;
+    } elsif($cmd eq 'source-license') {
+      die "$where: source-license SPDX...\n" unless @w;
+      for (@w) {
+        die "$where: $_ is not a license with a version (such as GPL-2.0-or-later)\n" if spdx_base($_) eq $_;
+        $c{source_license}{$_} = 1;
+      }
     } else {
       die "$where: unknown directive $cmd\n";
     }
@@ -246,13 +302,25 @@ sub read_config ($path) {
     die "$path: $c{include}{$key}{repo} is both included and excluded\n" if exists $c{exclude}{$key};
   }
   die "$path: no license directive\n" unless %{ $c{license} };
+  for my $spdx (sort keys $c{source_license}->%*) {
+    die "$path: $spdx is both a license and a source-license\n" if $c{license}{$spdx} || $c{license}{spdx_base($spdx)};
+  }
   return \%c;
 }
+
+# A license without its -only or -or-later: GitHub reports GPL-2.0 for the
+# text of the GPL version 2 (GPL-1.0 for version 1's), whichever the
+# program is under.
+sub spdx_base ($spdx) { $spdx =~ s/(-only|-or-later|\+)$//r }
+
+# The source licenses of a family GitHub reports.
+sub source_licenses ($c, $spdx) { grep { spdx_base($_) eq $spdx } sort keys $c->{source_license}->%* }
 
 sub reserved () {
   my %r;
   $r{base($_)} = $_ for map { uc } split /[\s,]+/, $opt{reserved};
   delete $r{''};
+  $r{base($SOURCES)} //= "$SOURCES (dist16's)";
   return \%r;
 }
 
@@ -430,32 +498,205 @@ sub resolve_one ($c, $r, $notes) {
   my $lic = api("/repos/$repo/license?ref=$res{commit}") // return $skip->('failed', "$tag: no license");
   my $spdx = $lic->{license}{spdx_id} // 'NOASSERTION';
   my $lpath = $lic->{path} // '';
-  return $skip->('failed', "$tag: license $spdx is not one dist16/config allows") unless $c->{license}{$spdx};
-  return $skip->('failed', "$tag: malformed license path") unless $lpath =~ m{^[\w./-]+$} && $lpath !~ /\.\./;
-  my($ls, $ltext) = get("$opt{raw}/$repo/$res{commit}/$lpath");
-  die "$opt{raw}/$repo/$res{commit}/$lpath: HTTP $ls\n" unless $ls == 200 || $ls == 404;
-  return $skip->('failed', "$tag: license file $lpath is missing") unless $ls == 200;
+  return $skip->('failed', "$tag: license $spdx is not one dist16/config allows")
+    unless $c->{license}{$spdx} || source_licenses($c, $spdx);
+  return $skip->('failed', "$tag: malformed license path") unless safe_path($lpath);
+  my $ltext = raw($repo, $res{commit}, $lpath) // return $skip->('failed', "$tag: license file $lpath is missing");
   @res{qw( spdx license license_sha256 )} = ($spdx, $lpath, sha256_hex($ltext));
 
-  my $url = "$opt{github}/$repo/releases/download/$tag/$asset->{name}";
-  my($as, $data) = get($url);
-  die "$url: HTTP $as\n" unless $as == 200 || $as == 404;
-  return $skip->('failed', "$tag: $asset->{name} cannot be downloaded") unless $as == 200;
-  my $sha = sha256_hex($data);
-  if(length($data) != $asset->{size}) {
-    return $skip->('failed', "$tag: $asset->{name} is @{[ length $data ]} bytes, but GitHub says $asset->{size}");
-  }
-  if(defined $asset->{digest} && $asset->{digest} ne '') {
-    my($want) = $asset->{digest} =~ /^sha256:([0-9a-f]{64})$/
-      or return $skip->('failed', "$tag: $asset->{name} has a malformed digest");
-    return $skip->('failed', "$tag: $asset->{name} checksum mismatch: GitHub says $want, downloaded $sha")
-      if $want ne $sha;
-  }
+  my($data, $why) = download($repo, $tag, $asset);
+  return $skip->('failed', "$tag: $why") if $why;
   if(my $why = not_dos($asset->{name}, $data)) {
     return $skip->('failed', "$tag: $why");
   }
-  @res{qw( size sha256 )} = (length $data, $sha);
+  @res{qw( size sha256 )} = (length $data, sha256_hex($data));
+  unless($c->{license}{$spdx}) {
+    my $why = source_of($c, \%res, $assets, $data, $ltext);
+    return $skip->('failed', "$tag: $why") if $why;
+  }
   return { %res, kind => 'included' };
+}
+
+sub safe_path ($path) { $path =~ m{^[\w.+-][\w./+-]*$} && $path !~ m{(^|/)\.\.(/|$)} && $path !~ m{//} }
+
+# A file at a commit, or undef if it has none.
+sub raw ($repo, $commit, $path) {
+  my($status, $text) = get("$opt{raw}/$repo/$commit/$path");
+  die "$opt{raw}/$repo/$commit/$path: HTTP $status\n" unless $status == 200 || $status == 404;
+  return $status == 200 ? $text : undef;
+}
+
+# A release asset, checked against the size and digest GitHub gives:
+# (data), or (undef, why not).
+sub download ($repo, $tag, $asset) {
+  my $url = "$opt{github}/$repo/releases/download/$tag/$asset->{name}";
+  my($as, $data) = get($url);
+  die "$url: HTTP $as\n" unless $as == 200 || $as == 404;
+  return (undef, "$asset->{name} cannot be downloaded") unless $as == 200;
+  my $sha = sha256_hex($data);
+  if(length($data) != $asset->{size}) {
+    return (undef, "$asset->{name} is @{[ length $data ]} bytes, but GitHub says $asset->{size}");
+  }
+  if(defined $asset->{digest} && $asset->{digest} ne '') {
+    my($want) = $asset->{digest} =~ /^sha256:([0-9a-f]{64})$/
+      or return (undef, "$asset->{name} has a malformed digest");
+    return (undef, "$asset->{name} checksum mismatch: GitHub says $want, downloaded $sha")
+      if $want ne $sha;
+  }
+  return ($data);
+}
+
+# A source archive's files, { path => content }, or why it cannot be read.
+sub archive ($name, $data) {
+  my %f;
+  if($name =~ /\.zip$/i) {
+    my $z = IO::Uncompress::Unzip->new(\$data, Transparent => 0) or return "$name is not a zip archive";
+    my $status;
+    for($status = 1; $status > 0; $status = $z->nextStream) {
+      my $h = $z->getHeaderInfo or return "$name is not a zip archive";
+      my $path = $h->{Name} // '';
+      my $content = '';
+      while(($status = $z->read(my $chunk)) > 0) { $content .= $chunk }
+      last if $status < 0;
+      $f{$path} = $content unless $path =~ m{/$};
+    }
+    return "$name is a damaged zip archive" if $status < 0;
+  } elsif($name =~ /\.(tar\.gz|tgz)$/i) {
+    my $tar;
+    IO::Uncompress::Gunzip::gunzip(\$data => \$tar, Transparent => 0) or return "$name is not gzip compressed";
+    local $Archive::Tar::WARN = 0;
+    open my $fh, '<', \$tar or die "$name: $!\n";
+    my $t = Archive::Tar->new;
+    $t->read($fh) or return "$name is not a tar archive";
+    $f{$_->full_path} = $_->get_content for grep { $_->is_file } $t->get_files;
+  } else {
+    return "$name is not a .zip, .tar.gz or .tgz archive";
+  }
+  %f = map { (s{^\./}{}r, $f{$_}) } keys %f;
+  return "$name is empty" unless %f;
+  return \%f;
+}
+
+# The top directory of an archive that has FILE in it ('' for none), or
+# undef.
+sub top ($files, $file) {
+  my @tops = sort map { m{^([^/]+/)?\Q$file\E$} ? $1 // '' : () } keys %$files;
+  return @tops == 1 ? $tops[0] : undef;
+}
+
+sub read_manifest ($text) {
+  my %m = (notice => [], depends => []);
+  my $n = 0;
+  for my $line (split /\r?\n/, $text) {
+    $n++;
+    $line =~ s/#.*//;
+    my @w = split ' ', $line;
+    next unless @w;
+    my $cmd = shift @w;
+    if($cmd =~ /^(license|source|build)$/) {
+      return "line $n: $cmd takes one value" unless @w == 1;
+      return "line $n: $cmd is given twice" if defined $m{$cmd};
+      return "line $n: malformed $cmd" unless $cmd eq 'license' ? $w[0] =~ /^[\w.+-]+$/
+        : $cmd eq 'source' ? $w[0] =~ /^[\w.+-]+$/ : safe_path($w[0]);
+      $m{$cmd} = $w[0];
+    } elsif($cmd eq 'notice') {
+      return "line $n: notice PATH" unless @w == 1 && safe_path($w[0]);
+      push $m{notice}->@*, $w[0];
+    } elsif($cmd eq 'depends') {
+      return "line $n: depends OWNER/NAME TAG ASSET"
+        unless @w == 3 && $w[0] =~ m{^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$} && $w[1] =~ /^[\w.+-]+$/ && $w[2] =~ /^[\w.+-]+$/;
+      push $m{depends}->@*, [@w];
+    } else {
+      return "line $n: unknown directive $cmd";
+    }
+  }
+  for (qw( license source build )) {
+    return "no $_ line" unless defined $m{$_};
+  }
+  return \%m;
+}
+
+# A program under a source license: its dist16.source at the release's
+# commit, and the corresponding source the manifest names, each checked.
+# Fills in RES; returns why the program fails, or undef.
+sub source_of ($c, $res, $assets, $exe, $ltext) {
+  my($repo, $tag, $commit) = $res->@{qw( repo tag commit )};
+  my $mtext = raw($repo, $commit, $MANIFEST)
+    // return "license $res->{spdx} needs the program's source, but there is no $MANIFEST at its commit";
+  my $m = read_manifest($mtext);
+  return "$MANIFEST: $m" unless ref $m;
+  return "GitHub finds $res->{spdx} in $res->{license}, but $MANIFEST says $m->{license}"
+    unless spdx_base($m->{license}) eq $res->{spdx};
+  return "license $m->{license} ($MANIFEST) is not one dist16/config allows" unless $c->{source_license}{$m->{license}};
+  return "$res->{asset} contains Open Watcom's C runtime, which $MANIFEST does not cover"
+    if $exe =~ m{WATCOM C/C\+\+\d* Run.?Time}i;
+
+  # The program's source: an asset of the same release.
+  my($sa) = grep { $_->{name} eq $m->{source} } @$assets;
+  return "$MANIFEST names the source $m->{source}, which the release does not have" unless $sa;
+  return "$MANIFEST names the program as its source" if $sa->{name} eq $res->{asset};
+  my($data, $why) = download($repo, $tag, $sa);
+  return $why if $why;
+  my $files = archive($sa->{name}, $data);
+  return $files unless ref $files;
+  my $top = top($files, $MANIFEST) // return "the source $sa->{name} has no $MANIFEST (or more than one)";
+  return "the source $sa->{name} has another $MANIFEST than the commit's" unless $files->{"$top$MANIFEST"} eq $mtext;
+  return "the source $sa->{name} has no $res->{license}, or another one than the commit's"
+    unless ($files->{"$top$res->{license}"} // '') eq $ltext && $ltext ne '';
+  return "the source $sa->{name} has no $m->{build} (the build instructions $MANIFEST names)"
+    unless defined $files->{"$top$m->{build}"};
+  $res->{ignored} = [ grep { $_ ne $sa->{name} } $res->{ignored}->@* ];
+  $res->{source} = { repo => $repo, asset => $sa->{name}, size => length $data, sha256 => sha256_hex($data), build => $m->{build} };
+
+  # Further notices: at the commit, and the same in the source.
+  $res->{notices} = [];
+  for my $path ($m->{notice}->@*) {
+    my $text = raw($repo, $commit, $path) // return "the notice $path ($MANIFEST) is not at the commit";
+    return "the source $sa->{name} has no $path, or another one than the commit's" unless ($files->{"$top$path"} // '') eq $text;
+    push $res->{notices}->@*, { repo => $repo, path => $path, sha256 => sha256_hex($text) };
+  }
+
+  # The libraries linked into the program, and their source.
+  $res->{depends} = [];
+  my %names = ($sa->{name} => $repo);
+  for my $d ($m->{depends}->@*) {
+    my $dep = dependency($c, @$d);
+    return "depends $d->[0] $d->[1]: $dep" unless ref $dep;
+    return "depends $d->[0] $d->[1]: its source $dep->{asset} has the name of $names{$dep->{asset}}'s" if $names{$dep->{asset}};
+    $names{$dep->{asset}} = $dep->{dep};
+    push $res->{depends}->@*, { %$dep, repo => $repo };
+  }
+  $res->{spdx} = $m->{license};
+  return undef;
+}
+
+# A library a program is linked with: its release, commit, license, and
+# the source ASSET, checked; or why not.
+sub dependency ($c, $repo, $tag, $name) {
+  my $rel = api("/repos/$repo/releases/tags/$tag") // return "no release $tag";
+  return "$tag is a draft" if $rel->{draft};
+  return "$tag is a prerelease" if $rel->{prerelease};
+  return "malformed release: no assets list" unless ref $rel->{assets} eq 'ARRAY';
+  my($asset) = grep { ref $_ eq 'HASH' && ($_->{name} // '') eq $name } $rel->{assets}->@*;
+  return "no asset $name" unless $asset;
+  return "malformed release: $name has no size" unless ($asset->{size} // '') =~ /^\d+$/;
+  my $commit = api("/repos/$repo/commits/$tag") // return "no commit";
+  return "malformed commit" unless ($commit->{sha} // '') =~ /^[0-9a-f]{40}$/;
+  my $lic = api("/repos/$repo/license?ref=$commit->{sha}") // return "no license";
+  my $spdx = $lic->{license}{spdx_id} // 'NOASSERTION';
+  my $lpath = $lic->{path} // '';
+  return "license $spdx is not one dist16/config allows" unless $c->{license}{$spdx} || source_licenses($c, $spdx);
+  return "malformed license path" unless safe_path($lpath);
+  my $ltext = raw($repo, $commit->{sha}, $lpath) // return "license file $lpath is missing";
+  my($data, $why) = download($repo, $tag, $asset);
+  return $why if $why;
+  my $files = archive($name, $data);
+  return $files unless ref $files;
+  my $top = top($files, $lpath);
+  return "its source $name has no $lpath, or another one than the commit's"
+    unless defined $top && $files->{"$top$lpath"} eq $ltext;
+  return { dep => $repo, tag => $tag, commit => $commit->{sha}, asset => $name, size => length $data,
+    sha256 => sha256_hex($data), spdx => $spdx, license => $lpath, license_sha256 => sha256_hex($ltext) };
 }
 
 sub lock_text ($results) {
@@ -465,11 +706,20 @@ sub lock_text ($results) {
     '# the pull request that updates it (docs/dist16.md).',
     '#',
     "# program @{[ map { uc } @FIELDS ]}",
+    '# and after a program under a source license (dist16/config, dist16.source):',
+    "# source @{[ map { uc } @SOURCE ]}",
+    "# notice @{[ map { uc } @NOTICE ]}",
+    "# depend @{[ map { uc } @DEPEND ]}",
     '# skip REPO KIND REASON',
   );
   for my $res (@$results) {
     if($res->{kind} eq 'included') {
       push @lines, join ' ', 'program', map { $res->{$_} } @FIELDS;
+      if(my $s = $res->{source}) {
+        push @lines, join ' ', 'source', map { $s->{$_} } @SOURCE;
+        for my $x ($res->{notices}->@*) { push @lines, join ' ', 'notice', map { $x->{$_} } @NOTICE }
+        for my $x ($res->{depends}->@*) { push @lines, join ' ', 'depend', map { $x->{$_} } @DEPEND }
+      }
     } else {
       push @lines, join ' ', 'skip', $res->{repo}, $res->{kind}, $res->{reason};
     }
@@ -481,7 +731,11 @@ sub report ($results, $notes) {
   for my $res (@$results) {
     if($res->{kind} eq 'included') {
       my $ign = $res->{ignored}->@* ? " (ignored: @{ $res->{ignored} })" : '';
-      say sprintf '%-12s %s %s %s as %s, %s%s', 'included', $res->{repo}, $res->{tag}, $res->{asset}, $res->{name}, $res->{spdx}, $ign;
+      my $src = '';
+      if(my $s = $res->{source}) {
+        $src = ", source $s->{asset}" . join '', map { ", with $_->{dep} $_->{tag} ($_->{spdx}, source $_->{asset})" } $res->{depends}->@*;
+      }
+      say sprintf '%-12s %s %s %s as %s, %s%s%s', 'included', $res->{repo}, $res->{tag}, $res->{asset}, $res->{name}, $res->{spdx}, $src, $ign;
     } else {
       say sprintf '%-12s %s: %s', $res->{kind}, $res->{repo}, $res->{reason};
     }
@@ -490,23 +744,43 @@ sub report ($results, $notes) {
 }
 
 sub read_lock () {
+  my $c = read_config($opt{config});
   my @programs;
   my $n = 0;
+  my $hex = sub ($v, $len) { $v =~ /^[0-9a-f]{$len}$/ };
+  my $fields = sub ($kind, $names, @w) {
+    die "$opt{lock}:$n: a $kind line has @{[ scalar @$names ]} fields\n" unless @w == @$names;
+    my %h;
+    @h{@$names} = @w;
+    return \%h;
+  };
   for my $line (split /\n/, slurp($opt{lock})) {
     $n++;
     next if $line =~ /^\s*(#|$)/;
-    my @w = split ' ', $line;
-    if($w[0] eq 'program') {
-      die "$opt{lock}:$n: a program line has @{[ scalar @FIELDS ]} fields\n" unless @w == @FIELDS + 1;
-      my %p;
-      @p{@FIELDS} = @w[1 .. $#w];
+    my($kind, @w) = split ' ', $line;
+    if($kind eq 'program') {
+      my $p = $fields->('program', \@FIELDS, @w);
       die "$opt{lock}:$n: malformed program line\n"
-        unless $p{repo} =~ m{^[\w.-]+/[\w.-]+$} && $p{commit} =~ /^[0-9a-f]{40}$/ && $p{size} =~ /^\d+$/
-          && $p{sha256} =~ /^[0-9a-f]{64}$/ && $p{license_sha256} =~ /^[0-9a-f]{64}$/ && valid_83($p{name})
-          && $p{name} eq uc $p{asset} && $p{license} !~ /\.\./;
-      push @programs, \%p;
-    } elsif($w[0] ne 'skip') {
-      die "$opt{lock}:$n: unknown line $w[0]\n";
+        unless $p->{repo} =~ m{^[\w.-]+/[\w.-]+$} && $hex->($p->{commit}, 40) && $p->{size} =~ /^\d+$/
+          && $hex->($p->{sha256}, 64) && $hex->($p->{license_sha256}, 64) && valid_83($p->{name})
+          && $p->{name} eq uc $p->{asset} && safe_path($p->{license});
+      $p->{notices} = [];
+      $p->{depends} = [];
+      push @programs, $p;
+    } elsif($kind eq 'source' || $kind eq 'notice' || $kind eq 'depend') {
+      my $x = $fields->($kind, { source => \@SOURCE, notice => \@NOTICE, depend => \@DEPEND }->{$kind}, @w);
+      my $p = $programs[-1];
+      die "$opt{lock}:$n: a $kind line must follow its program's\n" unless $p && $p->{repo} eq $x->{repo};
+      die "$opt{lock}:$n: a $kind line out of place\n" unless $kind eq 'source' xor $p->{source};
+      die "$opt{lock}:$n: malformed $kind line\n" unless $hex->($x->{sha256}, 64) && ($kind eq 'notice'
+        ? safe_path($x->{path})
+        : $x->{asset} =~ /^[\w.+-]+$/ && $x->{size} =~ /^\d+$/ && ($kind eq 'source' ? safe_path($x->{build})
+          : $x->{dep} =~ m{^[\w.-]+/[\w.-]+$} && $x->{tag} =~ /^[\w.+-]+$/ && $hex->($x->{commit}, 40)
+            && $hex->($x->{license_sha256}, 64) && safe_path($x->{license})));
+      if($kind eq 'source') { $p->{source} = $x }
+      else { push $p->{$kind . 's'}->@*, $x }
+    } elsif($kind ne 'skip') {
+      die "$opt{lock}:$n: unknown line $kind\n";
     }
   }
   my $reserved = reserved();
@@ -516,6 +790,25 @@ sub read_lock () {
     die "$opt{lock}: $p->{name} ($p->{repo}) has the name of GR-DOS's $reserved->{$b}\n" if $reserved->{$b};
     die "$opt{lock}: $p->{name} ($p->{repo}) has the name of $seen{$b}'s program\n" if $seen{$b};
     $seen{$b} = $p->{repo};
+    # The license decides whether the source must be shipped: a program
+    # under a source license with no source line is refused, not shipped.
+    if($p->{source}) {
+      die "$opt{lock}: $p->{name} ($p->{repo}) has a source line, but $p->{spdx} is not a source-license in $opt{config}\n"
+        unless $c->{source_license}{$p->{spdx}};
+      my %names;
+      for ($p->{source}, $p->{depends}->@*) {
+        die "$opt{lock}: $p->{name} ($p->{repo}) has two sources named $_->{asset}\n" if $names{$_->{asset}}++;
+      }
+    } else {
+      die "$opt{lock}: $p->{name} ($p->{repo}) is under $p->{spdx}, which needs a source line\n"
+        if $c->{source_license}{$p->{spdx}};
+      die "$opt{lock}: $p->{name} ($p->{repo}) is under $p->{spdx}, which is not a license in $opt{config}\n"
+        unless $c->{license}{$p->{spdx}};
+    }
+    for my $d ($p->{depends}->@*) {
+      die "$opt{lock}: $p->{name} ($p->{repo}) depends on $d->{dep}, under $d->{spdx}, which $opt{config} does not allow\n"
+        unless $c->{license}{$d->{spdx}} || source_licenses($c, $d->{spdx});
+    }
   }
   return \@programs;
 }
@@ -532,6 +825,10 @@ sub cached ($url, $path, $sha256, $what) {
   return $path;
 }
 
+sub sourced ($programs) { grep { $_->{source} } @$programs }
+
+sub release_url ($repo, $tag, $asset) { "$opt{github}/$repo/releases/download/$tag/$asset" }
+
 sub cmd_fetch ($dest) {
   my $programs = read_lock();
   die "$dest exists and is not a dist16 directory\n" if -e $dest && !-e "$dest/.dist16";
@@ -541,29 +838,187 @@ sub cmd_fetch ($dest) {
   spew("$dest/.dist16", '');
   for my $p (@$programs) {
     my $dir = "$opt{cache}/$p->{repo}/$p->{tag}";
-    my $exe = cached("$opt{github}/$p->{repo}/releases/download/$p->{tag}/$p->{asset}", "$dir/$p->{asset}",
-      $p->{sha256}, "$p->{repo} $p->{tag} $p->{asset}");
+    my $what = "$p->{repo} $p->{tag}";
+    my $exe = cached(release_url($p->{repo}, $p->{tag}, $p->{asset}), "$dir/$p->{asset}", $p->{sha256}, "$what $p->{asset}");
     my $lic = cached("$opt{raw}/$p->{repo}/$p->{commit}/$p->{license}", "$dir/license",
-      $p->{license_sha256}, "$p->{repo} $p->{tag} $p->{license}");
+      $p->{license_sha256}, "$what $p->{license}");
     copy($exe, "$dest/$p->{name}") or die "$dest/$p->{name}: $!\n";
     copy($lic, "$dest/licenses/$p->{name}.txt") or die "$dest/licenses/$p->{name}.txt: $!\n";
+    my $s = $p->{source} or next;
+    # The corresponding source, in source/NAME, and the further notices
+    # and the libraries' licenses, in licenses.
+    my $sdir = "$dest/source/" . base($p->{name});
+    make_path($sdir);
+    my $src = cached(release_url($p->{repo}, $p->{tag}, $s->{asset}), "$dir/$s->{asset}", $s->{sha256}, "$what $s->{asset}");
+    copy($src, "$sdir/$s->{asset}") or die "$sdir/$s->{asset}: $!\n";
+    my $k = 0;
+    for my $x ($p->{notices}->@*) {
+      $k++;
+      my $f = cached("$opt{raw}/$p->{repo}/$p->{commit}/$x->{path}", "$dir/notice/" . ($x->{path} =~ tr{/}{_}r),
+        $x->{sha256}, "$what $x->{path}");
+      copy($f, "$dest/licenses/$p->{name}.notice$k.txt") or die "$dest/licenses: $!\n";
+    }
+    $k = 0;
+    for my $d ($p->{depends}->@*) {
+      $k++;
+      my $ddir = "$opt{cache}/$d->{dep}/$d->{tag}";
+      my $f = cached(release_url($d->{dep}, $d->{tag}, $d->{asset}), "$ddir/$d->{asset}", $d->{sha256}, "$d->{dep} $d->{tag} $d->{asset}");
+      copy($f, "$sdir/$d->{asset}") or die "$sdir/$d->{asset}: $!\n";
+      $f = cached("$opt{raw}/$d->{dep}/$d->{commit}/$d->{license}", "$ddir/license.$d->{license_sha256}",
+        $d->{license_sha256}, "$d->{dep} $d->{tag} $d->{license}");
+      copy($f, "$dest/licenses/$p->{name}.depend$k.txt") or die "$dest/licenses: $!\n";
+    }
+  }
+  # How to get the source, with the licenses, beside the programs: in
+  # C:\DOS, and the ZIP's BIN.
+  if(my @s = sourced($programs)) {
+    spew("$dest/$SOURCES", (sources_text(@s) . license_text($dest, @s)) =~ s/\r?\n/\r\n/gr);
   }
   say "$_->{name}  $_->{repo} $_->{tag}" for @$programs;
 }
 
-sub cmd_notices ($dest) {
-  for my $p (read_lock()->@*) {
-    my $head = "$p->{name}: $p->{repo} $p->{tag} (commit $p->{commit}), $p->{spdx}";
-    print "\n\n$head\n", '-' x length($head), "\n\n";
-    my $text = slurp("$dest/licenses/$p->{name}.txt") =~ s/\r//gr;
-    $text =~ s/\n*\z/\n/;
-    print $text;
+# Each program's license, and under a source license its further notices
+# and its libraries' licenses, from a fetch's DEST.
+sub license_text ($dest, @programs) {
+  my $out = '';
+  my $text = sub ($head, $path) {
+    my $t = slurp($path) =~ s/\r//gr;
+    $t =~ s/\n*\z/\n/;
+    $out .= "\n\n$head\n" . ('-' x length $head) . "\n\n$t";
+  };
+  for my $p (@programs) {
+    $text->("$p->{name}: $p->{repo} $p->{tag} (commit $p->{commit}), $p->{spdx}", "$dest/licenses/$p->{name}.txt");
+    my $k = 0;
+    for my $x ($p->{notices}->@*) {
+      $k++;
+      $text->("$p->{name}: $x->{path}", "$dest/licenses/$p->{name}.notice$k.txt");
+    }
+    $k = 0;
+    for my $d ($p->{depends}->@*) {
+      $k++;
+      $text->("$p->{name}: linked with $d->{dep} $d->{tag} (commit $d->{commit}), $d->{spdx}", "$dest/licenses/$p->{name}.depend$k.txt");
+    }
   }
+  return $out;
+}
+
+# Where the exact source of each program under a source license is: in
+# the release ZIP, and on GitHub, pinned by the lock.
+sub sources_text (@programs) {
+  return '' unless @programs;
+  my $out = <<'END';
+Corresponding source
+--------------------
+
+GR-DOS is an aggregation of separately licensed programs; it does not
+relicense them. The programs below are under licenses, such as the GNU
+GPL, that require their complete corresponding source to be available to
+everyone who receives them. GR-DOS ships each one unchanged, as its
+project released it, and its source is that release's source archive,
+with the source of each library linked into it. These are the exact
+files, pinned by commit and SHA-256 in GR-DOS's dist16/lock, not a link to
+a branch that changes.
+
+The release ZIP holds each archive in its SOURCE directory, as named
+below. A CF card or hard disk installed with GR-DOS holds this text in
+C:\DOS\SOURCES.TXT, but not the archives: get them from the ZIP of the
+same GR-DOS release, or from GitHub at the addresses below, and check them
+with sha256sum.
+END
+  for my $p (@programs) {
+    my $s = $p->{source};
+    my $dir = 'SOURCE\\' . base($p->{name}) . '\\';
+    $out .= "\n$p->{name}: $p->{repo} $p->{tag}, $p->{spdx}\n";
+    $out .= "  commit    $p->{commit}\n";
+    $out .= "  program   https://github.com/$p->{repo}/releases/download/$p->{tag}/$p->{asset}\n";
+    $out .= "            SHA-256 $p->{sha256}\n";
+    $out .= "  source    https://github.com/$p->{repo}/releases/download/$p->{tag}/$s->{asset}\n";
+    $out .= "            SHA-256 $s->{sha256}, $s->{size} bytes\n";
+    $out .= "            in the ZIP: $dir$s->{asset}\n";
+    $out .= "  build     $s->{build}, in the source archive\n";
+    $out .= "  license   $p->{license} in the source archive, and at the end of this file\n";
+    for my $d ($p->{depends}->@*) {
+      $out .= "  linked    with $d->{dep} $d->{tag} (commit $d->{commit}), $d->{spdx}\n";
+      $out .= "  source    https://github.com/$d->{dep}/releases/download/$d->{tag}/$d->{asset}\n";
+      $out .= "            SHA-256 $d->{sha256}, $d->{size} bytes\n";
+      $out .= "            in the ZIP: $dir$d->{asset}\n";
+    }
+  }
+  return "$out\n";
+}
+
+sub cmd_notices ($dest) {
+  print license_text($dest, read_lock()->@*);
+}
+
+# Check a packaged distribution, DIR: the release ZIP's tree (README.txt,
+# BIN and SOURCE) or the CF install's files (no BIN), against the
+# lock and what fetch staged in DEST. Each program under a source license
+# must be there with its source, and its licenses in full, and nothing else
+# may be in SOURCE.
+sub cmd_check_dist ($dir, $dest) {
+  my $programs = read_lock();
+  my @s = sourced($programs);
+  my $cf = !-d "$dir/BIN";
+  my $bin = $cf ? $dir : "$dir/BIN";
+  my $norm = sub ($t) { $t =~ s/\r//gr };
+  my $sha = sub ($path) { -f $path ? sha256_hex(slurp($path)) : '' };
+  my @texts;
+  push @texts, $norm->(slurp("$bin/$SOURCES")) if -f "$bin/$SOURCES";
+  push @texts, $norm->(slurp("$dir/README.txt")) unless $cf;
+  my @problems;
+  if(!@s) {
+    push @problems, "$bin/$SOURCES: no program has a source license, but it exists" if -e "$bin/$SOURCES";
+    push @problems, "$dir/SOURCE: no program has a source license, but it exists" if -e "$dir/SOURCE";
+  } else {
+    push @problems, "$bin/$SOURCES is missing" unless -f "$bin/$SOURCES";
+    my %want;
+    for my $p (@s) {
+      push @problems, "$bin/$p->{name} is not the program dist16/lock pins" unless $sha->("$bin/$p->{name}") eq $p->{sha256};
+      for my $x ($p->{source}, $p->{depends}->@*) {
+        my $path = "SOURCE/" . base($p->{name}) . "/$x->{asset}";
+        $want{$path} = 1;
+        push @problems, "$dir/$path is not the source dist16/lock pins" if !$cf && $sha->("$dir/$path") ne $x->{sha256};
+        for my $t (@texts) {
+          push @problems, "the source text does not give $x->{asset}'s SHA-256" unless index($t, $x->{sha256}) >= 0;
+        }
+      }
+      # The license texts, as fetched, in full.
+      my @lic = map { $norm->(slurp($_)) =~ s/\n*\z//r }
+        grep { m{/\Q$p->{name}\E\.(txt|notice\d+\.txt|depend\d+\.txt)$} } files_under("$dest/licenses");
+      push @problems, "$dest/licenses has no license of $p->{name}" unless @lic;
+      for my $t (@texts) {
+        for my $l (@lic) {
+          push @problems, "a license text of $p->{name} is not in full in the source text" unless index($t, $l) >= 0;
+        }
+        push @problems, "the source text does not name $p->{name}" unless $t =~ /^\Q$p->{name}: $p->{repo} $p->{tag}, $p->{spdx}\E$/m;
+        push @problems, "the license text of $p->{name} ($p->{spdx}) is missing"
+          unless $t =~ /^\Q$p->{name}: $p->{repo} $p->{tag} (commit $p->{commit}), $p->{spdx}\E$/m;
+      }
+    }
+    if(!$cf) {
+      for my $f (sort map { s{^\Q$dir\E/}{}r } files_under("$dir/SOURCE")) {
+        push @problems, "$dir/$f is not a source dist16/lock pins" unless $want{$f};
+      }
+    }
+  }
+  die join('', map { "$_\n" } @problems) if @problems;
+  say "$dir: " . (@s ? join(', ', map { "$_->{name} ($_->{spdx})" } @s) . ' with source and licenses' : 'no program under a source license');
+}
+
+sub files_under ($dir) {
+  return () unless -d $dir;
+  opendir my $dh, $dir or die "$dir: $!\n";
+  my @f;
+  for my $e (sort grep { !/^\.\.?$/ } readdir $dh) {
+    push @f, -d "$dir/$e" ? files_under("$dir/$e") : "$dir/$e";
+  }
+  return @f;
 }
 
 sub main (@args) {
   GetOptionsFromArray(\@args, \%opt, 'config=s', 'lock=s', 'cache=s', 'api=s', 'github=s', 'raw=s', 'reserved=s')
-    or die "usage: scripts/dist16 [OPTIONS] resolve|check|fetch DEST|list|notices DEST|bin-list\n";
+    or die "usage: scripts/dist16 [OPTIONS] resolve|check|fetch DEST|list|notices DEST|bin-list|sources|check-dist DIR DEST\n";
   my $cmd = shift(@args) // '';
   if($cmd eq 'resolve' || $cmd eq 'check') {
     my $c = read_config($opt{config});
@@ -592,7 +1047,17 @@ sub main (@args) {
     return 0;
   }
   if($cmd eq 'list') {
-    say $_->{name} for read_lock()->@*;
+    my $programs = read_lock();
+    say $_->{name} for @$programs;
+    say $SOURCES if sourced($programs);
+    return 0;
+  }
+  if($cmd eq 'sources') {
+    print sources_text(sourced(read_lock()));
+    return 0;
+  }
+  if($cmd eq 'check-dist' && @args == 2) {
+    cmd_check_dist(@args);
     return 0;
   }
   if($cmd eq 'notices' && @args == 1) {
@@ -601,10 +1066,13 @@ sub main (@args) {
   }
   if($cmd eq 'bin-list') {
     my %skip = map { uc($_) => 1 } @args;
-    printf "  BIN\\%-12s from %s %s\n", $_->{name}, $_->{repo}, $_->{tag} for grep { !$skip{$_->{name}} } read_lock()->@*;
+    my $programs = read_lock();
+    printf "  BIN\\%-12s from %s %s, %s\n", $_->{name}, $_->{repo}, $_->{tag}, $_->{spdx} for grep { !$skip{$_->{name}} } @$programs;
+    printf "  BIN\\%-12s where to get the source of %s\n", $SOURCES, join ', ', map { $_->{name} } sourced($programs)
+      if sourced($programs);
     return 0;
   }
-  die "usage: scripts/dist16 [OPTIONS] resolve|check|fetch DEST|list|notices DEST|bin-list\n";
+  die "usage: scripts/dist16 [OPTIONS] resolve|check|fetch DEST|list|notices DEST|bin-list|sources|check-dist DIR DEST\n";
 }
 
 my $rc = eval { main(@ARGV) };

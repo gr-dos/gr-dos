@@ -102,7 +102,8 @@ GR-DOS. TICO.EXE and the programs listed after GRVER.EXE are the
 releases of the GitHub projects named, unchanged: the ones whose names
 end in 16 in the gr-dos organization (https://github.com/gr-dos), and
 tico16 (https://github.com/tico-edit/tico16). They are on no floppy but
-TICO.EXE; each one's license is at the end of this file.
+TICO.EXE. Each is under its own project's license, named in the list
+above, with its text at the end of this file.
 
 Booting
 -------
@@ -183,13 +184,21 @@ and, once unpacked, this archive's own SHA256SUMS covers its files:
 
   cd gr-dos-@VERSION@ && sha256sum -c SHA256SUMS
 
+@DIST16_SOURCES@
 Licenses
 --------
 
-GR-DOS's own work is MIT licensed. The MS-DOS 4.00 source it is built from
-keeps its own MIT license. MS-DOS is a trademark of Microsoft. GR-DOS is an
-independent project, not endorsed by Microsoft or IBM. TICO.EXE is tico16's,
-under its MIT license. ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE and GRVER.EXE
-are compiled with Open Watcom C, but contain no Open Watcom code: their C runtime is libc16
-(https://github.com/gr-dos/libc16), under its MIT license. The four MIT
-licenses follow.
+GR-DOS is an aggregation of separately licensed programs, not one
+MIT-licensed work, and it relicenses none of them. GR-DOS's own work is
+MIT licensed. The MS-DOS 4.00 source it is built from keeps its own MIT
+license. MS-DOS is a trademark of Microsoft. GR-DOS is an independent
+project, not endorsed by Microsoft or IBM. ATTRIB.EXE, MEM.EXE, FDISK.EXE,
+FC.EXE and GRVER.EXE are compiled with Open Watcom C, but contain no Open
+Watcom code: their C runtime is libc16 (https://github.com/gr-dos/libc16),
+under its MIT license. TICO.EXE and the other programs from GitHub
+projects are each under their project's license, as named in Contents
+above. A license that requires the program's source, the GNU GPL version
+2 or later or version 1 or later, is met as "Corresponding source" above
+says, and the program's own license text is kept as its project gives it. The licenses follow: GR-DOS's,
+the MS-DOS 4.00 source's, each GitHub project's, with any further notice
+and the license of any library linked into it, and libc16's.
