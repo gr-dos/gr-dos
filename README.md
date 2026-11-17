@@ -167,7 +167,10 @@ gr-dos-VERSION/
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
 │   ├── CRCSUM.EXE, DF.EXE, DIFF16.EXE, LESS.EXE, MD5SUM.EXE, TAR.EXE,
 │   │   TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
+│   ├── SOURCES.TXT   only with a *16 program under the GPL or another
+│   │                 source license: where its source is, and its license
 │   └── AUTOEXEC.BAT
+├── SOURCE/           only then: each such program's source archives
 ├── BUILDINFO         the commit and tool versions
 ├── SHA256SUMS        checksums of the files in the ZIP
 └── LOGS/
@@ -218,7 +221,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
 - [`docs/grver.md`](docs/grver.md): the kernel's GR-DOS identification
   call (`INT 21h AX=3347h`), GRVER.EXE, and how a program calls it.
 - [`docs/dist16.md`](docs/dist16.md): the `*16` programs, how they are
-  found, pinned and checked, and how to add or exclude one.
+  found, pinned and checked, how to add or exclude one, and how a program
+  under the GPL ships with its source.
 - [`docs/run-dosbox.md`](docs/run-dosbox.md): `make run-dosbox`, the
   commands DOSBox-X runs itself, and what works there.
 
@@ -228,8 +232,12 @@ GR-DOS's own scripts, patches and documentation are MIT, see
 [`LICENSE`](LICENSE). The MS-DOS 4.00 source in `v4.0` keeps its own MIT
 license, [`v4.0/LICENSE`](v4.0/LICENSE). TICO.EXE is
 [tico16](https://github.com/tico-edit/tico16)'s, and each other `*16` program is its
-repository's, under that repository's license, all MIT today
-(`dist16/lock`).
+repository's, under that repository's license (`dist16/lock`): all MIT
+today. A `*16` program may also be under the GPL version 2 or later, and
+then ships with its exact corresponding source
+([`docs/dist16.md`](docs/dist16.md#source-licenses), issue #56). GR-DOS is
+an aggregation of separately licensed programs: including one under the
+GPL does not relicense GR-DOS, its kernel or any other program.
 ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are compiled with Open Watcom C but linked with
 [libc16](https://github.com/gr-dos/libc16), an MIT C runtime, and contain
 no Open Watcom code ([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes
