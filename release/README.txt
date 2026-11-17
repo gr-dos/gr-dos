@@ -25,20 +25,34 @@ and use B: for programs and data. Each also installs GR-DOS on a hard disk
            PRINT, ASSIGN, RECOVER and KEYB, with COUNTRY.SYS and
            KEYBOARD.SYS
   1.2 MB,  those, and APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS,
-  1.44 MB  GRAPHICS.PRO and NLSFUNC
+  1.44 MB  GRAPHICS.PRO and NLSFUNC, and DISPLAY.SYS with EGA.CPI
 
-FASTOPEN, IFSFUNC and GRVER are on no floppy: FASTOPEN works on hard
-disks only, IFSFUNC needs an installable file system driver, and GRVER is
-for C:\DOS and this archive.
+FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on no floppy: FASTOPEN works on
+hard disks only, IFSFUNC needs an installable file system driver, GRVER is
+for C:\DOS and this archive, and LCD.CPI is for the IBM PC Convertible.
 
 COUNTRY.SYS and KEYBOARD.SYS are MS-DOS 4.00's country and keyboard
 data. COUNTRY=049 in CONFIG.SYS gives the German date, time and number
 formats, for example, from \COUNTRY.SYS on the boot disk (or
 COUNTRY=049,,C:\DOS\COUNTRY.SYS), and KEYB GR the German keyboard;
 Ctrl+Alt+F1 switches to the US keyboard and Ctrl+Alt+F2 back. There are 23
-countries and 17 keyboard layouts. Use code page 437 where the layout has
-it: there is no DISPLAY.SYS, so the screen's characters are code page
-437's.
+countries and 17 keyboard layouts.
+
+DISPLAY.SYS switches the code page of an EGA or VGA screen (or a PC
+Convertible's LCD), with the fonts of EGA.CPI (LCD.CPI): code pages 437,
+850, 860, 863 and 865. For example, in CONFIG.SYS:
+
+  DEVICE=C:\DOS\DISPLAY.SYS CON=(EGA,437,1)
+
+and then:
+
+  MODE CON CP PREPARE=((850) C:\DOS\EGA.CPI)
+  MODE CON CP SELECT=850
+
+KEYB follows the screen's code page, and CHCP, with NLSFUNC loaded,
+changes DOS's and the screen's together. Without DISPLAY.SYS, use code
+page 437 where the keyboard layout has it, as the screen's characters are
+code page 437's.
 
 Contents
 --------
@@ -84,6 +98,9 @@ Contents
   BIN\GRAPHICS.PRO GRAPHICS's printer profile
   BIN\COUNTRY.SYS  country information, for COUNTRY= in CONFIG.SYS
   BIN\KEYBOARD.SYS keyboard layouts, for KEYB
+  BIN\DISPLAY.SYS  code page switching for the screen, for CONFIG.SYS
+  BIN\EGA.CPI      EGA and VGA fonts of five code pages, for MODE
+  BIN\LCD.CPI      the PC Convertible's LCD fonts, for MODE
   BIN\GRVER.EXE    shows the GR-DOS release version, from the kernel
 @DIST16@
   BIN\AUTOEXEC.BAT sets the prompt and PATH A:\

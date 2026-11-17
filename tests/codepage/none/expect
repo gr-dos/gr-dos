@@ -1,0 +1,47 @@
+# Lines the code page test (codepage.bat) must write to COM1 without
+# DISPLAY.SYS (scripts/smoke-test): CON has no code page switching, so
+# CON's query fails with invalid function (1), MODE's CP commands are not
+# supported (SELECT is a device error), KEYB cannot learn CON's code page,
+# and the font stays the VGA BIOS' own. CHCP changes only DOS's tables.
+# The font lines are checked as in tests/codepage/ega/expect.
+
+^GRDOS-TEST-BEGIN$
+^== BOOT$
+^CON CODEPAGE ERROR 1$
+^FONT 9B (?!00 00 00 00 00 7C C[6E] )[0-9A-F]{2}( [0-9A-F]{2}){15}$
+^FONT D5 00 00 00 00 00 1F 18 1F 18 18 18 18 18 18 18 18$
+^Code page operation not supported on this device$
+^== PREPARE$
+^Code page operation not supported on this device$
+^Code page operation not supported on this device$
+^== SELECT$
+^Device error during select$
+^CON CODEPAGE ERROR 1$
+^== KEYB$
+^Current keyboard code: GR  code page: 437$
+^Active code page not available from CON device$
+^== CHCP$
+^Active code page: 437$
+^CON CODEPAGE ERROR 1$
+^Current keyboard code: GR  code page: 437$
+^Active code page not available from CON device$
+^CON CODEPAGE ERROR 1$
+^FONT 9B (?!00 00 00 00 00 7C C[6E] )[0-9A-F]{2}( [0-9A-F]{2}){15}$
+^FONT D5 00 00 00 00 00 1F 18 1F 18 18 18 18 18 18 18 18$
+^== MODE$
+^CON CODEPAGE ERROR 1$
+
+# SELECT and CHCP 865, SELECT 860, the two bad PREPAREs, the missing file
+# (found before the device is asked), REFRESH
+^== ERRORS$
+^Device error during select$
+^Invalid code page$
+^Device error during select$
+^Code page operation not supported on this device$
+^Code page operation not supported on this device$
+^Failure to access code page font file$
+^Code page operation not supported on this device$
+^CON CODEPAGE ERROR 1$
+^FONT 9B (?!00 00 00 00 00 7C C[6E] )[0-9A-F]{2}( [0-9A-F]{2}){15}$
+^FONT D5 00 00 00 00 00 1F 18 1F 18 18 18 18 18 18 18 18$
+^GRDOS-TEST-END$

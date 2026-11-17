@@ -167,8 +167,12 @@ says which source needs it.
   structure field (`-Zm`) has the field's `SIZE` and `LENGTH` (GRAFTABL).
 - **`0021-Zj-question-mark-zeros.patch`**: `?` outside `DUP` is written as
   zeros, so that the segment has data records (EXE2BIN).
+- **`0022-Zj-type-of-forward-reference.patch`**: `TYPE` of a symbol not yet
+  defined is the constant 0 in pass one, not a forward reference
+  (DISPLAY.SYS' `ADD DI,TYPE FTBLK`).
 
-0012 to 0021 came with the utilities of [M5](m5-utilities.md).
+0012 to 0021 came with the utilities of [M5](m5-utilities.md), and 0022
+with DISPLAY.SYS ([codepage.md](codepage.md)).
 
 ## Linking
 

@@ -1,0 +1,89 @@
+# Lines the code page test (codepage.bat) must write to COM1 with
+# DEVICE=A:\DISPLAY.SYS CON=(EGA,437,2) (scripts/smoke-test), on QEMU's
+# VGA. CPINFO's FONT lines are characters 9Bh and D5h of the font in
+# plane 2: in code page 850 o with a stroke and the dotless i, EGA.CPI's
+# (DEV/DISPLAY/EGA/850-8X16.ASM); in 865 o with a stroke and a box drawing
+# character (865-8X16.ASM). Code page 437 is the hardware's, the VGA BIOS'
+# own font, not EGA.CPI's: its cent sign is only checked to be neither of
+# the others, its box drawing character exactly.
+
+^GRDOS-TEST-BEGIN$
+
+# At boot DISPLAY.SYS has the hardware code page and two places for
+# prepared ones, and no code page selected: CON's query fails (5) and the
+# font is the BIOS'
+^== BOOT$
+^CON CODEPAGE ERROR 5$
+^FONT 9B (?!00 00 00 00 00 7C C[6E] )[0-9A-F]{2}( [0-9A-F]{2}){15}$
+^FONT D5 00 00 00 00 00 1F 18 1F 18 18 18 18 18 18 18 18$
+^No code page has been selected$
+^Hardware code pages:$
+^  code page 437$
+^Prepared code pages:$
+^  code page not prepared$
+^  code page not prepared$
+^MODE status code page function completed$
+
+# 850 and 865 from EGA.CPI
+^== PREPARE$
+^MODE prepare code page function completed$
+^No code page has been selected$
+^Hardware code pages:$
+^  code page 437$
+^Prepared code pages:$
+^  code page 850$
+^  code page 865$
+^MODE status code page function completed$
+
+# Selecting 850 loads its font
+^== SELECT$
+^MODE select code page function completed$
+^CON CODEPAGE 850$
+^FONT 9B 00 00 00 00 00 7C CE DE F6 E6 C6 7C 00 00 00 00$
+^FONT D5 00 00 00 00 00 38 18 18 18 18 18 3C 00 00 00 00$
+
+# KEYB GR takes CON's code page; Germany's layout has 437 and 850, not
+# the prepared 865, which KEYB says
+^== KEYB$
+^One or more CON code pages invalid for given keyboard code$
+^Current keyboard code: GR  code page: 850$
+^Current CON code page: 850$
+
+# CHCP, with NLSFUNC, switches CON with DOS: 437, the hardware's font,
+# with KEYB following, then 850 again
+^== CHCP$
+^Active code page: 437$
+^CON CODEPAGE 437$
+^FONT 9B (?!00 00 00 00 00 7C C[6E] )[0-9A-F]{2}( [0-9A-F]{2}){15}$
+^FONT D5 00 00 00 00 00 1F 18 1F 18 18 18 18 18 18 18 18$
+^Current keyboard code: GR  code page: 437$
+^Current CON code page: 437$
+^CON CODEPAGE 850$
+^FONT 9B 00 00 00 00 00 7C CE DE F6 E6 C6 7C 00 00 00 00$
+^FONT D5 00 00 00 00 00 38 18 18 18 18 18 3C 00 00 00 00$
+
+# A video mode set (MODE CO80) loads the selected code page's font again
+^== MODE$
+^CON CODEPAGE 850$
+^FONT 9B 00 00 00 00 00 7C CE DE F6 E6 C6 7C 00 00 00 00$
+^FONT D5 00 00 00 00 00 38 18 18 18 18 18 3C 00 00 00 00$
+
+# MODE selects 865, which KEYB GR has no table for (it keeps 850's); CHCP
+# refuses 865, which COUNTRY.SYS does not have for the United States; 860
+# is not prepared; LCD.CPI has no EGA fonts, and EGA.CPI no code page 999,
+# which DISPLAY.SYS reports as an invalid font file; a missing file;
+# REFRESH loads 865 again. CON is left in 865, with its font.
+^== ERRORS$
+^Current keyboard does not support this code page$
+^Invalid code page$
+^Code page not prepared$
+^Font file contents invalid$
+^Device error during prepare$
+^Font file contents invalid$
+^Device error during prepare$
+^Failure to access code page font file$
+^Current keyboard does not support this code page$
+^CON CODEPAGE 865$
+^FONT 9B 00 00 00 00 00 7C C6 CE D6 E6 C6 7C 00 00 00 00$
+^FONT D5 00 00 00 00 00 1F 18 1F 18 18 18 18 18 18 18 18$
+^GRDOS-TEST-END$

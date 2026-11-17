@@ -53,7 +53,9 @@ sources; porting these is C work, like that of [M4](m4-utilities.md) and
 Two built commands need data files from `v4.0/src/DEV`: KEYB needs
 `KEYBOARD.SYS` (`DEV/KEYBOARD`), and NLSFUNC's code page switching
 (`CHCP`) needs `COUNTRY.SYS` (`DEV/COUNTRY`). GR-DOS builds both since
-issue #23 ([country-keyboard.md](country-keyboard.md)). GRAPHICS
+issue #23 ([country-keyboard.md](country-keyboard.md)). MODE's code page
+commands (`MODE CON CP`) need DISPLAY.SYS and its fonts (`DEV/DISPLAY`),
+built since issue #24 ([codepage.md](codepage.md)). GRAPHICS
 needs its printer profile, `GRAPHICS.PRO`, which is a text file in the
 source and is distributed with it.
 
@@ -173,17 +175,19 @@ drive. What a floppy carries is chosen for that use, not to fill it:
   [country-keyboard.md](country-keyboard.md)).
 - **1.2 MB and 1.44 MB:** those, and the rest that work from a floppy:
   APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and its GRAPHICS.PRO, and
-  NLSFUNC. Everything that is useful on a floppy fits on 1.2 MB, so the two
-  have the same files.
-- **No floppy:** GRVER ([grver.md](grver.md)), FASTOPEN, which works on hard disks only, and IFSFUNC,
-  which needs an installable file system driver, and there is none.
+  NLSFUNC; and DISPLAY.SYS with EGA.CPI (issue #24,
+  [codepage.md](codepage.md)). Everything that is useful on a floppy fits
+  on 1.2 MB, so the two have the same files.
+- **No floppy:** GRVER ([grver.md](grver.md)), FASTOPEN, which works on hard disks only, IFSFUNC,
+  which needs an installable file system driver, and there is none, and
+  LCD.CPI, for the PC Convertible alone.
 
 | Image | Files | Bytes free |
 |---|---:|---:|
 | 360 KB | 17 | 16,384 |
 | 720 KB | 30 | 229,376 |
-| 1.2 MB | 37 | 643,584 |
-| 1.44 MB | 37 | 887,296 |
+| 1.2 MB | 39 | 578,560 |
+| 1.44 MB | 39 | 822,272 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's
@@ -195,7 +199,8 @@ image's files with their size, attributes, time and SHA-256.
 ### C: and the release
 
 `ALL_FILES` is everything: the M4 utilities, TICO.EXE, all 19 commands,
-GRAPHICS.PRO, COUNTRY.SYS and KEYBOARD.SYS (issue #23), the other `*16` programs ([dist16.md](dist16.md), since
+GRAPHICS.PRO, COUNTRY.SYS and KEYBOARD.SYS (issue #23), DISPLAY.SYS, EGA.CPI
+and LCD.CPI (issue #24), the other `*16` programs ([dist16.md](dist16.md), since
 issue #36) and AUTOEXEC.BAT. `scripts/deploy-cf` installs all of it but
 AUTOEXEC.BAT in `C:\DOS` (`build/linux/cf`). Its manifest is that of a
 1.44 MB image of the same files, so each file is stamped as on the

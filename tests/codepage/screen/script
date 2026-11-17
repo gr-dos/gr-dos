@@ -1,0 +1,52 @@
+# DISPLAY.SYS on the screen (issue #24), read from the text-mode video
+# memory (scripts/disk-test): its messages at boot, and KEYB GR in code
+# page 850 and then 437. A floppy boot: the hard disk is not used.
+disk 1M
+unchanged
+
+# CONFIG.SYS's first five DEVICE= lines fail, each with its message: an
+# unknown display type, a missing parenthesis, a device other than CON, two
+# hardware code pages, no parameters. The sixth, with no display type,
+# loads as an EGA, which DISPLAY.SYS finds the VGA to be; AUTOEXEC.BAT
+# prepares and selects code page 850 and loads KEYB GR, silently.
+wait CON code page driver cannot be initialized\n(Invalid syntax on DISPLAY\.SYS code page driver\n){4}(?s:.*)A:\\>\s*\z
+
+# Code page 850: Shift+3 is the section sign (F5h), the dead acute accent
+# and a space the acute accent (EFh), the dead grave accent and Shift+A
+# A with a grave (B7h). The screen shows the bytes as code page 437's
+# characters. Commands are typed with KEYB's US layout (Ctrl+Alt+F1), the
+# keys with the German one (Ctrl+Alt+F2).
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+key ctrl-alt-f2
+key e c h o spc shift-3 spc equal spc spc shift-equal shift-a
+key ret
+key ctrl-alt-f1
+type MODE CON CP /STA
+key ret
+screen cp850
+
+# Code page 437, selected by MODE: KEYB follows CON. Shift+3 is the
+# section sign, 15h; the acute accent alone is an apostrophe; code page
+# 437 has no A with a grave, so the grave accent and A are both typed
+# (with a beep).
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type MODE CON CP SELECT
+key equal
+type 437
+key ret
+wait completed\s+A:\\>\s*\z
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+key ctrl-alt-f2
+key e c h o spc shift-3 spc equal spc spc shift-equal shift-a
+key ret
+key ctrl-alt-f1
+type KEYB
+key ret
+screen cp437
+quit
