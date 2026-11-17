@@ -65,8 +65,8 @@ sudo scripts/deploy-cf update /dev/sdX      # afterwards: C: only
 
 | Format | Image | Bytes | Geometry | Free |
 |---|---|---:|---|---:|
-| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 887,296 |
-| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 643,584 |
+| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 822,272 |
+| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 578,560 |
 | 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 229,376 |
 | 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 16,384 |
 
@@ -83,9 +83,10 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `XCOPY.EXE`, `COMP.COM`, `DISKCOMP.COM`, `LABEL.COM`, `TREE.COM`, `SORT.EXE`, `EDLIN.COM`, `PRINT.COM`, `ASSIGN.COM`, `RECOVER.COM` | | ✓ | ✓ |
 | `KEYB.COM`, with `COUNTRY.SYS` and `KEYBOARD.SYS` ([`docs/country-keyboard.md`](docs/country-keyboard.md)) | | ✓ | ✓ |
 | `APPEND.EXE`, `SHARE.EXE`, `EXE2BIN.EXE`, `GRAFTABL.COM`, `GRAPHICS.COM`, `GRAPHICS.PRO`, `NLSFUNC.EXE` | | | ✓ |
+| `DISPLAY.SYS`, with `EGA.CPI` ([`docs/codepage.md`](docs/codepage.md)) | | | ✓ |
 | `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
 
-The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC and GRVER are on C: only. `image/files-360k.txt` (and so on) lists each image's
+The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on C: only. `image/files-360k.txt` (and so on) lists each image's
 files in order, and `make` checks the image against it.
 `build/linux/manifest-360k.txt` (and so on) lists them with their checksums. To
 build one image from a built tree, choose the format with `--format` (1440
@@ -164,6 +165,7 @@ gr-dos-VERSION/
 │   │   IFSFUNC.EXE, KEYB.COM, LABEL.COM, NLSFUNC.EXE, PRINT.COM,
 │   │   RECOVER.COM, SHARE.EXE, SORT.EXE, TREE.COM, XCOPY.EXE,
 │   │   GRAPHICS.PRO, COUNTRY.SYS, KEYBOARD.SYS
+│   ├── DISPLAY.SYS, EGA.CPI, LCD.CPI   code page switching for the screen
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
 │   ├── CRCSUM.EXE, DF.EXE, DIFF16.EXE, LESS.EXE, MD5SUM.EXE, TAR.EXE,
 │   │   TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
@@ -218,6 +220,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   utilities, each format's files, and their tests.
 - [`docs/country-keyboard.md`](docs/country-keyboard.md): COUNTRY.SYS and
   KEYBOARD.SYS, the countries and layouts, configuration and limits.
+- [`docs/codepage.md`](docs/codepage.md): DISPLAY.SYS, EGA.CPI and LCD.CPI,
+  code page switching with MODE, CHCP and KEYB, the displays, and limits.
 - [`docs/grver.md`](docs/grver.md): the kernel's GR-DOS identification
   call (`INT 21h AX=3347h`), GRVER.EXE, and how a program calls it.
 - [`docs/dist16.md`](docs/dist16.md): the `*16` programs, how they are

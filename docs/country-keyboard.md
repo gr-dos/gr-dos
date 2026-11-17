@@ -22,7 +22,8 @@ With them, `COUNTRY=`, NLSFUNC, CHCP and KEYB, built since issue #17
 | `CMD/KEYB`, `CMD/NLSFUNC` | the programs | built since issue #17 |
 | `BIOS/SYSINIT*.ASM` | `COUNTRY=`, which loads a country from `COUNTRY.SYS` at boot | in IO.SYS |
 | `CMD/COMMAND` | `DATE`, `TIME`, `DIR` and `CHCP`, which use the country's formats | in COMMAND.COM |
-| `DEV/DISPLAY`, `DEV/PRINTER` | code page switching for the screen and printers: DISPLAY.SYS (EGA and LCD fonts), PRINTER.SYS and the 4201, 4208 and 5202 `.CPI` files | not built (below) |
+| `DEV/DISPLAY` | code page switching for the screen: DISPLAY.SYS and its EGA and LCD fonts | built since issue #24: [codepage.md](codepage.md) |
+| `DEV/PRINTER` | code page switching for printers: PRINTER.SYS and the 4201, 4208 and 5202 `.CPI` files | not built: issue #25 |
 
 Everything GR-DOS uses here is in Microsoft's MIT-licensed `v4.0` tree.
 No retail MS-DOS file is used or distributed. `KEYBOARD.LNK` links 20 of
@@ -105,8 +106,10 @@ CHCP 850
 NLSFUNC loads resident and reads `COUNTRY.SYS` when CHCP asks for another
 code page. CHCP can choose only a code page that `COUNTRY.SYS` has for
 the current country, or it says "Invalid code page". The change applies
-only to DOS's tables. Without DISPLAY.SYS and MODE's `CP PREPARE` the
-screen's font stays the hardware's, normally code page 437 (below).
+only to DOS's tables, unless DISPLAY.SYS is loaded and MODE's `CP PREPARE`
+has given it the code page: then CHCP changes the screen's font too
+([codepage.md](codepage.md)). Otherwise the font stays the hardware's,
+normally code page 437.
 
 ### KEYB
 
@@ -136,7 +139,10 @@ report its code page ("Active code page not available from CON device").
 KEYB then takes the code page given, or the layout's first. Use code page
 437, which matches the screen's font, for every layout that has it. PO,
 DK, NO and CF do not, so their characters appear as code page 437's
-glyphs for the same bytes.
+glyphs for the same bytes. With DISPLAY.SYS, KEYB takes CON's code page,
+and follows it when MODE or CHCP selects another; on an EGA or VGA,
+EGA.CPI's 850, 860, 863 and 865 give PO, DK, NO and CF their characters
+([codepage.md](codepage.md)).
 
 ## Supported countries
 
@@ -244,12 +250,11 @@ against the source's tables.
 
 ### Limits found
 
-- **Code page switching is not built.** DISPLAY.SYS, PRINTER.SYS and their
-  `.CPI` files (`DEV/DISPLAY`, `DEV/PRINTER`) are not part of issue #23.
-  So CHCP changes only DOS's tables, KEYB cannot learn the screen's code
-  page, and MODE's `CP` commands have nothing to work with.
-  `DEV/DISPLAY/INT10COM.INC` is one of the source's damaged files
-  ([provenance.md](provenance.md)).
+- **Code page switching was not part of issue #23.** Without DISPLAY.SYS,
+  CHCP changes only DOS's tables, KEYB cannot learn the screen's code page,
+  and MODE's `CP` commands have nothing to work with. DISPLAY.SYS and its
+  fonts are built since issue #24 ([codepage.md](codepage.md)); printer
+  code pages, PRINTER.SYS, are issue #25's.
 - **Germany's code page 437 data uses `.` as the time separator.**
   `TIME` shows `4.37.19,29`.
 - **The key left of 1 is not a dead key in the German layout.** It is
