@@ -82,7 +82,8 @@ which require only that their notice is kept.
 =item source-license SPDX...
 
 The licenses a program may have that also require its corresponding
-source to be available, such as C<GPL-2.0-or-later> (issue #56). A
+source to be available, such as C<GPL-2.0-or-later> and
+C<GPL-1.0-or-later> (issue #56). A
 program under one needs a F<dist16.source> manifest, below.
 
 =back
@@ -308,7 +309,8 @@ sub read_config ($path) {
 }
 
 # A license without its -only or -or-later: GitHub reports GPL-2.0 for the
-# text of the GPL version 2, whichever the program is under.
+# text of the GPL version 2 (GPL-1.0 for version 1's), whichever the
+# program is under.
 sub spdx_base ($spdx) { $spdx =~ s/(-only|-or-later|\+)$//r }
 
 # The source licenses of a family GitHub reports.
