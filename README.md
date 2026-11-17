@@ -233,8 +233,9 @@ GR-DOS's own scripts, patches and documentation are MIT, see
 license, [`v4.0/LICENSE`](v4.0/LICENSE). TICO.EXE is
 [tico16](https://github.com/tico-edit/tico16)'s, and each other `*16` program is its
 repository's, under that repository's license (`dist16/lock`): all MIT
-today. A `*16` program may also be under the GPL version 2 or later, and
-then ships with its exact corresponding source
+today. A `*16` program may also be under the GPL version 2 or later
+(patch16) or version 1 or later (perl16's Perl 3), and then ships with
+its exact corresponding source
 ([`docs/dist16.md`](docs/dist16.md#source-licenses), issue #56). GR-DOS is
 an aggregation of separately licensed programs: including one under the
 GPL does not relicense GR-DOS, its kernel or any other program.

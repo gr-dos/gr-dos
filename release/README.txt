@@ -197,7 +197,8 @@ FC.EXE and GRVER.EXE are compiled with Open Watcom C, but contain no Open
 Watcom code: their C runtime is libc16 (https://github.com/gr-dos/libc16),
 under its MIT license. TICO.EXE and the other programs from GitHub
 projects are each under their project's license, as named in Contents
-above; a license that requires the program's source, such as the GNU GPL,
-is met as "Corresponding source" above says. The licenses follow: GR-DOS's,
+above. A license that requires the program's source, the GNU GPL version
+2 or later or version 1 or later, is met as "Corresponding source" above
+says, and the program's own license text is kept as its project gives it. The licenses follow: GR-DOS's,
 the MS-DOS 4.00 source's, each GitHub project's, with any further notice
 and the license of any library linked into it, and libc16's.

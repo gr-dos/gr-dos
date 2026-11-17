@@ -108,7 +108,8 @@ A repository's release is shipped when it has:
    (`GET /repos/R/license?ref=COMMIT`), under one of the licenses in
    `dist16/config`. The `license` ones, MIT, BSD-2-Clause, BSD-3-Clause,
    ISC, Zlib and 0BSD, only require their notice to be kept, and the ZIP's
-   README keeps it. A `source-license` one, GPL-2.0-or-later, also needs
+   README keeps it. A `source-license` one, GPL-2.0-or-later or
+   GPL-1.0-or-later, also needs
    the program's corresponding source, which the release must provide as
    [Source licenses](#source-licenses) says. A license added after a
    release counts from the next release.
@@ -160,15 +161,24 @@ build error, and is never used.
 
 ## Source licenses
 
-Issue #56 lets the full distribution include programs under the GNU GPL,
-starting with [gr-dos/patch16](https://github.com/gr-dos/patch16), GNU
-patch 2.2, which is GPL-2.0-or-later and linked with libc16 (MIT).
-`dist16/config` lists such licenses apart from the permissive ones:
+Issue #56 lets the full distribution include programs under the GNU GPL.
+Two families are allowed:
+
+| License | GitHub reports | For |
+|---|---|---|
+| `GPL-2.0-or-later` | `GPL-2.0` | [gr-dos/patch16](https://github.com/gr-dos/patch16), GNU patch 2.2, linked with libc16 (MIT) |
+| `GPL-1.0-or-later` | `GPL-1.0` | [gr-dos/perl16](https://github.com/gr-dos/perl16), whose Perl 3.044 is GPL version 1 or later |
+
+`dist16/config` lists them apart from the permissive licenses:
 
 ```text
 license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD
-source-license GPL-2.0-or-later
+source-license GPL-2.0-or-later GPL-1.0-or-later
 ```
+
+Both are under the same contract, below. The `-only` forms are not
+allowed, and neither is any other GPL version: a program needs a config
+change, reviewed, to add one.
 
 GR-DOS is an **aggregation of separately licensed programs**. Shipping a
 GPL program beside the others, in `C:\DOS` or the ZIP, does not relicense
@@ -179,9 +189,9 @@ Makefile's `FLOPPY_*` lists, and `image/files-*k.txt` must not change.
 
 ### The release's dist16.source
 
-GitHub reports a license's family, `GPL-2.0`, for the text of the GPL
-version 2: not whether the program is `GPL-2.0-only` or
-`GPL-2.0-or-later`, and not where its source is. So a program whose
+GitHub reports a license's family, `GPL-2.0` for the text of the GPL
+version 2 and `GPL-1.0` for version 1's: not whether the program is
+`-only` or `-or-later`, and not where its source is. So a program whose
 license GitHub finds in a `source-license` family ships only if its
 repository has a `dist16.source` at the release's commit:
 
@@ -208,8 +218,16 @@ reason, if anything is missing, unverifiable or contradictory:
 - **No manifest**, or a malformed one: a GPL program is never treated as
   permissively licensed.
 - **The license.** `dist16.source`'s license must be in GitHub's family
-  (`GPL-2.0` for `GPL-2.0-or-later`) and in `dist16/config`; a GitHub
-  `GPL-3.0`, or a manifest saying `MIT` or `GPL-2.0-only`, fails.
+  (`GPL-2.0` for `GPL-2.0-or-later`, `GPL-1.0` for
+  `GPL-1.0-or-later`) and in `dist16/config`. A GitHub `GPL-3.0`, a
+  manifest saying `MIT`, `GPL-2.0-only` or `GPL-1.0-only`, or one whose
+  version is not the license file's (`GPL-2.0-or-later` over GPL version
+  1's text, or the reverse), fails.
+- **The license text is the program's own.** The lock pins the license
+  file GitHub found at the commit (`COPYING`), by SHA-256, and the source
+  archive must hold the same file. That text is what the ZIP's README and
+  `SOURCES.TXT` carry: a GPL version 1 program keeps the version 1 text,
+  never a substituted version 2 notice.
 - **The source is this release's.** The archive must be an asset of the
   release, checked against GitHub's size and digest like the program,
   and must hold, under one top directory, the same `dist16.source` and
@@ -219,8 +237,9 @@ reason, if anything is missing, unverifiable or contradictory:
 - **Statically linked libraries.** Each `depends` release must exist,
   and its license (at its tag's commit) must be one `dist16/config`
   allows. Its source asset is checked the same way, and must hold its
-  license file. GPL-2.0 section 3 covers the source of every module the
-  program contains, other than the compiler's own system libraries.
+  license file. Section 3 of both GPL versions covers the source of every
+  module the program contains, other than the system's or compiler's own
+  standard libraries.
 - **No Open Watcom runtime.** Using Open Watcom as a compiler and linker
   does not bring its license with it, but linking its C runtime would.
   An `.exe` under a source license that carries Open Watcom's runtime
@@ -235,7 +254,7 @@ reason, if anything is missing, unverifiable or contradictory:
   so everyone who gets the ZIP gets the source with it. `README.txt` has a
   *Corresponding source* section naming each archive by its GitHub URL,
   SHA-256 and place in the ZIP, and the program's license (the full GPL
-  text), its notices and its libraries' licenses at the end.
+  text, of the version its project ships), its notices and its libraries' licenses at the end.
 - **A CF card or hard disk** (`scripts/deploy-cf`) has `C:\DOS\SOURCES.TXT`,
   the same section with the license texts, but not the archives: the CF
   files are DOS 8.3 names, staged through a 1.44 MB image. It tells the
@@ -354,23 +373,29 @@ downloads and raw files. It needs no network. It covers:
   with one name.
 - **Licenses:** none at the release's commit, one not allowed, and one
   GitHub cannot identify.
-- **Source licenses (issue #56):** a GPL-2.0-or-later program with its
-  source, a notice and a linked library's source is resolved, locked,
-  fetched (offline too), staged with `SOURCES.TXT`, and packaged, and
-  `check-dist` accepts the ZIP and CF layouts. Each of these fails: no
-  `dist16.source`, a malformed one, one without `build`, a license that
-  disagrees with GitHub's (`MIT`), one `dist16/config` does not allow
-  (`GPL-2.0-only`, GitHub's `GPL-3.0`), a source asset the release does
-  not have, one that is the program, one that is not a `.zip` or
-  `.tar.gz`, one with another license file, manifest or no build file, a
-  source checksum mismatch, a notice missing at the commit, a library
-  with no such release or whose source is not an archive, Open Watcom's
-  runtime in the program, and a program named `SOURCES`. `check-dist`
-  refuses a README without the GPL text, a missing library source, an
-  unpinned file in `SOURCE`, a missing `SOURCES.TXT`, and a
-  `SOURCES.TXT` with no such program; the lock is refused with a GPL
-  program and no `source` line, a `source` line under MIT, or lines out
-  of order; and the MIT programs beside it are locked as before.
+- **Source licenses (issue #56):** a GPL-2.0-or-later and a
+  GPL-1.0-or-later program, each with its source, a notice and a linked
+  library's source, are resolved, locked, fetched (offline too), staged
+  with `SOURCES.TXT`, and packaged, and `check-dist` accepts the ZIP and
+  CF layouts. The GPL-1.0-or-later program keeps the GPL version 1 text,
+  as its project gives it. Each of these fails: no `dist16.source`, a
+  malformed one, one without `build`, a license that disagrees with
+  GitHub's (`MIT`), one `dist16/config` does not allow (`GPL-2.0-only`,
+  `GPL-1.0-only`, GitHub's `GPL-3.0`), a manifest version that is not
+  GitHub's (`GPL-2.0-or-later` for GitHub's `GPL-1.0`, and the reverse),
+  a source asset the release does not have, one that is the program, one
+  that is not a `.zip` or `.tar.gz`, one with another license file (a
+  version 2 `COPYING` for a version 1 program), manifest or no build
+  file, a source checksum mismatch, a notice missing at the commit, a
+  library with no such release or whose source is not an archive, Open
+  Watcom's runtime in the program, and a program named `SOURCES`; the
+  missing manifest, other license file and library failures are tested
+  for GPL-1.0-or-later too. `check-dist` refuses a README without the GPL
+  text, a missing library source, an unpinned file in `SOURCE`, a missing
+  `SOURCES.TXT`, and a `SOURCES.TXT` with no such program; the lock is
+  refused with a GPL program and no `source` line, a `source` line under
+  MIT, or lines out of order; and the MIT programs beside it are locked
+  as before.
 - **Architecture:** PE, NE, COFF behind a stub, a DOS extender, no MZ
   header, a malformed MZ header, and a `.COM` over 65,280 bytes (with one
   at exactly 65,280).
