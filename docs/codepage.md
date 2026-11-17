@@ -28,7 +28,7 @@ country and keyboard data, `COUNTRY.SYS` and `KEYBOARD.SYS`, are issue
 | `CMD/COMMAND` | CHCP | in COMMAND.COM |
 | `CMD/NLSFUNC`, `CMD/KEYB` | CHCP's code page change for the devices, and KEYB's tables by code page | built since issue #17 |
 | `CMD/GRAFTABL` | the upper 128 characters for CGA graphics modes (INT 1Fh), in code pages 437, 850, 860, 863 and 865 | built since issue #17 |
-| `DEV/PRINTER` | PRINTER.SYS, `4201.CPI`, `4208.CPI` and `5202.CPI`, for IBM printers | not built: issue #25 |
+| `DEV/PRINTER` | PRINTER.SYS, `4201.CPI`, `4208.CPI` and `5202.CPI`, for IBM printers | built since issue #25: [printer.md](printer.md) |
 | `DEV/ANSI` | ANSI.SYS, which asks DISPLAY.SYS before `MODE CON LINES=43` or `50` | not built: issue #26 |
 
 Everything GR-DOS uses here is in Microsoft's MIT-licensed `v4.0` tree:
@@ -41,10 +41,10 @@ tree has the restoration of hharte `1f50610`
 Microsoft's build of that tree shows the build is right, not that the
 restored comments are.
 
-Printer code pages, PRINTER.SYS and its `.CPI` files, are part of issue
-#25 (printer and graphics support), not this issue. Until they are built,
-`MODE LPT1 CP ...` says "Code page operation not supported on this device",
-and CHCP changes no printer.
+Printer code pages, PRINTER.SYS and its `.CPI` files, are issue #25's
+([printer.md](printer.md)). Without PRINTER.SYS, `MODE LPT1 CP ...` says
+"Code page operation not supported on this device", and CHCP changes no
+printer.
 
 ## Building
 
@@ -295,9 +295,9 @@ against `DISPLAY.SKL` and `MODE.SKL`.
   so DISPLAY.SYS never loads EGA.CPI's 437, which differs from QEMU's ROM
   font in a few characters (the cent sign is one). On an IBM EGA or VGA
   the ROM's font is IBM's.
-- **No printer code pages** (issue #25), and **no ANSI.SYS** (issue #26):
-  `MODE CON LINES=43` and `50`, which need ANSI.SYS, are not available, so
-  DISPLAY.SYS' check that an 8×8 font is prepared for them is not tested.
+- **No ANSI.SYS** (issue #26): `MODE CON LINES=43` and `50`, which need
+  ANSI.SYS, are not available, so DISPLAY.SYS' check that an 8×8 font is
+  prepared for them is not tested.
 - **A code page EGA.CPI does not have** (999, say) is "Font file contents
   invalid", as for a file with no fonts for the display: DISPLAY.SYS
   reports both the same way, and MODE has no other message for them.

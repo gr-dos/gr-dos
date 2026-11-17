@@ -1,0 +1,27 @@
+# What the IBM 5202 test (printer.bat) must send to LPT1, byte for byte
+# (tests/printer/check-lpt). The printer has 437, and 850 in its slot;
+# PRINTER.SYS only sends the escape sequences that select them.
+
+== BOOT
+
+# Before anything is prepared, selecting 437 sends PRINTER.SYS' own
+# sequence (DEV/PRINTER/CPSPM10.ASM, CTL5202_H), in which it puts the
+# code page, low byte first, at offset 8 (CPSPI07.ASM, CTL5202_OFFS)
+== BUILTIN
+# ESC [ T, then 437 low byte first (B5h 01h); 5202.CPI, like IBM's
+# printers, has the code page high byte first (01h B5h)
+data "\e[T\x05\0\0\0\xB5\x01\0\e6"
+
+# Preparing sends nothing; then the selections are 5202.CPI's
+== PREPARE
+== SELECT
+select 5202.CPI 850
+
+== TEXT
+data "Hello, printer\r\nCode page 850: \x9B \xD5\r\n"
+
+== HARDWARE
+select 5202.CPI 437
+
+== ERRORS
+== END

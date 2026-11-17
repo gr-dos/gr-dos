@@ -23,7 +23,7 @@ With them, `COUNTRY=`, NLSFUNC, CHCP and KEYB, built since issue #17
 | `BIOS/SYSINIT*.ASM` | `COUNTRY=`, which loads a country from `COUNTRY.SYS` at boot | in IO.SYS |
 | `CMD/COMMAND` | `DATE`, `TIME`, `DIR` and `CHCP`, which use the country's formats | in COMMAND.COM |
 | `DEV/DISPLAY` | code page switching for the screen: DISPLAY.SYS and its EGA and LCD fonts | built since issue #24: [codepage.md](codepage.md) |
-| `DEV/PRINTER` | code page switching for printers: PRINTER.SYS and the 4201, 4208 and 5202 `.CPI` files | not built: issue #25 |
+| `DEV/PRINTER` | code page switching for printers: PRINTER.SYS and the 4201, 4208 and 5202 `.CPI` files | built since issue #25: [printer.md](printer.md) |
 
 Everything GR-DOS uses here is in Microsoft's MIT-licensed `v4.0` tree.
 No retail MS-DOS file is used or distributed. `KEYBOARD.LNK` links 20 of
@@ -254,7 +254,7 @@ against the source's tables.
   CHCP changes only DOS's tables, KEYB cannot learn the screen's code page,
   and MODE's `CP` commands have nothing to work with. DISPLAY.SYS and its
   fonts are built since issue #24 ([codepage.md](codepage.md)); printer
-  code pages, PRINTER.SYS, are issue #25's.
+  code pages, PRINTER.SYS, since issue #25 ([printer.md](printer.md)).
 - **Germany's code page 437 data uses `.` as the time separator.**
   `TIME` shows `4.37.19,29`.
 - **The key left of 1 is not a dead key in the German layout.** It is

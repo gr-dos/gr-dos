@@ -65,8 +65,8 @@ sudo scripts/deploy-cf update /dev/sdX      # afterwards: C: only
 
 | Format | Image | Bytes | Geometry | Free |
 |---|---|---:|---|---:|
-| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 822,272 |
-| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 578,560 |
+| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 795,136 |
+| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 551,424 |
 | 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 229,376 |
 | 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 16,384 |
 
@@ -84,6 +84,7 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `KEYB.COM`, with `COUNTRY.SYS` and `KEYBOARD.SYS` ([`docs/country-keyboard.md`](docs/country-keyboard.md)) | | ✓ | ✓ |
 | `APPEND.EXE`, `SHARE.EXE`, `EXE2BIN.EXE`, `GRAFTABL.COM`, `GRAPHICS.COM`, `GRAPHICS.PRO`, `NLSFUNC.EXE` | | | ✓ |
 | `DISPLAY.SYS`, with `EGA.CPI` ([`docs/codepage.md`](docs/codepage.md)) | | | ✓ |
+| `PRINTER.SYS`, with `4201.CPI`, `4208.CPI` and `5202.CPI` ([`docs/printer.md`](docs/printer.md)) | | | ✓ |
 | `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
 
 The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on C: only. `image/files-360k.txt` (and so on) lists each image's
@@ -125,7 +126,8 @@ tests the commands of [`docs/m5-utilities.md`](docs/m5-utilities.md)
 (`make test-floppy-360` and so on). It
 compares FC's output with Microsoft's FC.EXE's (`make test-fc`), boots
 with `COUNTRY=` in CONFIG.SYS (`make test-country`), types through KEYB's
-layouts (`make test-keyb`), runs FDISK on disposable hard disk images against Microsoft's build of
+layouts (`make test-keyb`), checks what PRINTER.SYS, PRINT and GRAPHICS
+send to QEMU's parallel port (`make test-printer`), runs FDISK on disposable hard disk images against Microsoft's build of
 it (`make test-fdisk`), and installs GR-DOS on a blank hard disk and boots
 it (`make test-install`). It provisions disk images of 512 MB to 8 GB with
 `scripts/deploy-cf`, boots them, and updates them, checking that every
@@ -166,6 +168,7 @@ gr-dos-VERSION/
 │   │   RECOVER.COM, SHARE.EXE, SORT.EXE, TREE.COM, XCOPY.EXE,
 │   │   GRAPHICS.PRO, COUNTRY.SYS, KEYBOARD.SYS
 │   ├── DISPLAY.SYS, EGA.CPI, LCD.CPI   code page switching for the screen
+│   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
 │   ├── CRCSUM.EXE, DF.EXE, DIFF16.EXE, LESS.EXE, MD5SUM.EXE, TAR.EXE,
 │   │   TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
@@ -222,6 +225,9 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   KEYBOARD.SYS, the countries and layouts, configuration and limits.
 - [`docs/codepage.md`](docs/codepage.md): DISPLAY.SYS, EGA.CPI and LCD.CPI,
   code page switching with MODE, CHCP and KEYB, the displays, and limits.
+- [`docs/printer.md`](docs/printer.md): PRINTER.SYS and the printer fonts,
+  PRINT and GRAPHICS, the printers, their tests on QEMU's parallel port,
+  and limits.
 - [`docs/grver.md`](docs/grver.md): the kernel's GR-DOS identification
   call (`INT 21h AX=3347h`), GRVER.EXE, and how a program calls it.
 - [`docs/dist16.md`](docs/dist16.md): the `*16` programs, how they are

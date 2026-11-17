@@ -113,8 +113,19 @@ EGA_OBJS     := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/DIS
 LCD_OBJS     := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/DISPLAY/LCD/LCD.LNK))
 CP_FILES     := DEV/DISPLAY/DISPLAY.SYS DEV/DISPLAY/EGA/EGA.CPI DEV/DISPLAY/LCD/LCD.CPI
 
+# Code page switching for the printer (issue #25, docs/printer.md):
+# PRINTER.SYS, the LPTn driver that CONFIG.SYS loads, and the printer fonts
+# MODE's CP PREPARE gives it: 4201.CPI (IBM Proprinter), 4208.CPI (IBM
+# Proprinter X24 and XL24) and 5202.CPI (IBM Quietwriter III). PRINTER.SYS
+# and 5202.CPI are linked and converted with EXE2BIN; 4201.CPI and 4208.CPI
+# are binary files in the source, copied as is (CPY.BAT), like GRAPHICS.PRO.
+PRINTER_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src DEV/PRINTER/PRINTER.LNK))
+P5202_OBJS   := $(SRC)/DEV/PRINTER/5202/5202.OBJ
+PRT_FILES    := DEV/PRINTER/PRINTER.SYS DEV/PRINTER/5202/5202.CPI
+PRT_COPIED   := DEV/PRINTER/4201/4201.CPI DEV/PRINTER/4208/4208.CPI
+
 OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM \
-	$(UTILITIES) $(EXTRA_UTILITIES) $(NLS_FILES) $(CP_FILES)
+	$(UTILITIES) $(EXTRA_UTILITIES) $(NLS_FILES) $(CP_FILES) $(PRT_FILES) $(PRT_COPIED)
 
 # The message files of utility $(1): X.CL$(c) for each c of $(2), and X.CTL.
 utility_messages = $(foreach c,$(2),CMD/$(1)/$(1).CL$(c)) CMD/$(1)/$(1).CTL
@@ -141,7 +152,8 @@ MESSAGES := BOOT/BOOT.CL1 \
 	$(call utility_messages,RECOVER,1 2 A) $(call utility_messages,SHARE,1 2 A) \
 	$(call utility_messages,SORT,1 2 A) $(call utility_messages,TREE,1 2 A) \
 	$(call utility_messages,XCOPY,1 2 A) \
-	$(foreach c,1 2 A,DEV/DISPLAY/DISPLAY.CL$(c)) DEV/DISPLAY/DISPLAY.CTL
+	$(foreach c,1 2 A,DEV/DISPLAY/DISPLAY.CL$(c)) DEV/DISPLAY/DISPLAY.CTL \
+	$(foreach c,1 2 A,DEV/PRINTER/PRINTER.CL$(c)) DEV/PRINTER/PRINTER.CTL
 
 # ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are built with Open Watcom C,
 # not Microsoft C 5.1, so they are not compared. CONVERT makes CHKDSK.EXE
@@ -149,7 +161,8 @@ MESSAGES := BOOT/BOOT.CL1 \
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
 	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE %/FDISK.EXE %/FC.EXE,$(UTILITIES)) \
 	CMD/CHKDSK/CHKDSK.EXE CMD/FDISK/FDBOOT.BIN CMD/FDISK/FDBOOT.INC \
-	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE DEV/COUNTRY/MKCNTRY.EXE $(NLS_FILES) $(CP_FILES)
+	$(EXTRA_UTILITIES) CMD/RECOVER/RECOVER.EXE DEV/COUNTRY/MKCNTRY.EXE $(NLS_FILES) $(CP_FILES) \
+	$(PRT_FILES)
 
 # Floppy formats, by size in KB (scripts/mkimage --format); 1440 is the
 # default.
@@ -191,21 +204,25 @@ FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
 # the everyday file and disk commands, and KEYB with KEYBOARD.SYS and
 # COUNTRY.SYS (issue #23); 1.2 MB and 1.44 MB add the rest that work from
 # a floppy, and DISPLAY.SYS with EGA.CPI (DISPLAY, issue #24), for the EGA
-# and VGA of the AT-class machines that boot from them. FASTOPEN works on
+# and VGA of the AT-class machines that boot from them, and PRINTER.SYS
+# with its three printer fonts (PRINTER, issue #25). FASTOPEN works on
 # hard disks only and IFSFUNC only with an installable file system, so they
 # are on C: alone, as is LCD.CPI, for the PC Convertible's LCD alone.
 extra = $(call dist,$(foreach u,$(1),$(filter $(SRC)/CMD/$(u)/%,$(addprefix $(SRC)/,$(EXTRA_UTILITIES)))))
 FLOPPY_720  := XCOPY COMP DISKCOMP LABEL TREE SORT EDLIN PRINT ASSIGN RECOVER KEYB
-FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS NLSFUNC DISPLAY
+FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS NLSFUNC DISPLAY PRINTER
 FLOPPY_1440 := $(FLOPPY_1200)
 # GRAPHICS reads its printer profile, GRAPHICS.PRO, from its own directory.
 # A floppy with KEYB has the data files, in its root, where KEYB and
-# COUNTRY= look for them by default, and one with DISPLAY.SYS, EGA.CPI.
+# COUNTRY= look for them by default, one with DISPLAY.SYS, EGA.CPI, and
+# one with PRINTER.SYS, the printer fonts.
 GRAPHICS_PRO := $(SRC)/CMD/GRAPHICS/GRAPHICS.PRO
 NLS_DATA     := $(addprefix $(SRC)/,$(NLS_FILES))
 CP_DATA      := $(addprefix $(SRC)/,$(CP_FILES))
+PRT_DATA     := $(addprefix $(SRC)/,DEV/PRINTER/PRINTER.SYS $(PRT_COPIED) DEV/PRINTER/5202/5202.CPI)
 extra_files = $(call extra,$(1)) $(if $(filter GRAPHICS,$(1)),$(GRAPHICS_PRO)) \
-	$(if $(filter KEYB,$(1)),$(NLS_DATA)) $(if $(filter DISPLAY,$(1)),$(filter-out %/LCD.CPI,$(CP_DATA)))
+	$(if $(filter KEYB,$(1)),$(NLS_DATA)) $(if $(filter DISPLAY,$(1)),$(filter-out %/LCD.CPI,$(CP_DATA))) \
+	$(if $(filter PRINTER,$(1)),$(PRT_DATA))
 FILES_360  := $(FILES)
 FILES_720  := $(PROGRAMS) $(call extra_files,$(FLOPPY_720)) $(BUILD)/image/AUTOEXEC.BAT
 FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(BUILD)/image/AUTOEXEC.BAT
@@ -217,10 +234,11 @@ GRVER := $(BUILD)/grver/GRVER.EXE
 
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
 # programs, then all of issue #17's in CMD's order, GRAPHICS.PRO,
-# COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI and LCD.CPI, GRVER,
-# and the other *16 programs.
+# COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI and LCD.CPI,
+# PRINTER.SYS, 4201.CPI, 4208.CPI and 5202.CPI, GRVER, and the other *16
+# programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(GRAPHICS_PRO) \
-	$(NLS_DATA) $(CP_DATA) $(GRVER) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
+	$(NLS_DATA) $(CP_DATA) $(PRT_DATA) $(GRVER) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
 
 # GR-DOS's own file names, which no *16 program may have, even with
 # another extension (COMMAND.COM would run only one of them).
@@ -246,7 +264,7 @@ TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
-	test-keyb test-codepage test-grver test-fdisk test-install test-deploy-cf test-config-include
+	test-keyb test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
 test-dist16: scripts/dist16 tests/dist16/run
@@ -343,6 +361,22 @@ $(TEST_CODEPAGE): test-codepage-%: $(TESTS)/codepage-%.img
 
 test-codepage-screen: $(TESTS)/codepage-screen.img scripts/disk-test
 	scripts/disk-test $< tests/codepage/screen $(TESTS)/codepage-screen
+
+# The printer tests (tests/printer, issue #25): each boots a 1.44 MB image
+# whose CONFIG.SYS and AUTOEXEC.BAT are tests/printer/NAME's, with LPT1
+# written to a file (scripts/smoke-test --parallel), and checks what MODE's
+# CP commands report on COM1 (tests/printer/NAME/expect) and what
+# PRINTER.SYS, COPY, PRINT and GRAPHICS send to the printer
+# (tests/printer/NAME/lpt, tests/printer/check-lpt, which reads the
+# printer fonts).
+PRINTER_TESTS := $(sort $(patsubst tests/printer/%/expect,%,$(wildcard tests/printer/*/expect)))
+TEST_PRINTER  := $(addprefix test-printer-,$(PRINTER_TESTS))
+
+test-printer: $(TEST_PRINTER)
+
+$(TEST_PRINTER): test-printer-%: $(TESTS)/printer-%.img tests/printer/check-lpt
+	scripts/smoke-test --parallel $< tests/printer/$*/expect $(TESTS)/printer-$*
+	tests/printer/check-lpt $(TESTS)/printer-$*/parallel.bin tests/printer/$*/lpt $(filter %.CPI,$(PRT_DATA))
 
 # GRVER's tests (tests/grver, issue #46): its output and exit status, and
 # FAKEID's imitations of the identification call's answer, on GR-DOS; and
@@ -517,6 +551,9 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-codepage       DISPLAY.SYS, MODE's code pages, KEYB and CHCP; or
   make test-codepage-SETUP   one (SETUP: $(CODEPAGE_TESTS)), or the
   make test-codepage-screen  boot messages and KEYB GR, read from the screen
+  make test-printer        PRINTER.SYS, MODE's code pages, PRINT and GRAPHICS,
+  make test-printer-PRINTER  with LPT1 in a file; or one (PRINTER:
+                             $(PRINTER_TESTS))
   make test-grver          GRVER and the kernel's identification call, on
   make test-grver-grdos,     GR-DOS and on MS-DOS 4.00; or one of them
   make test-grver-msdos
@@ -561,6 +598,7 @@ test-help: scripts/check-help
 	$(MAKE) --no-print-directory -s help > $(TESTS)/help.txt
 	scripts/check-help $(TESTS)/help.txt 'FORMAT=$(FORMATS)' 'NAME=$(FDISK_TESTS)' \
 	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' 'COUNTRY=$(COUNTRY_TESTS)' 'SETUP=$(CODEPAGE_TESTS)' \
+	  'PRINTER=$(PRINTER_TESTS)' \
 	  $(HELP_INTERNAL) -- \
 	  $$($(MAKE) --no-print-directory -pRrq : 2>/dev/null | sed -n 's/^\.PHONY: //p')
 
@@ -568,7 +606,7 @@ test-help: scripts/check-help
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
 	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
-	test-codepage-screen
+	test-codepage-screen test-printer $(TEST_PRINTER)
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -590,8 +628,9 @@ $(BUILD)/tree.stamp: $(shell find v4.0/src -type f) $(PATCHES) scripts/prepare-d
 	rm -rf $(BUILD)/upstream
 	touch $@
 
-# GRAPHICS's printer profile is a source file, copied as is into the tree.
-$(GRAPHICS_PRO): $(BUILD)/tree.stamp
+# GRAPHICS's printer profile is a source file, copied as is into the tree,
+# as are the 4201 and 4208 printer fonts.
+$(GRAPHICS_PRO) $(addprefix $(SRC)/,$(PRT_COPIED)): $(BUILD)/tree.stamp
 
 # Message files (BUILDMSG/NOSRVBLD); the case aliases cover their references too.
 # FDISK's menus are C (MENUBLD), and FDISK5.CL1 the messages of its boot record.
@@ -605,6 +644,7 @@ $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/menubld sc
 	done
 	scripts/buildmsg $(MSG) $(SRC)/CMD/LABEL/LABL.SKL
 	scripts/buildmsg $(MSG) $(SRC)/DEV/DISPLAY/DISPLAY.SKL
+	scripts/buildmsg $(MSG) $(SRC)/DEV/PRINTER/PRINTER.SKL
 	for u in SHARE IFSFUNC; do \
 	  cp $(SRC)/DOS/MSDOS.SKL $(SRC)/CMD/$$u/ && scripts/buildmsg --nosrvbld $(MSG) $(SRC)/CMD/$$u/MSDOS.SKL || exit 1; \
 	done
@@ -655,10 +695,13 @@ $(SRC)/DEV/COUNTRY/MKCNTRY.EXE: $(MKCNTRY_OBJS)
 $(SRC)/DEV/DISPLAY/DISPLAY.EXE: $(DISPLAY_OBJS)
 $(SRC)/DEV/DISPLAY/EGA/CPI-HEAD.EXE: $(EGA_OBJS)
 $(SRC)/DEV/DISPLAY/LCD/FONT-R3.EXE: $(LCD_OBJS)
+$(SRC)/DEV/PRINTER/PRINTER.EXE: $(PRINTER_OBJS)
+$(SRC)/DEV/PRINTER/5202/5202.EXE: $(P5202_OBJS)
 
 EXES := $(addprefix $(SRC)/,BOOT/MSBOOT.EXE BIOS/MSLOAD.EXE BIOS/MSBIO.EXE DOS/MSDOS.EXE \
 	CMD/COMMAND/COMMAND.EXE CMD/FDISK/FDBOOT.EXE DEV/KEYBOARD/KEYBOARD.EXE DEV/COUNTRY/MKCNTRY.EXE \
-	DEV/DISPLAY/DISPLAY.EXE DEV/DISPLAY/EGA/CPI-HEAD.EXE DEV/DISPLAY/LCD/FONT-R3.EXE) \
+	DEV/DISPLAY/DISPLAY.EXE DEV/DISPLAY/EGA/CPI-HEAD.EXE DEV/DISPLAY/LCD/FONT-R3.EXE \
+	DEV/PRINTER/PRINTER.EXE DEV/PRINTER/5202/5202.EXE) \
 	$(foreach u,$(filter-out ATTRIB MEM FDISK FC,$(UTILITY_DIRS)) $(EXTRA_DIRS),$(SRC)/CMD/$(u)/$(u).EXE)
 
 # The programs CONVERT makes into .COM files are linked as Microsoft LINK
@@ -770,6 +813,16 @@ $(SRC)/DEV/DISPLAY/EGA/EGA.CPI: $(SRC)/DEV/DISPLAY/EGA/CPI-HEAD.EXE $(EGA_OBJS) 
 	scripts/exe2bin --size $(size) $< $@
 
 $(SRC)/DEV/DISPLAY/LCD/LCD.CPI: $(SRC)/DEV/DISPLAY/LCD/FONT-R3.EXE $(LCD_OBJS) scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --size $(size) $< $@
+
+# PRINTER.SYS, like DISPLAY.SYS, with base segment 0 (ZERO.DAT,
+# DEV/PRINTER/MAKEFILE); 5202.CPI from offset 0.
+$(SRC)/DEV/PRINTER/PRINTER.SYS: $(SRC)/DEV/PRINTER/PRINTER.EXE $(PRINTER_OBJS) scripts/exe2bin \
+	scripts/mslink-layout
+	scripts/exe2bin --base 0 --size $(size) $< $@
+
+$(SRC)/DEV/PRINTER/5202/5202.CPI: $(SRC)/DEV/PRINTER/5202/5202.EXE $(P5202_OBJS) scripts/exe2bin \
 	scripts/mslink-layout
 	scripts/exe2bin --size $(size) $< $@
 
@@ -1007,6 +1060,30 @@ CODEPAGE_SCREEN_FILES := $(TESTS)/codepage-screen/CONFIG.SYS $(TESTS)/codepage-s
 
 $(TESTS)/codepage-screen.img: $(CORE) $(CODEPAGE_SCREEN_FILES) scripts/mkimage scripts/check-image
 	scripts/mkimage $@ $(SRC) $(CODEPAGE_SCREEN_FILES)
+
+# The printer tests' disks: the scenario's CONFIG.SYS and AUTOEXEC.BAT,
+# PRINTER.SYS and the fonts, and the programs and files the tests use.
+$(TESTS)/printer-%/CONFIG.SYS: tests/printer/%/config.sys
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/printer-%/AUTOEXEC.BAT: tests/printer/%/printer.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/printer-files/%: tests/printer/%
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+printer_files = $(TESTS)/printer-$(1)/CONFIG.SYS $(TESTS)/printer-$(1)/AUTOEXEC.BAT $(PRT_DATA) \
+	$(addprefix $(SRC)/,CMD/MODE/MODE.COM CMD/PRINT/PRINT.COM CMD/GRAPHICS/GRAPHICS.COM CMD/DEBUG/DEBUG.COM) \
+	$(call dist,$(SRC)/CMD/FIND/FIND.EXE) $(GRAPHICS_PRO) $(addprefix $(TESTS)/printer-files/,hello.txt gdump.in idle.in)
+
+define printer_test_image
+$(TESTS)/printer-$(1).img: $(CORE) $(call printer_files,$(1)) scripts/mkimage scripts/check-image
+	scripts/mkimage $$@ $(SRC) $(call printer_files,$(1))
+endef
+$(foreach t,$(PRINTER_TESTS),$(eval $(call printer_test_image,$(t))))
 
 # GRVER's test disks: GRVER, FAKEID and the batch files, with GR-DOS's
 # system files or MS-DOS 4.00's. The reference build is make check's; its

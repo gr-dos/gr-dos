@@ -1,0 +1,34 @@
+# What the IBM 4201 test (printer.bat) must send to LPT1, byte for byte
+# (tests/printer/check-lpt). Code page 850 is a font PRINTER.SYS downloads
+# from 4201.CPI to the printer when it is selected, or refreshed, and 437
+# the printer's own.
+
+# Nothing at boot, nor when MODE prepares 850: PRINTER.SYS keeps the font
+== BOOT
+== PREPARE
+
+# Selecting 850 downloads its font, then selects the downloaded characters
+== SELECT
+download 4201.CPI 850
+select-ram 4201.CPI 850
+
+# Text goes to the printer as it is, in whatever code page it has
+== TEXT
+data "Hello, printer\r\nCode page 850: \x9B \xD5\r\n"
+
+# 437 is the printer's own characters
+== HARDWARE
+select 4201.CPI 437
+
+# The printer still has 850's font: selecting it again only selects it
+== AGAIN
+select-ram 4201.CPI 850
+
+# REFRESH downloads the selected code page's font again
+== REFRESH
+download 4201.CPI 850
+select-ram 4201.CPI 850
+
+# None of the errors sends anything
+== ERRORS
+== END

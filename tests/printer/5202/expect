@@ -1,0 +1,49 @@
+# Lines the IBM 5202 printer test (printer.bat) must write to COM1 with
+# DEVICE=A:\PRINTER.SYS LPT1=(5202,437,1) (scripts/smoke-test); what it
+# sends to LPT1 is in lpt.
+
+^GRDOS-TEST-BEGIN$
+
+# At boot PRINTER.SYS has the printer's own code page, 437, and one slot,
+# and no code page selected
+^== BOOT$
+^No code page has been selected$
+^Hardware code pages:$
+^  code page 437$
+^Prepared code pages:$
+^  code page not prepared$
+^MODE status code page function completed$
+
+# 437 can be selected before anything is prepared
+^== BUILTIN$
+^MODE select code page function completed$
+
+# 850 from 5202.CPI; 437 stays selected
+^== PREPARE$
+^MODE prepare code page function completed$
+^Active code page for device LPT1 is 437$
+^Hardware code pages:$
+^  code page 437$
+^Prepared code pages:$
+^  code page 850$
+^MODE status code page function completed$
+
+^== SELECT$
+^MODE select code page function completed$
+^== TEXT$
+^ +1 File\(s\) copied$
+^== HARDWARE$
+^MODE select code page function completed$
+
+# 865 is not prepared, and 4208.CPI is another printer's: the failed
+# PREPARE leaves the slot empty
+^== ERRORS$
+^Code page not prepared$
+^Device or code page missing from font file$
+^Active code page for device LPT1 is 437$
+^Hardware code pages:$
+^  code page 437$
+^Prepared code pages:$
+^  code page not prepared$
+^MODE status code page function completed$
+^GRDOS-TEST-END$

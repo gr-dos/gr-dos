@@ -1,0 +1,27 @@
+# What the IBM 4208 test (printer.bat) must send to LPT1, byte for byte
+# (tests/printer/check-lpt). The printer has 437, and 850 in its slot;
+# PRINTER.SYS only sends the escape sequences that select them.
+
+== BOOT
+
+# Before anything is prepared, selecting 437 sends PRINTER.SYS' own
+# sequence (DEV/PRINTER/CPSPM10.ASM, CTL4208_H), in which it puts the
+# code page, low byte first, at offset 8 (CPSPI07.ASM, CTL5202_OFFS)
+== BUILTIN
+# ESC I 10, ESC I 3, then ESC with 437 (B5h 01h) in place of the I 2 of
+# ESC I 2, and ESC 6; 4208.CPI selects 437 with ESC I 2 (HARDWARE, below)
+data "\e\x49\x0A\e\x49\x03\e\xB5\x01\e6"
+
+# Preparing sends nothing; then the selections are 4208.CPI's
+== PREPARE
+== SELECT
+select 4208.CPI 850
+
+== TEXT
+data "Hello, printer\r\nCode page 850: \x9B \xD5\r\n"
+
+== HARDWARE
+select 4208.CPI 437
+
+== ERRORS
+== END

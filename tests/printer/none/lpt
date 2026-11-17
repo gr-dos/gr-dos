@@ -1,0 +1,23 @@
+# What the test without PRINTER.SYS (printer.bat) must send to LPT1, byte
+# for byte (tests/printer/check-lpt).
+
+# MODE's CP commands fail, and send nothing
+== STATUS
+
+# COPY to LPT1 and TYPE to PRN send the text as it is
+== TEXT
+data "Hello, printer\r\nCode page 850: \x9B \xD5\r\n" x 2
+
+# GRAPHICS prints the 320x200 CGA screen (mode 4) for its default printer
+# type, GRAPHICS (GRAPHICS.PRO), rotated: line spacing 24/216 (ESC 3 24),
+# then for each 4 of the screen's 320 columns, from the left, a band of 6
+# spaces and 800 bytes of graphics (ESC L 800), 4 for each of the 200 rows
+# from the bottom up. Only row 0 has pixels, all colour 3, which the
+# printer gets as the pattern AA 00 55 00
+== GRAPHICS
+data "\e3\x18" . (" " x 6 . "\eL\x20\x03" . "\0" x 796 . "\xAA\0\x55\0" . "\r\n") x 80
+
+# PRINT prints the file in the background, and ends it with a form feed
+== PRINT
+data "Hello, printer\r\nCode page 850: \x9B \xD5\r\n\f"
+== END
