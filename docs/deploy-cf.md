@@ -128,7 +128,8 @@ following, in this order:
    and TICO, all of [M5](m5-utilities.md)'s commands (APPEND to XCOPY)
    with GRAPHICS.PRO, COUNTRY.SYS and KEYBOARD.SYS
    ([country-keyboard.md](country-keyboard.md)), DISPLAY.SYS, EGA.CPI and
-   LCD.CPI ([codepage.md](codepage.md)), GRVER
+   LCD.CPI ([codepage.md](codepage.md)), PRINTER.SYS, 4201.CPI, 4208.CPI
+   and 5202.CPI ([printer.md](printer.md)), GRVER
    ([grver.md](grver.md)), and the other `*16` programs `dist16/lock` pins
    (CRCSUM, DF, DIFF16, LESS, MD5SUM, TAR, TRUNCATE and WHICH;
    [dist16.md](dist16.md)). The floppy images keep those they carry in the

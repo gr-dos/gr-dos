@@ -25,7 +25,8 @@ and use B: for programs and data. Each also installs GR-DOS on a hard disk
            PRINT, ASSIGN, RECOVER and KEYB, with COUNTRY.SYS and
            KEYBOARD.SYS
   1.2 MB,  those, and APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS,
-  1.44 MB  GRAPHICS.PRO and NLSFUNC, and DISPLAY.SYS with EGA.CPI
+  1.44 MB  GRAPHICS.PRO and NLSFUNC, DISPLAY.SYS with EGA.CPI, and
+           PRINTER.SYS with 4201.CPI, 4208.CPI and 5202.CPI
 
 FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on no floppy: FASTOPEN works on
 hard disks only, IFSFUNC needs an installable file system driver, GRVER is
@@ -53,6 +54,24 @@ KEYB follows the screen's code page, and CHCP, with NLSFUNC loaded,
 changes DOS's and the screen's together. Without DISPLAY.SYS, use code
 page 437 where the keyboard layout has it, as the screen's characters are
 code page 437's.
+
+PRINTER.SYS does the same for an IBM printer on LPT1 to LPT3: the 4201
+Proprinter, whose fonts it downloads from 4201.CPI, the 4208 Proprinter
+X24 and XL24 (4208.CPI) and the 5202 Quietwriter III (5202.CPI). For
+example, in CONFIG.SYS:
+
+  DEVICE=C:\DOS\PRINTER.SYS LPT1=(4201,437,1)
+
+and then:
+
+  MODE LPT1 CP PREPARE=((850) C:\DOS\4201.CPI)
+  MODE LPT1 CP SELECT=850
+
+Prepare a code page before selecting one: on a 4208 or 5202, PRINTER.SYS'
+own escape sequence for the printer's code page, before anything is
+prepared, has the code page in the wrong place. PRINT prints files in the
+background, and GRAPHICS prints a graphics screen with Shift+PrtSc, with
+the printer types of GRAPHICS.PRO; neither needs PRINTER.SYS.
 
 Contents
 --------
@@ -101,6 +120,10 @@ Contents
   BIN\DISPLAY.SYS  code page switching for the screen, for CONFIG.SYS
   BIN\EGA.CPI      EGA and VGA fonts of five code pages, for MODE
   BIN\LCD.CPI      the PC Convertible's LCD fonts, for MODE
+  BIN\PRINTER.SYS  code page switching for IBM printers, for CONFIG.SYS
+  BIN\4201.CPI     IBM 4201 Proprinter fonts of five code pages, for MODE
+  BIN\4208.CPI     IBM 4208 Proprinter X24 and XL24 code pages, for MODE
+  BIN\5202.CPI     IBM 5202 Quietwriter III code pages, for MODE
   BIN\GRVER.EXE    shows the GR-DOS release version, from the kernel
 @DIST16@
   BIN\AUTOEXEC.BAT sets the prompt and PATH A:\
