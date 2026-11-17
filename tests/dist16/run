@@ -5,6 +5,9 @@ use warnings;
 use Digest::SHA qw( sha256_hex );
 use File::Basename qw( dirname );
 use File::Path qw( make_path remove_tree );
+use Archive::Tar ();
+use IO::Compress::Gzip ();
+use IO::Compress::Zip ();
 use JSON::PP ();
 
 # ABSTRACT: Test scripts/dist16 offline, against a fake GitHub (make test-dist16)
@@ -24,8 +27,11 @@ pinned release and a prerelease; malformed releases; checksum and size
 mismatches; unexpected and ambiguous asset names; collisions with GR-DOS's
 files and between programs; missing and disallowed licenses; 32-bit and
 malformed programs; GitHub refusing (a rate limit) or failing; forks,
-archived and private repositories; and a deterministic lock, reproduced
-offline from the cache.
+archived and private repositories; a deterministic lock, reproduced
+offline from the cache; and programs under a source license (issue #56):
+a GPL-2.0-or-later program with its corresponding source and a linked
+library's, resolved, locked, fetched, staged and packaged, and each way
+its source can be missing, unverifiable or mislabeled.
 
 =cut
 
@@ -34,6 +40,8 @@ my $tool = "$root/scripts/dist16";
 my $out = shift // die "usage: tests/dist16/run OUTDIR\n";
 my $json = JSON::PP->new->canonical;
 my($tests, $failed) = (0, 0);
+
+sub diag (@lines) { say "# $_" for @lines }
 
 sub ok ($cond, $what) {
   $tests++;
@@ -62,6 +70,31 @@ sub mz ($size = 600, $seed = 'x') {
   my $last = $size % 512;
   my $hdr = pack('a2 v4 v4 v2 v', 'MZ', $last, $pages, 0, 2, 0, 0xFFFF, 0, 0x100, 0, 0, 0, 0x1C, 0);
   return substr($hdr . ($seed x $size), 0, $size);
+}
+
+sub license_text ($full, $spdx) { "$spdx license of $full\n" }
+
+# Archives of FILES, { path => content }: a .tar.gz and a .zip.
+sub tgz (%files) {
+  my $t = Archive::Tar->new;
+  $t->add_data($_, $files{$_}, { mtime => 0 }) for sort keys %files;
+  open my $fh, '>', \my $tar or die;
+  $t->write($fh);
+  close $fh;
+  IO::Compress::Gzip::gzip(\$tar => \my $gz, Minimal => 1) or die;
+  return $gz;
+}
+
+sub zip (%files) {
+  my @names = sort keys %files;
+  my $z = IO::Compress::Zip->new(\my $out, Name => shift(@names), Minimal => 1) or die;
+  $z->print($files{ (sort keys %files)[0] });
+  for my $n (@names) {
+    $z->newStream(Name => $n, Minimal => 1);
+    $z->print($files{$n});
+  }
+  $z->close;
+  return $out;
 }
 
 # The fake GitHub, in $dir: owners' repositories and their releases.
@@ -100,9 +133,11 @@ sub github (%gh) {
         spew("$api/repos/$full/releases/latest", ref $release ? $json->encode($release) : $release) if $rel->{latest};
         spew("$api/repos/$full/commits/$tag", $json->encode({ sha => $sha }));
         if(defined $rel->{license}) {
-          spew("$api/repos/$full/license\@ref=$sha", $json->encode({ path => 'LICENSE', license => { spdx_id => $rel->{license} } }));
-          spew("$dir/raw/$full/$sha/LICENSE", "$rel->{license} license of $full\n");
+          my $path = $rel->{license_path} // 'LICENSE';
+          spew("$api/repos/$full/license\@ref=$sha", $json->encode({ path => $path, license => { spdx_id => $rel->{license} } }));
+          spew("$dir/raw/$full/$sha/$path", license_text($full, $rel->{license}));
         }
+        spew("$dir/raw/$full/$sha/$_", $rel->{files}{$_}) for keys(($rel->{files} // {})->%*);
         spew("$dir/dl/$full/releases/download/$tag/$_", $rel->{assets}{$_}) for keys $rel->{assets}->%*;
       }
     }
@@ -179,6 +214,14 @@ sub prog ($name, %r) {
   ok($rc == 0 && -f "$dir/dest3/MD5SUM.EXE", 'a fetch that failed part way can be run again');
   my($lrc, $list) = dist16($dir, 'list');
   ok($lrc == 0 && $list eq "CRCSUM.EXE\nMD5SUM.EXE\n", 'list: the DOS names, in lock order');
+  ok(!-e "$dir/dest/SOURCES.TXT" && !-e "$dir/dest/source", 'permissive programs only: no SOURCES.TXT and no source');
+  make_path("$dir/zip/BIN");
+  spew("$dir/zip/README.txt", "GR-DOS\r\n");
+  ($rc, $o) = dist16($dir, 'check-dist', "$dir/zip", "$dir/dest");
+  ok($rc == 0 && $o =~ /no program under a source license/, 'check-dist: a ZIP with no source is right then');
+  spew("$dir/zip/BIN/SOURCES.TXT", '');
+  ($rc, $o) = dist16($dir, 'check-dist', "$dir/zip", "$dir/dest");
+  ok($rc == 2 && $o =~ /no program has a source license, but it exists/, 'check-dist: and a SOURCES.TXT then is an error');
   spew("$dir/notdist", 'x');
   ($rc, $o) = dist16($dir, 'fetch', "$dir/notdist");
   ok($rc == 2 && $o =~ /not a dist16 directory/, 'fetch will not remove a directory it did not make');
@@ -380,6 +423,191 @@ sub prog ($name, %r) {
   ($rc, $o) = dist16($dir, 'resolve');
   ok($rc == 2 && $o =~ m{gr-dos/a16 is required \(dist16/config\), but unavailable: no release}, 'a required repository with no release stops resolve');
   ok(slurp("$dir/lock") eq $lock, 'and the lock is unchanged');
+}
+
+# 10. A program under a source license (issue #56): GPL-2.0-or-later, with
+# its corresponding source and that of the library linked into it.
+{
+  my $libc = { name => 'libc16', releases => [ { tag => 'v0.07', latest => 1, license => 'MIT',
+    assets => { 'libc16-0.07.zip' => 'PK', 'libc16-0.07-src.zip' => zip('libc16-0.07/LICENSE' => license_text('gr-dos/libc16', 'MIT'),
+      'libc16-0.07/src/stdio.c' => "int printf;\n") } } ] };
+  my $manifest = sub ($stem, %o) {
+    join '', map { "$_\n" } grep { defined } "license @{[ $o{license} // 'GPL-2.0-or-later' ]}",
+      "source @{[ $o{source} // \"$stem-0.01-src.tar.gz\" ]}", $o{nobuild} ? undef : 'build BUILDING.md',
+      'notice AUTHORS', "depends @{[ $o{depends} // 'gr-dos/libc16 v0.07 libc16-0.07-src.zip' ]}", $o{extra};
+  };
+  my $gpl = sub ($name, %o) {
+    my $stem = $name =~ s/16$//r;
+    my $m = $o{manifest} // $manifest->($stem, %o);
+    my $top = "$stem-0.01/";
+    my %src = ("${top}dist16.source" => $m, "${top}COPYING" => license_text("gr-dos/$name", 'GPL-2.0'),
+      "${top}AUTHORS" => "authors of $name\n", "${top}BUILDING.md" => "make\n", "${top}src/main.c" => "int main;\n",
+      ($o{src} // {})->%*);
+    delete @src{ map { "$top$_" } ($o{drop} // [])->@* };
+    my %files = ('dist16.source' => $m, AUTHORS => "authors of $name\n");
+    delete @files{ ($o{nofile} // [])->@* };
+    my %assets = ("$stem.exe" => $o{exe} // mz(600, $name), "$stem-0.01-src.tar.gz" => tgz(%src), ($o{assets} // {})->%*);
+    delete @assets{ ($o{noasset} // [])->@* };
+    return { name => $name, releases => [ { tag => 'v0.01', latest => 1, license => $o{github} // 'GPL-2.0',
+      license_path => 'COPYING', files => \%files, assets => \%assets, ($o{rel} // {})->%* } ] };
+  };
+  my $dir = github(config => $base_config . "source-license GPL-2.0-or-later\n", owners => { 'gr-dos' => [
+    $libc, prog('md5sum16'), $gpl->('gpl16'),
+    $gpl->('nomani16', nofile => ['dist16.source']),
+    $gpl->('mitsays16', license => 'MIT'),
+    $gpl->('only16', license => 'GPL-2.0-only'),
+    $gpl->('gpl3x16', github => 'GPL-3.0'),
+    $gpl->('nosrc16', noasset => ['nosrc-0.01-src.tar.gz']),
+    $gpl->('other16', src => { 'other-0.01/COPYING' => "another license\n" }),
+    $gpl->('nobuild16', drop => ['BUILDING.md']),
+    $gpl->('stale16', src => { 'stale-0.01/dist16.source' => "license GPL-2.0-or-later\n" }),
+    $gpl->('badman16', extra => 'frobnicate'),
+    $gpl->('nobld16', nobuild => 1),
+    $gpl->('watcom16', exe => mz(600, 'w') . 'Open Watcom C/C++16 Run Time system'),
+    $gpl->('nodep16', depends => 'gr-dos/libc16 v9.99 libc16-9.99-src.zip'),
+    $gpl->('binlib16', depends => 'gr-dos/libc16 v0.07 libc16-0.07.zip'),
+    $gpl->('xz16', source => 'xz-0.01-src.tar.xz', assets => { 'xz-0.01-src.tar.xz' => 'xz' }),
+    $gpl->('noauth16', nofile => ['AUTHORS']),
+    $gpl->('sum16', rel => { digest => { 'sum-0.01-src.tar.gz' => 'sha256:' . ('0' x 64) } }),
+    $gpl->('self16', source => 'self.exe'),
+    prog('sources16') ] });
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'source licenses: resolve succeeds');
+  ok(has($lines, qr{^program gr-dos/gpl16 v0\.01 [0-9a-f]{40} gpl\.exe GPL\.EXE 600 [0-9a-f]{64} GPL-2\.0-or-later COPYING [0-9a-f]{64}$}),
+    'a GPL program is locked with the exact license its dist16.source gives, and COPYING');
+  my($i) = grep { $lines->[$_] =~ m{^program gr-dos/gpl16 } } 0 .. $#$lines;
+  ok(defined $i && $lines->[$i + 1] =~ m{^source gr-dos/gpl16 gpl-0\.01-src\.tar\.gz \d+ [0-9a-f]{64} BUILDING\.md$}
+    && $lines->[$i + 2] =~ m{^notice gr-dos/gpl16 AUTHORS [0-9a-f]{64}$}
+    && $lines->[$i + 3] =~ m{^depend gr-dos/gpl16 gr-dos/libc16 v0\.07 [0-9a-f]{40} libc16-0\.07-src\.zip \d+ [0-9a-f]{64} MIT LICENSE [0-9a-f]{64}$},
+    'its source, notice and linked library\'s source are locked after it');
+  ok(scalar $o =~ m{^included +gr-dos/gpl16 v0\.01 gpl\.exe as GPL\.EXE, GPL-2\.0-or-later, source gpl-0\.01-src\.tar\.gz, with gr-dos/libc16 v0\.07 \(MIT, source libc16-0\.07-src\.zip\)$}m,
+    'the report gives the license, the source and the library');
+  ok(has($lines, qr{^program gr-dos/md5sum16 .* MIT LICENSE }) && !has($lines, qr{^(source|notice|depend) gr-dos/md5sum16 }),
+    'an MIT program beside it is locked as before, with no source lines');
+  my %why = (
+    nomani16 => q{license GPL-2.0 needs the program's source, but there is no dist16.source at its commit},
+    mitsays16 => 'GitHub finds GPL-2.0 in COPYING, but dist16.source says MIT',
+    only16 => 'license GPL-2.0-only (dist16.source) is not one dist16/config allows',
+    gpl3x16 => 'license GPL-3.0 is not one dist16/config allows',
+    nosrc16 => 'dist16.source names the source nosrc-0.01-src.tar.gz, which the release does not have',
+    other16 => q{the source other-0.01-src.tar.gz has no COPYING, or another one than the commit's},
+    nobuild16 => 'the source nobuild-0.01-src.tar.gz has no BUILDING.md (the build instructions dist16.source names)',
+    stale16 => q{the source stale-0.01-src.tar.gz has another dist16.source than the commit's},
+    badman16 => 'dist16.source: line 6: unknown directive frobnicate',
+    nobld16 => 'dist16.source: no build line',
+    watcom16 => q{watcom.exe contains Open Watcom's C runtime, which dist16.source does not cover},
+    nodep16 => 'depends gr-dos/libc16 v9.99: no release v9.99',
+    binlib16 => 'depends gr-dos/libc16 v0.07: libc16-0.07.zip is not a zip archive',
+    xz16 => 'xz-0.01-src.tar.xz is not a .zip, .tar.gz or .tgz archive',
+    noauth16 => 'the notice AUTHORS (dist16.source) is not at the commit',
+    sum16 => 'sum-0.01-src.tar.gz checksum mismatch: GitHub says ' . ('0' x 64),
+    self16 => 'dist16.source names the program as its source',
+  );
+  for my $name (sort keys %why) {
+    ok(has($lines, qr{^skip gr-dos/$name failed v0\.01: \Q$why{$name}\E}), "a GPL program fails: $why{$name}")
+      or diag(grep { m{gr-dos/$name } } @$lines);
+  }
+  ok(has($lines, qr{^skip gr-dos/sources16 failed SOURCES\.EXE has the name of GR-DOS's SOURCES\.TXT}),
+    'no program may be named SOURCES, the source description\'s name');
+  my $first = slurp("$dir/lock");
+  dist16($dir, 'resolve');
+  ok(slurp("$dir/lock") eq $first, 'source licenses: resolving again writes the same lock');
+
+  # fetch stages the source, and SOURCES.TXT with the licenses.
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest");
+  my $src_asset = slurp("$dir/dl/gr-dos/gpl16/releases/download/v0.01/gpl-0.01-src.tar.gz");
+  ok($rc == 0 && slurp("$dir/dest/GPL.EXE") eq mz(600, 'gpl16'), 'fetch stages the GPL program');
+  ok(slurp("$dir/dest/source/GPL/gpl-0.01-src.tar.gz") eq $src_asset
+    && slurp("$dir/dest/source/GPL/libc16-0.07-src.zip") eq slurp("$dir/dl/gr-dos/libc16/releases/download/v0.07/libc16-0.07-src.zip"),
+    'and its source and the library\'s, in source/GPL');
+  ok(!-e "$dir/dest/source/MD5SUM", 'and no source for the MIT program');
+  my $sources = slurp("$dir/dest/SOURCES.TXT") // '';
+  my $sha = sha256_hex($src_asset);
+  ok($sources =~ /\r\n/ && $sources !~ /[^\r]\n/, 'SOURCES.TXT has DOS line ends');
+  ok($sources =~ m{^GPL\.EXE: gr-dos/gpl16 v0\.01, GPL-2\.0-or-later\r$}m && index($sources, $sha) >= 0
+    && index($sources, 'https://github.com/gr-dos/gpl16/releases/download/v0.01/gpl-0.01-src.tar.gz') >= 0
+    && index($sources, 'in the ZIP: SOURCE\GPL\gpl-0.01-src.tar.gz') >= 0
+    && index($sources, 'https://github.com/gr-dos/libc16/releases/download/v0.07/libc16-0.07-src.zip') >= 0,
+    'SOURCES.TXT names the exact source and library source, by URL and SHA-256, and where they are in the ZIP');
+  ok(index($sources, "GPL-2.0 license of gr-dos/gpl16") >= 0 && index($sources, "authors of gpl16") >= 0
+    && index($sources, "MIT license of gr-dos/libc16") >= 0 && index($sources, 'MIT license of gr-dos/md5sum16') < 0,
+    'SOURCES.TXT has the GPL text, the notice and the library\'s license, and not the MIT program\'s');
+  my($lrc, $list) = dist16($dir, 'list');
+  ok($lrc == 0 && $list eq "GPL.EXE\nMD5SUM.EXE\nSOURCES.TXT\n", 'list: SOURCES.TXT after the programs');
+  my(undef, $bin) = dist16($dir, 'bin-list');
+  ok($bin =~ m{^  BIN\\GPL\.EXE +from gr-dos/gpl16 v0\.01, GPL-2\.0-or-later$}m
+    && $bin =~ m{^  BIN\\SOURCES\.TXT  where to get the source of GPL\.EXE$}m, 'bin-list: each license, and SOURCES.TXT');
+  my(undef, $notices) = dist16($dir, 'notices', "$dir/dest");
+  ok($notices =~ /^GPL\.EXE: gr-dos\/gpl16 v0\.01 \(commit [0-9a-f]{40}\), GPL-2\.0-or-later$/m
+    && $notices =~ /^GPL\.EXE: AUTHORS$/m && $notices =~ /^GPL\.EXE: linked with gr-dos\/libc16 v0\.07 \(commit [0-9a-f]{40}\), MIT$/m
+    && index($notices, 'MIT license of gr-dos/libc16') >= 0, 'notices: the GPL text, the notice and the library\'s license');
+  my(undef, $readme) = dist16($dir, 'sources');
+  ok($readme =~ /^Corresponding source$/m && $readme =~ /aggregation of separately licensed programs/, 'sources: README.txt\'s section');
+
+  # check-dist: a ZIP tree and a CF install, then each thing missing.
+  my $zip = "$dir/zip";
+  my $pack = sub {
+    remove_tree($zip);
+    make_path("$zip/BIN");
+    system('cp', "$dir/dest/$_", "$zip/BIN/") for 'GPL.EXE', 'MD5SUM.EXE', 'SOURCES.TXT';
+    system('cp', '-R', "$dir/dest/source", "$zip/SOURCE");
+    spew("$zip/README.txt", ("GR-DOS\n$readme$notices") =~ s/\n/\r\n/gr);
+  };
+  $pack->();
+  ($rc, $o) = dist16($dir, 'check-dist', $zip, "$dir/dest");
+  ok($rc == 0 && $o =~ /GPL\.EXE \(GPL-2\.0-or-later\) with source and licenses/, 'check-dist: the ZIP has the source and licenses');
+  spew("$zip/README.txt", slurp("$zip/README.txt") =~ s/GPL-2\.0 license of gr-dos\/gpl16//r);
+  ($rc, $o) = dist16($dir, 'check-dist', $zip, "$dir/dest");
+  ok($rc == 2 && $o =~ /a license text of GPL\.EXE is not in full/, 'check-dist: README.txt without the GPL text fails');
+  $pack->();
+  unlink "$zip/SOURCE/GPL/libc16-0.07-src.zip";
+  ($rc, $o) = dist16($dir, 'check-dist', $zip, "$dir/dest");
+  ok($rc == 2 && $o =~ m{SOURCE/GPL/libc16-0\.07-src\.zip is not the source dist16/lock pins}, 'check-dist: a missing library source fails');
+  $pack->();
+  spew("$zip/SOURCE/GPL/extra.tar.gz", 'x');
+  ($rc, $o) = dist16($dir, 'check-dist', $zip, "$dir/dest");
+  ok($rc == 2 && $o =~ /extra\.tar\.gz is not a source dist16\/lock pins/, 'check-dist: an unpinned file in SOURCE fails');
+  $pack->();
+  unlink "$zip/BIN/SOURCES.TXT";
+  ($rc, $o) = dist16($dir, 'check-dist', $zip, "$dir/dest");
+  ok($rc == 2 && $o =~ /SOURCES\.TXT is missing/, 'check-dist: a missing SOURCES.TXT fails');
+  my $cf = "$dir/cf";
+  make_path($cf);
+  spew("$cf/manifest.txt", '');
+  system('cp', "$dir/dest/$_", "$cf/") for 'GPL.EXE', 'SOURCES.TXT';
+  ($rc, $o) = dist16($dir, 'check-dist', $cf, "$dir/dest");
+  ok($rc == 0, 'check-dist: a CF install has SOURCES.TXT, with the licenses');
+
+  # The lock is checked: a GPL program without its source is refused.
+  my $lock = slurp("$dir/lock");
+  spew("$dir/lock", $lock =~ s/^source gr-dos\/gpl16 .*\n(notice .*\n|depend .*\n)*//mr);
+  ($rc, $o) = dist16($dir, 'list');
+  ok($rc == 2 && $o =~ /GPL\.EXE \(gr-dos\/gpl16\) is under GPL-2\.0-or-later, which needs a source line/, 'a lock with a GPL program but no source is refused');
+  spew("$dir/lock", $lock =~ s/GPL-2\.0-or-later COPYING/MIT COPYING/r);
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest");
+  ok($rc == 2 && $o =~ /has a source line, but MIT is not a source-license/, 'a source line under a permissive license is refused');
+  spew("$dir/lock", $lock =~ s/^(source gr-dos\/gpl16 .*\n)(notice .*\n)/$2$1/mr);
+  ($rc, $o) = dist16($dir, 'list');
+  ok($rc == 2 && $o =~ /a notice line out of place/, 'a notice before the source line is refused');
+  spew("$dir/lock", $lock);
+
+  # Offline from the cache, and a corrupt source archive refused.
+  remove_tree("$dir/dl", "$dir/raw");
+  ($rc) = dist16($dir, 'fetch', "$dir/dest2");
+  ok($rc == 0 && slurp("$dir/dest2/SOURCES.TXT") eq $sources, 'offline, fetch reproduces the source and SOURCES.TXT');
+  spew("$dir/cache/gr-dos/gpl16/v0.01/gpl-0.01-src.tar.gz", 'tampered');
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest3");
+  ok($rc == 2 && $o =~ /gpl16 v0\.01 gpl-0\.01-src\.tar\.gz: cannot download .*no verified copy/, 'offline, a corrupt cached source is refused');
+
+  # A config with a source license that is not a versioned one, or is
+  # also a license, is an error.
+  spew("$dir/config", $base_config . "source-license GPL-2.0\n");
+  ($rc, $o) = dist16($dir, 'list');
+  ok($rc == 2 && $o =~ /GPL-2\.0 is not a license with a version/, 'source-license needs -only or -or-later');
+  spew("$dir/config", $base_config . "license GPL-2.0\nsource-license GPL-2.0-or-later\n");
+  ($rc, $o) = dist16($dir, 'list');
+  ok($rc == 2 && $o =~ /GPL-2\.0-or-later is both a license and a source-license/, 'a license may not be both');
 }
 
 say "1..$tests";
