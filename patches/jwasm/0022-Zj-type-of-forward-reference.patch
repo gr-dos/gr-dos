@@ -1,0 +1,41 @@
+JWasm: -Zj makes TYPE of a symbol not yet defined the constant 0
+
+In pass one MASM 5 gives TYPE of a forward-referenced symbol the value 0,
+a constant, not a forward reference: ADD DI,TYPE FTBLK, before FTBLK's
+STRUC, is 83 C7 26 in pass two, the sign-extended byte form, with no
+padding.  JWasm took the undefined symbol for a near label (FF02h), so
+sized it as a word immediate, and flagged the operand as a forward
+reference, which 0018 then keeps a word.  Under -Zj, TYPE of an undefined
+symbol is 0, and its operand is not a forward reference.
+
+Needed for DISPLAY.SYS' CPS-FUNC.INC, which comes before F-PARSER.INC's
+FTBLK STRUC.
+
+diff --git a/src/expreval.c b/src/expreval.c
+index b94b0f1..1ec2b22 100644
+--- a/src/expreval.c
++++ b/src/expreval.c
+@@ -555,7 +555,12 @@ static ret_code get_operand( struct expr *opnd, int *idx, struct asm_tok tokenar
+             //if( Parse_Pass == PASS_1 ) {
+             if( Parse_Pass == PASS_1 && !( flags & EXPF_NOUNDEF ) ) {
+                 /* if symbol wasn't found, assume it is a forward ref! */
+-                Masm5FwdRef = TRUE;
++                /* -Zj: but not the operand of TYPE, which Masm 5 makes the
++                 * constant 0 in pass one (type_op) */
++                if ( !( Options.masm5_compat && i > 0 &&
++                       tokenarray[i-1].token == T_UNARY_OPERATOR &&
++                       tokenarray[i-1].tokval == T_TYPE ) )
++                    Masm5FwdRef = TRUE;
+                 if ( sym == NULL ) {
+                     /* v2.11: flag EXPF_NOLCREATE has got another meaning */
+                     //if ( opnd->type == NULL && !( flags & EXPF_NOLCREATE ) ) { /* added v1.95 */
+@@ -1219,6 +1224,9 @@ static ret_code type_op( int oper, struct expr *opnd1, struct expr *opnd2, struc
+                 break;
+             }
+         }
++    } else if ( Options.masm5_compat && sym && sym->state == SYM_UNDEFINED ) {
++        /* -Zj: Masm 5's TYPE of a symbol not yet defined is 0 */
++        opnd1->value = 0;
+     } else if ( sym == NULL ) {
+         //printf( "sym=NULL kind=%d mem_type=%X indirect=%u is_type=%u type=%s\n", opnd2->kind, opnd2->mem_type, opnd2->indirect, opnd2->is_type, opnd2->type ? opnd2->type->name : "NULL" );
+         /* for types, return total_size */
