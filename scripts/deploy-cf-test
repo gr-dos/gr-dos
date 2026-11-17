@@ -23,7 +23,10 @@ C<OUTDIR>, never on a block device.  For a disk size:
 
 C<provision> a disk of the size, with the drive geometry a CF card of it
 reports, and check that the tool chose the geometry SeaBIOS gives DOS,
-and the partitions with F<scripts/partition-table --chs>;
+and the partitions with F<scripts/partition-table --chs>; and that
+F<C:\DOS\SOURCES.TXT> is installed, with the licenses of each program
+under a source license, such as the GPL, and where its source is, or is
+absent if there is none (issue #56);
 
 =item 2.
 
@@ -185,6 +188,29 @@ sub dist16_programs () {
   return @p;
 }
 
+# The programs dist16/lock has under a source license (issue #56): those
+# with a source line.
+sub dist16_sourced () {
+  return map { (split ' ')[1] } grep { /^source / } split /\n/, slurp("$root/dist16/lock");
+}
+
+# C:\DOS\SOURCES.TXT: with a program under a source license, it must be
+# installed, as the distribution has it, with the licenses and where to get
+# the source (scripts/dist16 check-dist); with none, it must not be there.
+sub check_sources ($img, $r, $out) {
+  my @sourced = dist16_sourced();
+  my $listed = grep { m{  SOURCES\.TXT$} } split /\n/, slurp("$dist/manifest.txt");
+  if(!@sourced) {
+    ok(!$listed && !-e "$dist/SOURCES.TXT", 'no *16 program has a source license, and C:\DOS has no SOURCES.TXT');
+    return;
+  }
+  my($rc) = run("$root/scripts/dist16", 'check-dist', $dist, dirname($dist) . '/dist16');
+  ok($listed && $rc == 0, "the distribution has SOURCES.TXT, with the source and licenses of @sourced");
+  unlink "$out/SOURCES.TXT";
+  ($rc) = run('mcopy', '-n', '-i', at($img, $r->{sys_start}), '::DOS/SOURCES.TXT', "$out/SOURCES.TXT");
+  ok($rc == 0 && slurp("$out/SOURCES.TXT") eq slurp("$dist/SOURCES.TXT"), 'C:\DOS\SOURCES.TXT is installed, unchanged');
+}
+
 sub c_files ($img, $r) {
   my $out = must('mdir', '-/', '-a', '-b', '-i', at($img, $r->{sys_start}), '::');
   return join ' ', sort map { m{^::/(.*)} ? $1 : () } split /\n/, $out;
@@ -215,6 +241,7 @@ sub test_size ($size, $out) {
   my $n = $r->{logical}->@*;
   ok($table =~ /^mbr 1 80 0[146] 0\/1\/1 /m && $table =~ /^mbr 2 00 05 /m
     && (() = $table =~ /^ebr \d+ 1 00 0[146] /mg) == $n, "partition table: C: active, $n logical drives");
+  check_sources($img, $r, $out);
   my $fsck_c = "$out/c.img";
   must('dd', "if=$img", "of=$fsck_c", 'bs=512', "skip=$r->{sys_start}", "count=$r->{sys_len}", 'status=none');
   my($rc) = run('fsck.fat', '-n', $fsck_c);

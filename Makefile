@@ -149,7 +149,10 @@ TESTS   := $(BUILD)/tests
 # The *16 programs (issue #36, docs/dist16.md): the releases dist16/lock
 # pins, which scripts/dist16 fetches and verifies into $(DIST16), with their
 # licenses in $(DIST16)/licenses. TICO.EXE (tico16) is one, and is on every
-# floppy; the others are on C:\DOS and in the ZIP only, after the rest.
+# floppy; the others are on C:\DOS and in the ZIP only, after the rest. If
+# any is under a source license, such as the GPL (issue #56), its source is
+# in $(DIST16)/source, for the ZIP's SOURCE, and SOURCES.TXT, last in the
+# list, says where it is, for C:\DOS and the ZIP's BIN; never on a floppy.
 DIST16       := $(BUILD)/dist16
 DIST16_FILES := $(addprefix $(DIST16)/,$(shell scripts/dist16 list))
 TICO         := $(DIST16)/TICO.EXE
@@ -410,15 +413,20 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 	rm -rf $(DIST) $(RELEASE)
 	mkdir -p $(DIST)/$(NAME)/BIN $(RELEASE)
 	cp $(CORE) $(ALL_FILES) $(DIST)/$(NAME)/BIN/
+	if [ -d $(DIST16)/source ]; then cp -R $(DIST16)/source $(DIST)/$(NAME)/SOURCE; fi
 	scripts/dist16 bin-list $(notdir $(TICO)) > $(BUILD)/dist16-bin.txt
+	scripts/dist16 sources > $(BUILD)/dist16-sources.txt
 	{ \
-	  sed -e '/^@DIST16@$$/{r $(BUILD)/dist16-bin.txt' -e 'd;}' -e 's/@VERSION@/$(VERSION)/g' release/README.txt; \
+	  sed -e '/^@DIST16@$$/{r $(BUILD)/dist16-bin.txt' -e 'd;}' \
+	    -e '/^@DIST16_SOURCES@$$/{r $(BUILD)/dist16-sources.txt' -e 'd;}' \
+	    -e 's/@VERSION@/$(VERSION)/g' release/README.txt; \
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
 	  scripts/dist16 notices $(DIST16); \
 	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE and GRVER.EXE)\n-----------------------------------------------------------------\n\n'; \
 	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
+	scripts/dist16 check-dist $(DIST)/$(NAME) $(DIST16)
 	. ./$(TOOLS) && { \
 	  echo "GR-DOS $(VERSION)"; \
 	  echo "commit $$(git describe --always --dirty --abbrev=40)"; \
@@ -762,6 +770,7 @@ $(CF)/manifest.txt: $(CORE) $(ALL_FILES) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION scr
 	cp $(CORE) $(filter-out %/AUTOEXEC.BAT,$(ALL_FILES)) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION $(CF)/
 	scripts/image-manifest $(BUILD)/all-files.img | grep -v '  AUTOEXEC\.BAT$$' > $@.tmp
 	rm $(BUILD)/all-files.img
+	scripts/dist16 check-dist $(CF) $(DIST16)
 	mv $@.tmp $@
 
 # The *16 programs; a verified copy in build/tools/dist16 is not downloaded
