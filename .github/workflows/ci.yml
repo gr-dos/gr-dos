@@ -87,8 +87,9 @@ jobs:
           if-no-files-found: error
 
       # Unpacked, for debugging: the ZIP's tree, the logs and the QEMU
-      # output of each test, with the disk tests' screens and partition
-      # tables (not their disk images), also when a step failed.
+      # output of each test, with what the printer tests sent to LPT1 and the
+      # disk tests' screens and partition tables (not their disk images),
+      # also when a step failed.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
@@ -99,6 +100,7 @@ jobs:
             build/linux/dist/
             build/linux/tests/*/serial.txt
             build/linux/tests/*/qemu.log
+            build/linux/tests/*/parallel.bin
             build/linux/tests/*/*.screen
             build/linux/tests/*/table.txt
             build/linux/tests/deploy-cf-*/*/serial.txt

@@ -1,0 +1,157 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Basename qw( basename );
+
+# ABSTRACT: Check what a printer test sent to LPT1
+
+=head1 SYNOPSIS
+
+ tests/printer/check-lpt PARALLEL LPT FONT...
+
+=head1 DESCRIPTION
+
+Checks F<PARALLEL>, the bytes a printer test (F<tests/printer>) sent to
+LPT1 (C<scripts/smoke-test --parallel>), against F<LPT>, which lists what
+the printer must receive, in order: the file must be exactly the
+concatenation of its items, one per line.  Blank lines and lines starting
+with C<#> are ignored.  The items are:
+
+=over 4
+
+=item C<== NAME>
+
+The line the test's C<ECHO == NAME E<gt>LPT1> sends, ending CR LF.
+
+=item C<data EXPR>
+
+The bytes of the Perl expression C<EXPR>, such as C<"Hello\r\n"> or
+C<"\0" x 796>.
+
+=item C<select CPI CP>
+
+The escape sequence that selects code page C<CP> in the printer font file
+C<CPI> (one of the C<FONT> files, by name): for a font that is only
+selected (selection type 2: 4208.CPI, 5202.CPI), its whole selection
+sequence, and for one that is downloaded (type 1: 4201.CPI), the first of
+its two sequences, which selects the printer's own characters.
+
+=item C<select-ram CPI CP>
+
+For a downloaded font, the second sequence, which selects the characters
+downloaded to the printer.
+
+=item C<download CPI CP>
+
+For a downloaded font, the font data PRINTER.SYS sends to the printer.
+
+=back
+
+A printer font file (DEV/PRINTER/5202/5202.ASM) is a C<FONT> file header
+whose information has, for each code page, the printer type (2), its
+name, such as C<4201>, the code page and the offset of its font record.
+A record is three words, its cartridge flag, the number of fonts (1) and
+the length of the rest; then the selection type and the length of the
+selection data, the selection data, and for type 1 the font to download.
+Type 1 selection data is two sequences, each after its length byte.
+
+Prints each difference's offset and the item there, and exits non-zero if
+the file is not as listed.
+
+=cut
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!\n";
+  local $/;
+  return scalar <$fh>;
+}
+
+# The code pages of the printer font file $path: { CP => { type, select,
+# select_ram, download } }.
+sub read_font ($path) {
+  my $data = slurp($path);
+  die "$path: not a FONT file\n" unless substr($data, 0, 8) eq "\xFFFONT   ";
+  my $info = unpack 'V', substr($data, 0x13, 4);
+  my $count = unpack 'v', substr($data, $info, 2);
+  my %cp;
+  my $entry = $info + 2;
+  for (1 .. $count) {
+    my($size, $next, $device, $name, $page, $font) = unpack 'v V v A8 v x6 V', substr($data, $entry, 28);
+    die "$path: code page $page is not a printer's\n" unless $device == 2;
+    my($cart, $fonts, $length, $type, $sel_length) = unpack 'v5', substr($data, $font, 10);
+    my $sel = substr($data, $font + 10, $sel_length);
+    my %font = ( type => $type );
+    if($type == 1) {
+      my $first = ord $sel;
+      $font{select}     = substr($sel, 1, $first);
+      $font{select_ram} = substr($sel, 2 + $first, ord substr($sel, 1 + $first, 1));
+      $font{download}   = substr($data, $font + 10 + $sel_length, $length - 4 - $sel_length);
+    } elsif($type == 2) {
+      $font{select} = $sel;
+    } else {
+      die "$path: code page $page: selection type $type\n";
+    }
+    $cp{$page} = \%font;
+    last unless $next;
+    $entry = $next;
+  }
+  return \%cp;
+}
+
+# The bytes the lines of $lpt list: [ [ bytes, item ], ... ].
+sub expected ($lpt, $fonts) {
+  my @items;
+  my $line_no = 0;
+  for my $line (split /\n/, slurp($lpt)) {
+    $line_no++;
+    next if $line !~ /\S/ || $line =~ /^#/;
+    my $where = "$lpt:$line_no";
+    my $bytes;
+    if($line =~ /^== \S+$/) {
+      $bytes = "$line\r\n";
+    } elsif($line =~ /^data (.+)$/) {
+      $bytes = eval $1;
+      die "$where: $@" if $@;
+    } elsif($line =~ /^(select|select-ram|download) (\S+) (\d+)$/) {
+      my($what, $file, $page) = ($1 =~ tr/-/_/r, uc $2, $3);
+      my $font = $fonts->{$file} // die "$where: no font file $file\n";
+      my $cp = $font->{$page} // die "$where: $file has no code page $page\n";
+      $bytes = $cp->{$what} // die "$where: $file code page $page has no $1\n";
+    } else {
+      die "$where: not an item: $line\n";
+    }
+    push @items, [ $bytes, "$where: $line" ];
+  }
+  return \@items;
+}
+
+sub main ($parallel, $lpt, @font_files) {
+  my %fonts = map { uc basename($_) => read_font($_) } @font_files;
+  my $got = slurp($parallel);
+  my $at = 0;
+  my $failed = 0;
+  for my $item (expected($lpt, \%fonts)->@*) {
+    my($want, $what) = @$item;
+    my $have = substr($got, $at, length $want);
+    if($have ne $want) {
+      my $diff = 0;
+      $diff++ while $diff < length $have && substr($have, $diff, 1) eq substr($want, $diff, 1);
+      say sprintf 'check-lpt: offset %d (%d into %s): %s, not %s', $at + $diff, $diff, $what,
+        unpack('H*', substr($have, $diff, 8)) || 'the end', unpack('H*', substr($want, $diff, 8));
+      $failed = 1;
+      last;
+    }
+    $at += length $want;
+  }
+  if(!$failed && $at != length $got) {
+    say sprintf 'check-lpt: %d bytes after the last item, at offset %d: %s', length($got) - $at, $at,
+      unpack('H*', substr($got, $at, 16));
+    $failed = 1;
+  }
+  say $failed ? "check-lpt: $parallel: FAILED" : "check-lpt: $parallel: as $lpt lists, $at bytes";
+  return $failed;
+}
+
+die "usage: $0 PARALLEL LPT FONT...\n" unless @ARGV >= 2;
+exit main(@ARGV);

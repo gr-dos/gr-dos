@@ -1,0 +1,24 @@
+# Lines the printer test without PRINTER.SYS (printer.bat) must write to
+# COM1 (scripts/smoke-test); what it sends to LPT1 is in lpt.
+
+^GRDOS-TEST-BEGIN$
+
+# Without PRINTER.SYS, LPT1 has no code pages
+^== STATUS$
+^Code page operation not supported on this device$
+^Code page operation not supported on this device$
+
+^== TEXT$
+^ +1 File\(s\) copied$
+
+# GRAPHICS installs silently; DEBUG draws, and INT 5 prints the screen
+^== GRAPHICS$
+^-g$
+^Program terminated normally$
+
+# PRINT installs, queues HELLO.TXT, and has printed it after DOS is idle
+^== PRINT$
+^Resident part of PRINT installed$
+^  A:\\HELLO\.TXT is currently being printed$
+^PRINT queue is empty$
+^GRDOS-TEST-END$

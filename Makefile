@@ -264,7 +264,7 @@ TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
-	test-keyb test-codepage test-grver test-fdisk test-install test-deploy-cf test-config-include
+	test-keyb test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
 test-dist16: scripts/dist16 tests/dist16/run
@@ -361,6 +361,22 @@ $(TEST_CODEPAGE): test-codepage-%: $(TESTS)/codepage-%.img
 
 test-codepage-screen: $(TESTS)/codepage-screen.img scripts/disk-test
 	scripts/disk-test $< tests/codepage/screen $(TESTS)/codepage-screen
+
+# The printer tests (tests/printer, issue #25): each boots a 1.44 MB image
+# whose CONFIG.SYS and AUTOEXEC.BAT are tests/printer/NAME's, with LPT1
+# written to a file (scripts/smoke-test --parallel), and checks what MODE's
+# CP commands report on COM1 (tests/printer/NAME/expect) and what
+# PRINTER.SYS, COPY, PRINT and GRAPHICS send to the printer
+# (tests/printer/NAME/lpt, tests/printer/check-lpt, which reads the
+# printer fonts).
+PRINTER_TESTS := $(sort $(patsubst tests/printer/%/expect,%,$(wildcard tests/printer/*/expect)))
+TEST_PRINTER  := $(addprefix test-printer-,$(PRINTER_TESTS))
+
+test-printer: $(TEST_PRINTER)
+
+$(TEST_PRINTER): test-printer-%: $(TESTS)/printer-%.img tests/printer/check-lpt
+	scripts/smoke-test --parallel $< tests/printer/$*/expect $(TESTS)/printer-$*
+	tests/printer/check-lpt $(TESTS)/printer-$*/parallel.bin tests/printer/$*/lpt $(filter %.CPI,$(PRT_DATA))
 
 # GRVER's tests (tests/grver, issue #46): its output and exit status, and
 # FAKEID's imitations of the identification call's answer, on GR-DOS; and
@@ -535,6 +551,9 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-codepage       DISPLAY.SYS, MODE's code pages, KEYB and CHCP; or
   make test-codepage-SETUP   one (SETUP: $(CODEPAGE_TESTS)), or the
   make test-codepage-screen  boot messages and KEYB GR, read from the screen
+  make test-printer        PRINTER.SYS, MODE's code pages, PRINT and GRAPHICS,
+  make test-printer-PRINTER  with LPT1 in a file; or one (PRINTER:
+                             $(PRINTER_TESTS))
   make test-grver          GRVER and the kernel's identification call, on
   make test-grver-grdos,     GR-DOS and on MS-DOS 4.00; or one of them
   make test-grver-msdos
@@ -579,6 +598,7 @@ test-help: scripts/check-help
 	$(MAKE) --no-print-directory -s help > $(TESTS)/help.txt
 	scripts/check-help $(TESTS)/help.txt 'FORMAT=$(FORMATS)' 'NAME=$(FDISK_TESTS)' \
 	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' 'COUNTRY=$(COUNTRY_TESTS)' 'SETUP=$(CODEPAGE_TESTS)' \
+	  'PRINTER=$(PRINTER_TESTS)' \
 	  $(HELP_INTERNAL) -- \
 	  $$($(MAKE) --no-print-directory -pRrq : 2>/dev/null | sed -n 's/^\.PHONY: //p')
 
@@ -586,7 +606,7 @@ test-help: scripts/check-help
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
 	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
-	test-codepage-screen
+	test-codepage-screen test-printer $(TEST_PRINTER)
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -1040,6 +1060,30 @@ CODEPAGE_SCREEN_FILES := $(TESTS)/codepage-screen/CONFIG.SYS $(TESTS)/codepage-s
 
 $(TESTS)/codepage-screen.img: $(CORE) $(CODEPAGE_SCREEN_FILES) scripts/mkimage scripts/check-image
 	scripts/mkimage $@ $(SRC) $(CODEPAGE_SCREEN_FILES)
+
+# The printer tests' disks: the scenario's CONFIG.SYS and AUTOEXEC.BAT,
+# PRINTER.SYS and the fonts, and the programs and files the tests use.
+$(TESTS)/printer-%/CONFIG.SYS: tests/printer/%/config.sys
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/printer-%/AUTOEXEC.BAT: tests/printer/%/printer.bat
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+$(TESTS)/printer-files/%: tests/printer/%
+	mkdir -p $(@D)
+	sed 's/$$/\r/' $< > $@
+
+printer_files = $(TESTS)/printer-$(1)/CONFIG.SYS $(TESTS)/printer-$(1)/AUTOEXEC.BAT $(PRT_DATA) \
+	$(addprefix $(SRC)/,CMD/MODE/MODE.COM CMD/PRINT/PRINT.COM CMD/GRAPHICS/GRAPHICS.COM CMD/DEBUG/DEBUG.COM) \
+	$(call dist,$(SRC)/CMD/FIND/FIND.EXE) $(GRAPHICS_PRO) $(addprefix $(TESTS)/printer-files/,hello.txt gdump.in idle.in)
+
+define printer_test_image
+$(TESTS)/printer-$(1).img: $(CORE) $(call printer_files,$(1)) scripts/mkimage scripts/check-image
+	scripts/mkimage $$@ $(SRC) $(call printer_files,$(1))
+endef
+$(foreach t,$(PRINTER_TESTS),$(eval $(call printer_test_image,$(t))))
 
 # GRVER's test disks: GRVER, FAKEID and the batch files, with GR-DOS's
 # system files or MS-DOS 4.00's. The reference build is make check's; its

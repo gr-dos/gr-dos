@@ -1,0 +1,37 @@
+@ECHO OFF
+REM PRINTER.SYS with an IBM 4208 (Proprinter X24 or XL24): code page 437 in
+REM the printer, and one slot for another, which MODE
+REM prepares from 4208.CPI. Selecting a code page sends the printer the
+REM escape sequence that selects it: PRINTER.SYS' own for 437 before
+REM anything is prepared, then 4208.CPI's. Each == line on COM1 is also on
+REM LPT1, between what each step sends to the printer
+REM (tests/printer/check-lpt).
+CTTY AUX
+ECHO GRDOS-TEST-BEGIN
+ECHO == BOOT
+ECHO == BOOT>LPT1
+MODE LPT1 CP /STATUS
+ECHO == BUILTIN
+ECHO == BUILTIN>LPT1
+MODE LPT1 CP SELECT=437
+ECHO == PREPARE
+ECHO == PREPARE>LPT1
+MODE LPT1 CP PREPARE=((850) A:\4208.CPI)
+MODE LPT1 CP /STATUS
+ECHO == SELECT
+ECHO == SELECT>LPT1
+MODE LPT1 CP SELECT=850
+ECHO == TEXT
+ECHO == TEXT>LPT1
+COPY A:\HELLO.TXT LPT1
+ECHO == HARDWARE
+ECHO == HARDWARE>LPT1
+MODE LPT1 CP SELECT=437
+ECHO == ERRORS
+ECHO == ERRORS>LPT1
+MODE LPT1 CP SELECT=865
+MODE LPT1 CP PREPARE=((850) A:\5202.CPI)
+MODE LPT1 CP /STATUS
+ECHO == END>LPT1
+ECHO GRDOS-TEST-END
+CTTY CON

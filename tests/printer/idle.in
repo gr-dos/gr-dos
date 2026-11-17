@@ -1,0 +1,8 @@
+a 100
+mov cx,8000
+int 28
+loop 0103
+int 20
+
+g
+q

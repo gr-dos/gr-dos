@@ -1,0 +1,17 @@
+a 100
+mov ax,0004
+int 10
+mov ax,b800
+mov es,ax
+xor di,di
+mov cx,0050
+mov al,ff
+repz
+stosb
+int 05
+mov ax,0003
+int 10
+int 20
+
+g
+q
