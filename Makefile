@@ -204,21 +204,25 @@ FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
 # the everyday file and disk commands, and KEYB with KEYBOARD.SYS and
 # COUNTRY.SYS (issue #23); 1.2 MB and 1.44 MB add the rest that work from
 # a floppy, and DISPLAY.SYS with EGA.CPI (DISPLAY, issue #24), for the EGA
-# and VGA of the AT-class machines that boot from them. FASTOPEN works on
+# and VGA of the AT-class machines that boot from them, and PRINTER.SYS
+# with its three printer fonts (PRINTER, issue #25). FASTOPEN works on
 # hard disks only and IFSFUNC only with an installable file system, so they
 # are on C: alone, as is LCD.CPI, for the PC Convertible's LCD alone.
 extra = $(call dist,$(foreach u,$(1),$(filter $(SRC)/CMD/$(u)/%,$(addprefix $(SRC)/,$(EXTRA_UTILITIES)))))
 FLOPPY_720  := XCOPY COMP DISKCOMP LABEL TREE SORT EDLIN PRINT ASSIGN RECOVER KEYB
-FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS NLSFUNC DISPLAY
+FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS NLSFUNC DISPLAY PRINTER
 FLOPPY_1440 := $(FLOPPY_1200)
 # GRAPHICS reads its printer profile, GRAPHICS.PRO, from its own directory.
 # A floppy with KEYB has the data files, in its root, where KEYB and
-# COUNTRY= look for them by default, and one with DISPLAY.SYS, EGA.CPI.
+# COUNTRY= look for them by default, one with DISPLAY.SYS, EGA.CPI, and
+# one with PRINTER.SYS, the printer fonts.
 GRAPHICS_PRO := $(SRC)/CMD/GRAPHICS/GRAPHICS.PRO
 NLS_DATA     := $(addprefix $(SRC)/,$(NLS_FILES))
 CP_DATA      := $(addprefix $(SRC)/,$(CP_FILES))
+PRT_DATA     := $(addprefix $(SRC)/,DEV/PRINTER/PRINTER.SYS $(PRT_COPIED) DEV/PRINTER/5202/5202.CPI)
 extra_files = $(call extra,$(1)) $(if $(filter GRAPHICS,$(1)),$(GRAPHICS_PRO)) \
-	$(if $(filter KEYB,$(1)),$(NLS_DATA)) $(if $(filter DISPLAY,$(1)),$(filter-out %/LCD.CPI,$(CP_DATA)))
+	$(if $(filter KEYB,$(1)),$(NLS_DATA)) $(if $(filter DISPLAY,$(1)),$(filter-out %/LCD.CPI,$(CP_DATA))) \
+	$(if $(filter PRINTER,$(1)),$(PRT_DATA))
 FILES_360  := $(FILES)
 FILES_720  := $(PROGRAMS) $(call extra_files,$(FLOPPY_720)) $(BUILD)/image/AUTOEXEC.BAT
 FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(BUILD)/image/AUTOEXEC.BAT
@@ -230,10 +234,11 @@ GRVER := $(BUILD)/grver/GRVER.EXE
 
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
 # programs, then all of issue #17's in CMD's order, GRAPHICS.PRO,
-# COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI and LCD.CPI, GRVER,
-# and the other *16 programs.
+# COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI and LCD.CPI,
+# PRINTER.SYS, 4201.CPI, 4208.CPI and 5202.CPI, GRVER, and the other *16
+# programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(GRAPHICS_PRO) \
-	$(NLS_DATA) $(CP_DATA) $(GRVER) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
+	$(NLS_DATA) $(CP_DATA) $(PRT_DATA) $(GRVER) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
 
 # GR-DOS's own file names, which no *16 program may have, even with
 # another extension (COMMAND.COM would run only one of them).
