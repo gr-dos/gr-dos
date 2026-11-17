@@ -1,4 +1,7 @@
 
+IFDEF __JWASM__
+	OPTION NOKEYWORD:<INVOKE> ; a variable below and in the modules
+ENDIF
 	PAGE	,132
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
