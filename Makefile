@@ -837,7 +837,7 @@ $(HELP_EXE): $(BUILD)/help/HELP.OBJ $(TOOLS) $(BUILD)/libc16.stamp scripts/check
 # --help.
 HELP_TOPICS := $(sort $(wildcard help/topics/*.txt))
 
-$(BUILD)/help/files.txt: Makefile
+$(BUILD)/help/files.txt: Makefile dist16/lock
 	mkdir -p $(@D)
 	printf '%s\n' $(notdir $(ALL_FILES)) > $@
 
