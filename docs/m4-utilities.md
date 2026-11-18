@@ -170,7 +170,7 @@ the startup and `exit` are written by a separate session from the spec
 alone; and an audit of each release compares its code with Open Watcom's
 runtime library. GR-DOS's earlier runtime, `compat/crt`, was written after
 the Open Watcom runtime once linked into these programs had been
-disassembled ([PR #6](https://github.com/plicease/dos-gr-dos/pull/6#issuecomment-6404653096)).
+disassembled ([PR #6](https://github.com/gr-dos/gr-dos/pull/6#issuecomment-6404653096)).
 libc16 replaces it and was written without reading it. Open Watcom C,
 `wlink` and `wlib` are build tools only, under the Sybase Open Watcom
 Public License 1.0; no Open Watcom code is in ATTRIB.EXE or MEM.EXE.

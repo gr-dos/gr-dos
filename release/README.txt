@@ -3,7 +3,7 @@ GR-DOS @VERSION@
 GR-DOS is a fork of the MS-DOS 4.00 source that Microsoft published under
 the MIT license, built on Linux with open tools.
 
-  https://github.com/plicease/dos-gr-dos
+  https://github.com/gr-dos/gr-dos
 
 This archive holds the GR-DOS system files. The bootable floppy images are
 separate downloads from the same release:
