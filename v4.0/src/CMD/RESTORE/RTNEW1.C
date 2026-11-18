@@ -546,6 +546,14 @@ void get_fileheader_length()
 	WORD retcode;			/*;AN000;3*/
 	WORD read_count;		/*;AN000;3*/
 	DWORD file_position;		/*;AN000;3*/
+#ifdef __WATCOMC__
+	/* GR-DOS (issue #19): the two bytes read are the header's length and
+	   the first of its file name; read into fileheader_length, a BYTE,
+	   the second overwrote what Microsoft C put after it, but what Open
+	   Watcom C puts there is got_first_fh, and the first file header of
+	   each directory block was taken to be read already. */
+	WORD length_word;
+#endif
 
 			/* Save current file pointer */
 	retcode =					/*;AN000;3*/
@@ -568,10 +576,17 @@ void get_fileheader_length()
        DOSREAD						/*;AN000;3*/
 	(						/*;AN000;3*/
 	  control_file_handle,				/*;AN000;3*/
+#ifdef __WATCOMC__
+	  (char far *)&length_word,
+#else
 	  (char far *)&fileheader_length,		/*;AN000;3*/
+#endif
 	  (unsigned short)2,				/*;AN000;3*/
 	  (unsigned far *)&read_count			/*;AN000;3*/
 	 );						/*;AN000;3*/
+#ifdef __WATCOMC__
+	fileheader_length = (BYTE)length_word;
+#endif
 
 	if (retcode != 0 || read_count != 2)		/*;AN000;3*/
 	 {						/*;AN000;3*/

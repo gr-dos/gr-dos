@@ -38,13 +38,13 @@ and linked with `wlink` and libc16, with libc16's startup.
 `scripts/check-runtime` checks their maps. JOIN takes `cstart`, `argv`,
 `args`, `exit`, `intdos`, `intdosx`, `int86`, `int86x`, `mkdir`, `fputs`,
 `stdout`, `write`, `strcat`, `strcpy`, `strlen`, `strcmp` and `strncmp`
-from libc16 0.07, with `errno`, `doserr` and `fdtab`. SUBST takes the
-same, but with `malloc`, `open` and `access` in place of `mkdir`.
+from libc16 0.15, with `errno`, `doserr` and `fdtab`. SUBST takes the
+same, but with `malloc`, `free`, `open` and `access` in place of `mkdir`.
 
 | | Microsoft (M1) | GR-DOS |
 |---|---:|---:|
-| `JOIN.EXE` | 17,813 bytes | 10,312 bytes |
-| `SUBST.EXE` | 18,467 bytes | 11,094 bytes |
+| `JOIN.EXE` | 17,813 bytes | 10,344 bytes |
+| `SUBST.EXE` | 18,467 bytes | 11,558 bytes |
 
 `make check` compares their message files (`JOIN.CL1`, `JOIN.CL2`,
 `JOIN.CLA`, `JOIN.CTL`, and SUBST's) with the M1 reference build. It does

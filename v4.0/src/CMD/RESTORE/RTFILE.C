@@ -287,7 +287,11 @@ void restore_a_file(finfo,dinfo,bufsize,control_bufsize,	 /* wrw! */
 		   control_file_handle = 0xffff;			      /* !wrw */
 		  }							      /* !wrw */
 
+#ifdef __WATCOMC__  /* libc16 has no printf */
+	       fputs("\n",stdout);
+#else
 	       printf("\n");
+#endif
 	       temp_array1[0] = (char) (*dnumwant / 10) + '0';
 	       temp_array1[1] = (char) (*dnumwant % 10) + '0';
 	       temp_array1[2] = NULLC;

@@ -131,7 +131,13 @@ HaveSpace:
 	add	bx,bx
 
 	mov	ax,FileAttributeTable[bx]
+IFDEF __JWASM__ ; GR-DOS: into the caller's buffer: [bp].Attributes is the
+		; caller's stack, past this routine's parameters
+	lds	si,[bp].BufferPtr
+	mov	ds:[si].Attributes,ax
+ELSE
 	mov	[bp].Attributes,ax	       ; save file attribute
+ENDIF
 
 	sub	ax,ax			       ; set good return code
 

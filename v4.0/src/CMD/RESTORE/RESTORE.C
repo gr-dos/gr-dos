@@ -107,7 +107,13 @@ BYTE srcddir[MAXPATH+3] = {'\0'};
 BYTE rtswitch=0;
 BYTE control_flag=0;
 BYTE control_flag2=0;
+#ifdef __WATCOMC__  /* RTT3.C's far pointer: Microsoft C's linker made the
+   communal variable the largest size declared, Open Watcom's takes
+   this definition's */
+char far *buf_pointer;
+#else
 BYTE *buf_pointer;
+#endif
 
 /*=============================*/
 BYTE srcd;							      /*;AN000;4*/
@@ -216,7 +222,11 @@ void main(argc,argv)  /* wrw! */
 /*********************************/
 /*   Take control of Hard Errors */
 /*********************************/
+#ifdef __WATCOMC__  /* MAPPER's SETINT24 takes a word, and pops it */
+    set_int24_vector(0);
+#else
     set_int24_vector(); 			/*;AN000; Set Critical error vector (int 24h) */
+#endif
 
 
    /************************************************************/

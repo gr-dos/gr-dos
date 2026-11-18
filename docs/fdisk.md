@@ -18,11 +18,11 @@ is compiled with the same `wcc` flags, linked with `wlink` and libc16, and
 `setvect`, `int86`, `int86x`, `intdos`, `intdosx`, `segread`,
 `strcpy`, `strncpy`, `strcat`, `strcmp`, `strchr`, `strlen`, `memset`,
 `isalpha`, `isdigit`, `ltoa`, `getch`, `putch` and the long arithmetic
-helpers from libc16 0.07.
+helpers from libc16 0.15.
 
 | | Microsoft (M1) | GR-DOS |
 |---|---:|---:|
-| `FDISK.EXE` | 60,935 bytes, EXEPACKed | 37,608 bytes |
+| `FDISK.EXE` | 60,935 bytes, EXEPACKed | 37,640 bytes |
 
 Other parts of the build:
 

@@ -45,7 +45,7 @@ copied from the retail MS-DOS manuals or from a later DOS's help.
 `help/help.c` is GR-DOS's own C, built with Open Watcom C and libc16 like
 GRVER ([grver.md](grver.md)), for the 8086. It reads the file a line at a
 time with `fgets`, so it needs a few KB of memory, whatever the file's
-size. HELP.EXE is 4,136 bytes, and GRDOS.HLP about 100 KB, of 78 topics. `scripts/check-runtime` checks its link
+size. HELP.EXE is 4,152 bytes, and GRDOS.HLP about 100 KB, of 78 topics. `scripts/check-runtime` checks its link
 map.
 
 ## GRDOS.HLP

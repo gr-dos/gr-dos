@@ -617,3 +617,24 @@ void Get_DBCS_vector()						       /*;AN005;*/
     return;							       /*;AN005;*/
 }								       /*;AN005;*/
 
+#ifdef __WATCOMC__
+/* GR-DOS (issue #19, docs/backup-restore.md): what RESTORE took from
+ * COMSUBS.LIB, which is Microsoft C object code only, written for Open
+ * Watcom C. */
+
+/* com_toupper: c in upper case. COMSUBS.LIB's maps it through a table made
+ * by MAPPER's DosCaseMap, which changes a to z alone. */
+int com_toupper(c)
+unsigned char c;
+{
+   return(c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c);
+}
+
+/* rctomid: the message number for a DOS return code. COMSUBS.LIB's
+ * returns the code itself. */
+unsigned rctomid(retcode)
+unsigned retcode;
+{
+   return(retcode);
+}
+#endif

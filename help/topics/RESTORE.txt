@@ -1,0 +1,44 @@
+Topic: RESTORE
+Summary: Restores files that BACKUP backed up
+Origin: MS-DOS 4.00
+Group: command
+Files: RESTORE.COM
+
+Syntax
+  RESTORE source: target [/S] [/P] [/B:date] [/A:date] [/E:time]
+          [/L:time] [/M] [/N]
+
+  source:      The drive holding the backup: floppies, or a disk with
+               a \BACKUP directory.
+  target       Where the files are to go back: a drive, path and file
+               name, which may have wildcards. The path must be the one
+               the files were backed up from.
+  /S           Restores the subdirectories too.
+  /P           Asks before restoring over a file that is read-only or
+               changed since it was backed up.
+  /B:date      Only files changed on or before the date.
+  /A:date      Only files changed on or after the date.
+  /E:time      Only files changed at or before the time.
+  /L:time      Only files changed at or after the time.
+  /M           Only files changed or deleted since they were backed up.
+  /N           Only files that no longer exist on the target.
+
+Examples
+  RESTORE A: C:\ /S
+    Restores everything backed up from C: from floppies in A:.
+  RESTORE D: C:\WORK\*.TXT
+    Restores C:\WORK's .TXT files from D:\BACKUP.
+
+Exit status
+  0  Done.
+  1  No files were found to restore.
+  2  Some files were not restored: another program had them open.
+  3  Stopped by Ctrl+C or Ctrl+Break.
+  4  Stopped by an error.
+
+Notes
+  RESTORE asks for each floppy of the backup in order, and makes the
+  directories the files need. It restores the files' dates, times and
+  attributes. It reads backups made by BACKUP of DOS 2.0 to 4.00.
+  It does not restore COMMAND.COM, IBMBIO.COM or IBMDOS.COM, and BACKUP
+  skips IO.SYS and MSDOS.SYS: put the system on a disk with SYS.

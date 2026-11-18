@@ -578,7 +578,15 @@ char	*argv[];						      /*;AN000;4*/
 	BYTE  tempp[MAXPATH];
 	WORD  j,k,z;
 	BYTE *c;
+#ifdef __WATCOMC__
+	/* GR-DOS (issue #19): set only for a path with "..", and in RESTORE
+	   TRUE is 0. Microsoft C's stack happened to leave it nonzero, false;
+	   Open Watcom C's left 0, and RESTORE then needed the target's
+	   directory to exist. */
+	BYTE  backdir = FALSE;
+#else
 	BYTE  backdir;
+#endif
 	WORD  dnumwant = 1;
 	union REGS qregs;					      /*;AN000;8*/
 

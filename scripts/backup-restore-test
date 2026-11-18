@@ -1,0 +1,403 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Basename qw( dirname );
+use File::Temp qw( tempdir );
+use IO::Socket::UNIX;
+use IO::Select;
+use Time::HiRes qw( sleep time );
+
+# ABSTRACT: Test BACKUP and RESTORE on a CF install with floppy images, against Microsoft's
+
+=head1 SYNOPSIS
+
+ scripts/backup-restore-test [--update --backup BACKUP.COM --restore RESTORE.COM] OUTDIR
+
+=head1 DESCRIPTION
+
+Tests BACKUP and RESTORE (issue #19, F<docs/backup-restore.md>) on a 512 MB
+CF install made by F<scripts/deploy-cf> in C<OUTDIR>, with a 1.44 MB floppy
+drive A:, never on a block device.  F<tests/backup-restore/br.bat> runs from
+C:'s root, started by F<D:\AUTOEXEC.BAT>, with F<EL.BAT> (that of
+F<tests/join-subst>) in F<C:\DOS>, and works on D:\BR, whose files (with
+fixed dates, times and attributes) are put there with mtools.
+
+QEMU is run here, not by F<scripts/hd-boot-test>: COM1, which the batch file
+makes the console (CTTY AUX), is a socket, and it is answered.  The floppies
+are disposable images in C<OUTDIR>, in sets: a line C<== set NAME> of the
+batch file chooses the set; when BACKUP or RESTORE asks for "backup diskette
+NN" (or the last one) in drive A: and then for a key, A: is changed to
+F<NAME-NN.img>, made if new (formatted by mtools, with its own volume
+serial number, or blank for a set named C<RAW...>), and after 3 seconds (DOS
+takes a floppy read less than 2 seconds before to be the same one) a
+carriage return is sent.  RESTORE /P's "Replace the file (Y/N)?" is
+answered N, and so is "Format another (Y/N)?" of the FORMAT that BACKUP /F
+runs.  The set C<MSSET> is Microsoft's:
+it is made from F<tests/backup-restore/ms/NN/>, the files of the set C<SPAN>
+as Microsoft's BACKUP wrote them.  The clock starts at 2026-01-01 12:00.
+
+What COM1 shows from C<GRDOS-TEST-BEGIN> to C<GRDOS-TEST-END>, carriage
+returns included, with volume serial numbers (which FORMAT makes from the
+time) masked, must be F<tests/backup-restore/expect.log>, byte for byte; and
+the files of each disk of C<SPAN> must be those of F<ms/NN/>, byte for byte.
+
+With C<--update>, F<C:\DOS\BACKUP.COM> and F<C:\DOS\RESTORE.COM> are
+replaced by the programs given, Microsoft's (the M1 reference build's), and
+their output is written to F<expect.log>, and the set C<SPAN> to F<ms/>,
+instead (C<MSSET> is then C<SPAN>): C<make backup-restore-expect>.
+
+=cut
+
+my $root = dirname(dirname(__FILE__));
+my $tool = "$root/scripts/deploy-cf";
+my $tests = "$root/tests/backup-restore";
+my $begin = 'GRDOS-TEST-BEGIN';
+my $end = 'GRDOS-TEST-END';
+my $floppy_bytes = 1474560;
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "unable to write $path: $!";
+  print $fh $data;
+  close $fh or die "unable to write $path: $!";
+}
+
+sub must (@cmd) {
+  say '+ ', join ' ', @cmd;
+  system(@cmd) == 0 or die "failed: @cmd\n";
+}
+
+sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
+
+# CRLF text, as DOS reads it.
+sub dos_text ($path) { slurp($path) =~ s/\r?\n/\r\n/gr }
+
+sub blank ($path) {
+  open my $fh, '>', $path or die "unable to create $path: $!";
+  truncate $fh, $floppy_bytes or die "truncate: $!";
+  close $fh;
+}
+
+# Each disk with its own volume serial number: DOS takes a disk with the
+# serial number (and label) of the one it had for the same disk, and keeps
+# using what it read of that one.
+my $serials = 0;
+sub formatted ($path) {
+  blank($path);
+  must('mformat', '-i', $path, '-f', 1440, '-N', sprintf('%08X', 0x19190000 + ++$serials), '::');
+}
+
+# A set's disk NN, 01 up, in drive A:.
+sub floppy ($out, $set, $n, %opt) {
+  my $path = sprintf '%s/%s-%02d.img', $out, $set, $n;
+  return $path if -f $path;
+  if($set eq 'MSSET' && $opt{update}) {
+    my $span = sprintf '%s/SPAN-%02d.img', $out, $n;
+    die "backup-restore-test: no $span for MSSET\n" unless -f $span;
+    must('cp', $span, $path);
+  }
+  elsif($set eq 'MSSET') {
+    my $dir = sprintf '%s/ms/%02d', $tests, $n;
+    die "backup-restore-test: no $dir\n" unless -d $dir;
+    formatted($path);
+    # Dated as BACKUP dated them, at the guest clock's start: RESTORE shows
+    # the date.
+    local $ENV{TZ} = 'UTC';
+    opendir my $dh, $dir or die "unable to read $dir: $!";
+    for my $name (sort grep { !/^\./ } readdir $dh) {
+      must('cp', "$dir/$name", "$out/$name");
+      must('touch', '-d', '2026-01-01 12:00 UTC', "$out/$name");
+      must('mcopy', '-m', '-i', $path, "$out/$name", "::$name");
+      unlink "$out/$name";
+    }
+  }
+  elsif($set =~ /^RAW/) { blank($path) }
+  else { formatted($path) }
+  return $path;
+}
+
+# The disks of a set made so far.
+sub disks ($out, $set) { sort glob "$out/$set-[0-9][0-9].img" }
+
+# The files of a disk, NAME => contents.
+sub disk_files ($img, $tmp) {
+  system('rm', '-rf', $tmp) == 0 && system('mkdir', '-p', $tmp) == 0 or die "unable to create $tmp\n";
+  must('mcopy', '-n', '-i', $img, '::*', $tmp);
+  opendir my $dh, $tmp or die "unable to read $tmp: $!";
+  return map { $_ => slurp("$tmp/$_") } grep { !/^\./ } readdir $dh;
+}
+
+# D:\BR's files: name, contents, DOS date and time (UTC, as mtools reads it
+# with TZ=UTC), attributes for mattrib.
+sub pattern ($seed, $n) {
+  my($x, $s) = ($seed, '');
+  for(1 .. $n / 4) {
+    $x = ($x * 1103515245 + 12345) % 2**31;
+    $s .= pack 'V', $x;
+  }
+  return $s;
+}
+
+my @files = (
+  [ 'SRC/A.TXT',           "alpha\r\n",          '1999-12-31 23:58:00', '' ],
+  [ 'SRC/READONLY.TXT',    "read only\r\n",      '2000-02-29 08:30:10', '+r' ],
+  [ 'SRC/HIDDEN.TXT',      "hidden\r\n",         '1995-07-04 17:15:20', '+h' ],
+  [ 'SRC/NOARCH.TXT',      "no archive bit\r\n", '2001-03-01 00:00:00', '-a' ],
+  [ 'SRC/SUB/B.TXT',       "beta\r\n",           '2010-10-10 10:10:10', '' ],
+  [ 'SRC/SUB/DEEP/C.TXT',  "gamma\r\n",          '1988-06-01 09:00:00', '' ],
+  [ 'SRC/SUB/DEEP/BIG1.BIN', pattern(1, 1200000),  '2020-01-02 03:04:06', '' ],
+  [ 'SRC/SUB/DEEP/BIG2.BIN', pattern(2, 2000000),  '2020-01-02 03:04:08', '' ],
+  [ 'SRC/DOC/X.DOC',       "x doc\r\n",          '2005-05-05 05:05:04', '' ],
+  [ 'SRC/DOC/Y.DOC',       "y doc\r\n",          '2005-05-05 05:05:06', '' ],
+  [ 'SRC/DOC/Z.TXT',       "z text\r\n",         '2005-05-05 05:05:08', '' ],
+);
+
+sub main (@args) {
+  my %opt;
+  while(@args && $args[0] =~ /^--/) {
+    my $o = shift @args;
+    if($o eq '--update') { $opt{update} = 1 }
+    elsif($o eq '--backup' || $o eq '--restore') { $opt{substr $o, 2} = shift @args }
+    else { die "unknown option $o\n" }
+  }
+  my($out) = @args;
+  die "usage: $0 [--update --backup BACKUP.COM --restore RESTORE.COM] OUTDIR\n" unless defined $out && @args == 1;
+  die "--update needs --backup and --restore\n" if $opt{update} && !($opt{backup} && $opt{restore});
+  die "--backup and --restore are for --update\n" if !$opt{update} && ($opt{backup} || $opt{restore});
+  my $dist = "$root/build/linux/cf";
+  -f "$dist/manifest.txt" or die "$dist: no distribution (run make)\n";
+  system('rm', '-rf', $out) == 0 && system('mkdir', '-p', $out) == 0 or die "unable to create $out\n";
+
+  my $img = "$out/disk.img";
+  open my $fh, '>', $img or die "unable to create $img: $!";
+  truncate $fh, 993 * 16 * 63 * 512 or die "truncate: $!";
+  close $fh;
+  must($tool, 'provision', '--confirm', 'disk.img', $img);
+  # The layout record, sector 1.
+  open my $rfh, '<:raw', $img or die "unable to read $img: $!";
+  sysseek $rfh, 512, 0;
+  sysread $rfh, my $rec, 512;
+  close $rfh;
+  my($sys_start) = $rec =~ /^system (\d+) \d+$/m;
+  my($d_start) = $rec =~ /^logical \d+ (\d+) \d+$/m;
+  die "no layout record\n" unless $sys_start && $d_start;
+  my $c = at($img, $sys_start);
+  my $d = at($img, $d_start);
+
+  spew("$out/BR.BAT", dos_text("$tests/br.bat"));
+  spew("$out/EL.BAT", dos_text("$root/tests/join-subst/el.bat"));
+  spew("$out/AUTOEXEC.BAT", "C:\\BR\r\n");
+  must('mcopy', '-o', '-i', $c, "$out/BR.BAT", '::BR.BAT');
+  must('mcopy', '-o', '-i', $c, "$out/EL.BAT", '::DOS/EL.BAT');
+  must('mcopy', '-o', '-i', $d, "$out/AUTOEXEC.BAT", '::AUTOEXEC.BAT');
+  if($opt{update}) {
+    must('mcopy', '-o', '-i', $c, $opt{backup}, '::DOS/BACKUP.COM');
+    must('mcopy', '-o', '-i', $c, $opt{restore}, '::DOS/RESTORE.COM');
+  }
+  # D:\BR, its files' times as UTC, which mtools then writes unchanged.
+  local $ENV{TZ} = 'UTC';
+  my $files = "$out/files";
+  my %dirs;
+  for my $f (@files) {
+    my($name, $data, $when, $attr) = @$f;
+    my $path = "$files/$name";
+    system('mkdir', '-p', dirname($path)) == 0 or die "unable to create $path\n";
+    spew($path, $data);
+    must('touch', '-d', "$when UTC", $path);
+    my @parts = split m{/}, "BR/$name";
+    for my $i (1 .. $#parts) {
+      my $dir = join '/', @parts[0 .. $i - 1];
+      next if $dirs{$dir}++;
+      must('mmd', '-i', $d, "::$dir");
+    }
+    must('mcopy', '-m', '-i', $d, $path, "::BR/$name");
+    must('mattrib', '-i', $d, $attr, "::BR/$name") if $attr;
+  }
+
+  my $a_img = floppy($out, 'INIT', 1);
+  my $tmp = tempdir('backup-restore-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+  my($serial_sock, $mon_sock) = ("$tmp/serial", "$tmp/monitor");
+  my @cmd = (
+    'qemu-system-i386',
+    -display => 'none',
+    -m       => 4,
+    '-no-reboot',
+    -drive   => "file=$img,if=none,id=hd0,format=raw,snapshot=on",
+    -device  => 'ide-hd,drive=hd0,bus=ide.0,unit=0,cyls=993,heads=16,secs=63,bios-chs-trans=none',
+    -drive   => "file=$a_img,if=floppy,index=0,format=raw",
+    -boot    => 'c',
+    -rtc     => 'base=2026-01-01T12:00:00',
+    -serial  => "unix:$serial_sock,server=on,wait=on",
+    -monitor => "unix:$mon_sock,server=on,wait=off",
+  );
+  my $pid = fork // die "fork: $!";
+  if($pid == 0) {
+    open STDOUT, '>', "$out/qemu.log" or die "unable to write $out/qemu.log: $!";
+    open STDERR, '>&', \*STDOUT or die "dup: $!";
+    exec @cmd or die "exec qemu-system-i386: $!";
+  }
+  my $connect = sub ($path) {
+    for(1 .. 100) {
+      my $s = IO::Socket::UNIX->new(Peer => $path);
+      return $s if $s;
+      sleep 0.1;
+    }
+    die "backup-restore-test: no QEMU socket $path\n";
+  };
+  my $serial = $connect->($serial_sock);
+  my $mon = $connect->($mon_sock);
+  my $mon_read = sub {
+    my $buf = '';
+    my $deadline = time + 10;
+    while(time < $deadline) {
+      my $n = sysread $mon, my $chunk, 65536;
+      die "QEMU monitor closed\n" unless $n;
+      $buf .= $chunk;
+      return $buf if $buf =~ /\(qemu\) \z/;
+    }
+    die "no answer from the QEMU monitor\n";
+  };
+  $mon_read->();
+
+  # COM1: what the batch file shows, and its questions answered.
+  my($log, $done, $set, $want) = ('', 0, 'INIT', undef);
+  STDOUT->autoflush(1);
+  my($scanned, $quiet) = (0, time);
+  my $sel = IO::Select->new($serial);
+  my $deadline = time + 900;
+  open my $raw, '>:raw', "$out/serial.log" or die "unable to write $out/serial.log: $!";
+  $raw->autoflush(1);
+  while(time < $deadline) {
+    if($sel->can_read(0.25)) {
+      my $n = sysread $serial, my $chunk, 65536;
+      last unless $n;
+      print $raw $chunk;
+      $log .= $chunk;
+      $quiet = time;
+    }
+    # A key sent before the program flushed DOS's input (INT 21h 0Ch) is
+    # lost: while nothing comes after the question, it is sent again.
+    elsif($log =~ /Press any key to continue \. \. \.\z/ && time - $quiet > 3) {
+      say 'backup-restore-test: the key again';
+      syswrite $serial, "\r";
+      $quiet = time;
+    }
+    last if waitpid($pid, 1) == $pid;
+    # Complete lines, and a question waiting for its answer at the end.
+    while(substr($log, $scanned) =~ /\A(.*?)(\r?\n|Press any key to continue \. \. \.|Replace the file \(Y\/N\)\?|Format another \(Y\/N\)\?)/s) {
+      my($line, $eol) = ($1, $2);
+      $scanned += length($1) + length($2);
+      if($line =~ /^== set (\w+)/) { $set = $1 }
+      elsif($line =~ /Insert backup diskette (\d+) in drive A:/) { $want = $1 + 0 }
+      elsif($line =~ /Insert last backup diskette in drive A:/) {
+        my @have = disks($out, $set);
+        die "backup-restore-test: no disks of $set for the last one\n" unless @have;
+        ($want) = $have[-1] =~ /-(\d+)\.img\z/;
+        $want += 0;
+      }
+      elsif($line =~ /^\Q$end\E\r?$/) { $done = 1 }
+      # BIOS INT 14h gives up on COM1 when QEMU is slow to take its output,
+      # as on a busy host: the output is incomplete, and DOS asks forever.
+      elsif($line =~ /error writing device AUX/) {
+        kill 'TERM', $pid;
+        waitpid $pid, 0;
+        die "backup-restore-test: DOS could not write to COM1 (a busy host?); see $out/serial.log\n";
+      }
+      # RESTORE /P's question: no, keep the file. FORMAT's, run by BACKUP
+      # /F: no.
+      if($eol =~ /^Replace/) {
+        sleep 0.5;
+        syswrite $serial, 'N';
+      }
+      if($eol =~ /^Format another/) {
+        sleep 0.5;
+        syswrite $serial, "N\r";
+      }
+      if($eol =~ /^Press/) {
+        if(defined $want) {
+          my $path = floppy($out, $set, $want, %opt);
+          say "backup-restore-test: A: is now $set-", sprintf("%02d", $want);
+          syswrite $mon, "change floppy0 $path raw\n";
+          $mon_read->();
+          $want = undef;
+          # DOS takes a floppy it read less than 2 seconds before to be the
+          # same disk, and goes on with what it read of it: QEMU's BIOS
+          # gives drive A: no change line. So the key waits.
+          sleep 2.5;
+        }
+        sleep 0.5;
+        syswrite $serial, "\r";
+      }
+    }
+    last if $done;
+  }
+  kill 'TERM', $pid;
+  waitpid $pid, 0;
+  close $raw;
+
+  my($got) = $log =~ /^(\Q$begin\E\r\n.*?^\Q$end\E\r\n)/ms;
+  die "backup-restore-test: no $begin to $end on COM1\n" unless defined $got;
+  # FORMAT's volume serial numbers are from the time.
+  $got =~ s/(Volume Serial Number is )[0-9A-F]{4}-[0-9A-F]{4}/${1}XXXX-XXXX/g;
+  spew("$out/output.log", $got);
+
+  my @span = disks($out, 'SPAN');
+  die "backup-restore-test: no disks of SPAN\n" unless @span;
+  if($opt{update}) {
+    spew("$tests/expect.log", $got);
+    say "backup-restore-test: wrote $tests/expect.log";
+    system('rm', '-rf', "$tests/ms") == 0 or die "unable to remove $tests/ms\n";
+    for my $disk (@span) {
+      my($n) = $disk =~ /-(\d+)\.img\z/;
+      my %f = disk_files($disk, "$out/disk");
+      system('mkdir', '-p', "$tests/ms/$n") == 0 or die "unable to create $tests/ms/$n\n";
+      spew("$tests/ms/$n/$_", $f{$_}) for keys %f;
+      say "backup-restore-test: wrote $tests/ms/$n: ", join ' ', sort keys %f;
+    }
+    unlink $img;
+    return 0;
+  }
+
+  my $ok = 1;
+  if($got ne slurp("$tests/expect.log")) {
+    system("diff -u $tests/expect.log $out/output.log | tr -d '\\r'");
+    say 'backup-restore-test: FAILED, not the output of expect.log';
+    $ok = 0;
+  }
+  my @ms = sort glob "$tests/ms/[0-9][0-9]";
+  if(@ms != @span) {
+    say 'backup-restore-test: FAILED, SPAN has ', scalar @span, ' disks, Microsoft\'s ', scalar @ms;
+    $ok = 0;
+  }
+  for my $disk (@span) {
+    my($n) = $disk =~ /-(\d+)\.img\z/;
+    my %f = disk_files($disk, "$out/disk");
+    my $dir = "$tests/ms/$n";
+    opendir my $dh, $dir or do { $ok = 0; next };
+    my @want = sort grep { !/^\./ } readdir $dh;
+    if("@want" ne join ' ', sort keys %f) {
+      say "backup-restore-test: FAILED, SPAN-$n has ", join(' ', sort keys %f), ", Microsoft's @want";
+      $ok = 0;
+      next;
+    }
+    for my $name (@want) {
+      next if $f{$name} eq slurp("$dir/$name");
+      say "backup-restore-test: FAILED, SPAN-$n $name is not Microsoft's";
+      $ok = 0;
+    }
+  }
+  if($ok) {
+    say 'backup-restore-test: passed, the same output as expect.log, and the same backup as Microsoft\'s';
+    unlink $img;
+    return 0;
+  }
+  return 1;
+}
+
+exit main(@ARGV);
