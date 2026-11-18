@@ -6,9 +6,12 @@
 
 discover gr-dos 16
 
-# libc16 is a C runtime library (its release is libc16-VERSION.zip), not a
-# DOS program; GR-DOS's FDISK, ATTRIB, MEM and FC are linked with it.
-exclude gr-dos/libc16 a C runtime library, not a DOS program
+# A repository named lib*16 (any case), such as gr-dos/libc16, the C
+# runtime GR-DOS's FDISK, ATTRIB, MEM and FC are linked with, or
+# gr-dos/libkitchen16, is a library, not a DOS program: discover excludes
+# it without an exclude here (issue #61), and an include overrides that.
+# Only the library as a program is left out: its source, as a program's
+# depends in dist16.source (patch16's libc16), still ships.
 # hello16 is the template the other gr-dos *16 repositories are made from;
 # HELLO.EXE only prints a greeting.
 exclude gr-dos/hello16 the template for gr-dos *16 programs, not a utility
