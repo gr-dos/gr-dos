@@ -1,0 +1,125 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Basename qw( dirname );
+
+# ABSTRACT: Test JOIN and SUBST on a CF install's disk image, against Microsoft's
+
+=head1 SYNOPSIS
+
+ scripts/join-subst-test [--update --join JOIN.EXE --subst SUBST.EXE] OUTDIR
+
+=head1 DESCRIPTION
+
+Tests JOIN and SUBST (issue #18, F<docs/join-subst.md>) on a 512 MB CF
+install made by F<scripts/deploy-cf> in C<OUTDIR>, never on a block device:
+C: the system volume, D: the data volume.  F<tests/join-subst/js.bat> runs
+from C:'s root, started by F<D:\AUTOEXEC.BAT> (D: is joined in it), with
+F<EL.BAT> in F<C:\DOS>; both are copied to the image with mtools.  The
+image is booted in QEMU (F<scripts/hd-boot-test>), and what COM1 shows
+from C<GRDOS-TEST-BEGIN> to C<GRDOS-TEST-END>, carriage returns included,
+must be F<tests/join-subst/expect.log>, byte for byte.
+
+With C<--update>, F<C:\DOS\JOIN.EXE> and F<C:\DOS\SUBST.EXE> are replaced
+by the programs given, Microsoft's (the M1 reference build's), and their
+output is written to F<expect.log> instead: C<make join-subst-expect>.
+
+=cut
+
+my $root = dirname(dirname(__FILE__));
+my $tool = "$root/scripts/deploy-cf";
+my $tests = "$root/tests/join-subst";
+my $begin = 'GRDOS-TEST-BEGIN';
+my $end = 'GRDOS-TEST-END';
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "unable to write $path: $!";
+  print $fh $data;
+  close $fh or die "unable to write $path: $!";
+}
+
+sub must (@cmd) {
+  say '+ ', join ' ', @cmd;
+  system(@cmd) == 0 or die "failed: @cmd\n";
+}
+
+sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
+
+# CRLF text, as DOS reads it.
+sub dos_text ($path) { slurp($path) =~ s/\r?\n/\r\n/gr }
+
+sub main (@args) {
+  my %opt;
+  while(@args && $args[0] =~ /^--/) {
+    my $o = shift @args;
+    if($o eq '--update') { $opt{update} = 1 }
+    elsif($o eq '--join' || $o eq '--subst') { $opt{substr $o, 2} = shift @args }
+    else { die "unknown option $o\n" }
+  }
+  my($out) = @args;
+  die "usage: $0 [--update --join JOIN.EXE --subst SUBST.EXE] OUTDIR\n" unless defined $out && @args == 1;
+  die "--update needs --join and --subst\n" if $opt{update} && !($opt{join} && $opt{subst});
+  die "--join and --subst are for --update\n" if !$opt{update} && ($opt{join} || $opt{subst});
+  my $dist = "$root/build/linux/cf";
+  -f "$dist/manifest.txt" or die "$dist: no distribution (run make)\n";
+  system('rm', '-rf', $out) == 0 && system('mkdir', '-p', $out) == 0 or die "unable to create $out\n";
+
+  my $img = "$out/disk.img";
+  open my $fh, '>', $img or die "unable to create $img: $!";
+  truncate $fh, 993 * 16 * 63 * 512 or die "truncate: $!";
+  close $fh;
+  must($tool, 'provision', '--confirm', 'disk.img', $img);
+  # The layout record, sector 1.
+  open my $rfh, '<:raw', $img or die "unable to read $img: $!";
+  sysseek $rfh, 512, 0;
+  sysread $rfh, my $rec, 512;
+  close $rfh;
+  my($sys_start) = $rec =~ /^system (\d+) \d+$/m;
+  my($d_start) = $rec =~ /^logical \d+ (\d+) \d+$/m;
+  die "no layout record\n" unless $sys_start && $d_start;
+  my $c = at($img, $sys_start);
+  my $d = at($img, $d_start);
+
+  spew("$out/JS.BAT", dos_text("$tests/js.bat"));
+  spew("$out/EL.BAT", dos_text("$tests/el.bat"));
+  spew("$out/AUTOEXEC.BAT", "C:\\JS\r\n");
+  must('mcopy', '-o', '-i', $c, "$out/JS.BAT", '::JS.BAT');
+  must('mcopy', '-o', '-i', $c, "$out/EL.BAT", '::DOS/EL.BAT');
+  must('mcopy', '-o', '-i', $d, "$out/AUTOEXEC.BAT", '::AUTOEXEC.BAT');
+  if($opt{update}) {
+    must('mcopy', '-o', '-i', $c, $opt{join}, '::DOS/JOIN.EXE');
+    must('mcopy', '-o', '-i', $c, $opt{subst}, '::DOS/SUBST.EXE');
+  }
+
+  spew("$out/expect", "^$begin\$\n^$end\$\n");
+  my $rc = system("$root/scripts/hd-boot-test", '--chs', '993/16/63', '--timeout', 300, $img,
+    "$out/expect", "$out/boot");
+  my $serial = -f "$out/boot/serial.log" ? slurp("$out/boot/serial.log") : '';
+  my($log) = $serial =~ /^(\Q$begin\E\r\n.*?^\Q$end\E\r\n)/ms;
+  die "join-subst-test: no $begin to $end on COM1 (hd-boot-test: $rc)\n" unless defined $log;
+  spew("$out/output.log", $log);
+
+  if($opt{update}) {
+    spew("$tests/expect.log", $log);
+    say "join-subst-test: wrote $tests/expect.log";
+    unlink $img;
+    return 0;
+  }
+  if($log eq slurp("$tests/expect.log")) {
+    say 'join-subst-test: passed, the same output as expect.log';
+    unlink $img;
+    return 0;
+  }
+  system("diff -u $tests/expect.log $out/output.log | tr -d '\\r'");
+  say 'join-subst-test: FAILED, not the output of expect.log';
+  return 1;
+}
+
+exit main(@ARGV);

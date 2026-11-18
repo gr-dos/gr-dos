@@ -4,14 +4,33 @@
 #include <dos.h>
 #include "jointype.h"
 
+#ifdef __WATCOMC__
+/* libc16's declarations, __cdecl, of the C library functions ERRTST.C
+   calls without including their headers */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#endif
+
 extern unsigned char *com_substr() ;            /* ;AN000; DBCS enabled */
 extern char getdrv() ;
 
+#ifdef __WATCOMC__
+/* JOIN's and SUBST's own: Microsoft C made the two definitions one
+   communal variable, Watcom C would define it twice */
+extern union REGS inregs, outregs;
+#else
 union REGS inregs, outregs;                     /* ;AN000; Regs for Int21 */
+#endif
 struct SREGS segregs;                           /* ;AN000; Segment regs for Int21 */
 
 #define GET_DBCS_VEC   0x6300                   /* ;AN000; Int21 Get DBCS Vector */
+#ifdef __WATCOMC__  /* the vector ends with a word of 0; (unsigned)"00" is the
+                       string's address, which the loop looked for past the end */
+#define DBLNULL        0
+#else
 #define DBLNULL        "00"                     /* ;AN000; */
+#endif
 #define NULL           0                        /* ;AN000; */
 
 #define KANJI   TRUE
@@ -77,7 +96,12 @@ strpre(pre, tot)
 Fatal(p)
 char *p ;
 {
+#ifdef __WATCOMC__  /* libc16 has no printf */
+        fputs(p, stdout) ;
+        fputs("\n", stdout) ;
+#else
         printf("%s\n", p) ;
+#endif
         exit(1) ;
 }
 
@@ -307,4 +331,28 @@ unsigned char c;
   strcpy(fix_es_reg,NULL);                      /* ;AN000; Repair ES reg */
   return(got_dbcs);                             /* ;AN000; */
 }
+
+#ifdef __WATCOMC__
+/* com_substr, from COMSUBS.LIB, which is Microsoft C object code only:
+ * the first occurrence of the string t in the string s, or NULL. A match
+ * whose previous byte is a DBCS lead byte is the second half of a double
+ * byte character, and is skipped. As COMSUBS.LIB's, it finds a substring,
+ * not one of a set of characters: strbscan(p, "/\\") looks for "/\". */
+unsigned char *com_substr(s, t)
+unsigned char *s ;
+unsigned char *t ;
+{
+        int ls = strlen((char *)s) ;
+        int lt = strlen((char *)t) ;
+        int i ;
+
+        if (lt > ls)
+                return(NULL) ;
+        for (i = 0; i <= ls - lt; i++)
+                if (s[i] == t[0] && (i == 0 || !testkanj(s[i-1])) &&
+                    strncmp((char *)s+i, (char *)t, lt) == 0)
+                        return(s+i) ;
+        return(NULL) ;
+}
+#endif
 

@@ -100,6 +100,24 @@
 #include "jointype.h"
 #include "stdio.h"
 #include "sysvar.h"
+#ifdef __WATCOMC__
+/* libc16's declarations, __cdecl, of the C library functions JOIN.C
+   calls without including their headers */
+#include <string.h>
+#include <stdlib.h>
+#include <direct.h>
+/* The C calling convention of _MSGRET and _PARSE */
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysgetmsg
+#pragma aux (__cdecl) sysdispmsg
+#pragma aux (__cdecl) parse
+/* Some calls give no outline, for messages that substitute none */
+#include <stdarg.h>
+int dispmsg_terminate(int msg_num, ...) ;
+/* INC's functions that return char, which JOIN.C calls undeclared, as
+   if they returned int: Watcom C returns a char in AL alone */
+extern char fPathErr(), fPhysical(), fNet(), fShared(), getdrv() ;
+#endif
 
 /*컴컴컴컴컴컴컴컴컴컴컴� PARSE EQUATES 컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴*/
 #define ASCII_DRIVE       'A'-1                                                /* ;AN000;P Convert to Ascii drive */
@@ -144,7 +162,9 @@
 #define UTILITY_CLASS     0x0ff                                                /* ;AN000;M Utility message class */
 
 /*컴컴컴컴컴컴컴컴컴컴컴� MISCELLANEOUS 컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴*/
+#ifndef __WATCOMC__  /* libc16's string.h declares it */
 extern char *strchr() ;                                                        /* M003 */
+#endif
 extern char *strbscan() ;                                                      /* SM extern'd */
 
 char cmdln_drive[64]   = {0} ;                                                 /* ;AN002; Save user's input in   */
@@ -423,7 +443,18 @@ DoList()                                                                       /
   for (i=0 ; fGetCDS(i, &CDS) ; i++)
   {
     if (TESTFLAG(CDS.flags,CDSSPLICE))
+#ifdef __WATCOMC__  /* libc16 has no printf: the same line, in one write */
+      {
+        char line[DIRSTRLEN+8] ;
+        strcpy(line, "?: => ") ;
+        line[0] = (char)(i+'A') ;
+        strcat(line, CDS.text) ;
+        strcat(line, "\n") ;
+        fputs(line, stdout) ;
+      }
+#else
       printf("%c: => %s\n", i+'A', CDS.text) ;
+#endif
   }
   return ;
 }
@@ -607,10 +638,21 @@ char *outline ;                                                                /
 /*                                                                        */
 /**************************************************************************/
 
+#ifdef __WATCOMC__
+dispmsg_terminate(int msg_num, ...)
+{
+  char *outline ;
+  va_list ap ;
+
+  va_start(ap, msg_num) ;
+  outline = va_arg(ap, char *) ;
+  va_end(ap) ;
+#else
 dispmsg_terminate(msg_num,outline)                                             /* ;AN000;P */
 int msg_num ;                                                                  /* ;AN000;P Message number #define'd */
 char *outline ;                                                                /* ;AN001;P Substitution parameter */
 {                                                                              /* ;AN000;P */
+#endif
   display_msg(msg_num,outline) ;                                               /* ;AN000;P First, display the msg */
   exit(ERRORLEVEL1) ;                                                          /* ;AN000;P Then, terminate utility */
 }                                                                              /* ;AN000;P */

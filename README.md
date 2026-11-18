@@ -5,9 +5,10 @@ the MIT license. It is built on Linux with open tools, booted in QEMU, and
 tested in GitHub Actions.
 
 Today the build produces the boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM and
-31 utilities: FORMAT, SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND, FC,
-DEBUG, MEM and MODE, and every other MS-DOS 4.00 command written in
-assembly ([`docs/m5-utilities.md`](docs/m5-utilities.md)). It also makes
+33 utilities: FORMAT, SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND, FC,
+DEBUG, MEM and MODE, every other MS-DOS 4.00 command written in
+assembly ([`docs/m5-utilities.md`](docs/m5-utilities.md)), and JOIN and
+SUBST ([`docs/join-subst.md`](docs/join-subst.md)). It also makes
 bootable 1.44 MB, 1.2 MB, 720 KB and 360 KB floppy images with the tico16
 editor; the larger ones carry more of the utilities. With FDISK,
 FORMAT and SYS, GR-DOS installs on a hard disk and boots from it
@@ -20,7 +21,7 @@ and pinned in `dist16/lock` ([`docs/dist16.md`](docs/dist16.md)). Apart from the
 banner, `VER` and FDISK's menu (`patches/branding`), and the kernel's GR-DOS
 identification call (`patches/kernel`, [`docs/grver.md`](docs/grver.md)), the binaries of the
 assembly sources are byte-identical to the original MASM/LINK build; ATTRIB,
-MEM, FDISK and FC, which are C, are built with Open Watcom C and GR-DOS's own C
+MEM, FDISK, FC, JOIN and SUBST, which are C, are built with Open Watcom C and GR-DOS's own C
 runtime ([`docs/m4-utilities.md`](docs/m4-utilities.md)). See
 [`docs/00-mvp.md`](docs/00-mvp.md) for the plan and its status.
 
@@ -65,8 +66,8 @@ sudo scripts/deploy-cf update /dev/sdX      # afterwards: C: only
 
 | Format | Image | Bytes | Geometry | Free |
 |---|---|---:|---|---:|
-| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 795,136 |
-| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 551,424 |
+| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 773,120 |
+| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 529,408 |
 | 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 229,376 |
 | 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 16,384 |
 
@@ -83,6 +84,7 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `XCOPY.EXE`, `COMP.COM`, `DISKCOMP.COM`, `LABEL.COM`, `TREE.COM`, `SORT.EXE`, `EDLIN.COM`, `PRINT.COM`, `ASSIGN.COM`, `RECOVER.COM` | | ✓ | ✓ |
 | `KEYB.COM`, with `COUNTRY.SYS` and `KEYBOARD.SYS` ([`docs/country-keyboard.md`](docs/country-keyboard.md)) | | ✓ | ✓ |
 | `APPEND.EXE`, `SHARE.EXE`, `EXE2BIN.EXE`, `GRAFTABL.COM`, `GRAPHICS.COM`, `GRAPHICS.PRO`, `NLSFUNC.EXE` | | | ✓ |
+| `JOIN.EXE`, `SUBST.EXE` ([`docs/join-subst.md`](docs/join-subst.md)) | | | ✓ |
 | `DISPLAY.SYS`, with `EGA.CPI` ([`docs/codepage.md`](docs/codepage.md)) | | | ✓ |
 | `PRINTER.SYS`, with `4201.CPI`, `4208.CPI` and `5202.CPI` ([`docs/printer.md`](docs/printer.md)) | | | ✓ |
 | `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
@@ -124,7 +126,9 @@ on), FORMAT, SYS and DISKCOPY on blank, disposable images in drive B:. It
 tests the commands of [`docs/m5-utilities.md`](docs/m5-utilities.md)
 (`make test-extras`), and boots each format's files with a data disk in B:
 (`make test-floppy-360` and so on). It
-compares FC's output with Microsoft's FC.EXE's (`make test-fc`), boots
+compares FC's output with Microsoft's FC.EXE's (`make test-fc`), and JOIN's
+and SUBST's with Microsoft's on a CF install's C: and D: (`make
+test-join-subst`), boots
 with `COUNTRY=` in CONFIG.SYS (`make test-country`), types through KEYB's
 layouts (`make test-keyb`), checks what PRINTER.SYS, PRINT and GRAPHICS
 send to QEMU's parallel port (`make test-printer`), runs FDISK on disposable hard disk images against Microsoft's build of
@@ -166,7 +170,7 @@ gr-dos-VERSION/
 │   │   EXE2BIN.EXE, FASTOPEN.EXE, GRAFTABL.COM, GRAPHICS.COM,
 │   │   IFSFUNC.EXE, KEYB.COM, LABEL.COM, NLSFUNC.EXE, PRINT.COM,
 │   │   RECOVER.COM, SHARE.EXE, SORT.EXE, TREE.COM, XCOPY.EXE,
-│   │   GRAPHICS.PRO, COUNTRY.SYS, KEYBOARD.SYS
+│   │   JOIN.EXE, SUBST.EXE, GRAPHICS.PRO, COUNTRY.SYS, KEYBOARD.SYS
 │   ├── DISPLAY.SYS, EGA.CPI, LCD.CPI   code page switching for the screen
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
@@ -217,6 +221,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
 - [`docs/fdisk.md`](docs/fdisk.md): FDISK, its tests against Microsoft's
   build, and installing on a hard disk.
 - [`docs/fc.md`](docs/fc.md): FC and its tests against Microsoft's build.
+- [`docs/join-subst.md`](docs/join-subst.md): JOIN and SUBST, how they
+  behave, and their tests against Microsoft's build on C: and D:.
 - [`docs/deploy-cf.md`](docs/deploy-cf.md): installing on a CF card from
   Linux, and updating C: only.
 - [`docs/m5-utilities.md`](docs/m5-utilities.md): the other assembly

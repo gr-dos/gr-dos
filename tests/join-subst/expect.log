@@ -1,0 +1,178 @@
+GRDOS-TEST-BEGIN
+== nothing yet
+errorlevel 0
+errorlevel 0
+== SUBST E: D:\JS\WORK
+errorlevel 0
+E: => D:\JS\WORK
+errorlevel 0
+hello from D:
+written through E:
+E:\SUB\NEW.TXT exists
+E:\SUB
+== SUBST errors with E: substituted
+Invalid parameter - E: 
+errorlevel 1
+Invalid parameter - E: 
+errorlevel 1
+Invalid parameter - E: 
+errorlevel 1
+E: => D:\JS\WORK
+errorlevel 0
+== SUBST E: /D
+errorlevel 0
+errorlevel 0
+E: is gone
+Invalid parameter - E: 
+errorlevel 1
+== SUBST forms
+errorlevel 0
+E: => D:\JS\WORK
+Path not found - D:\JS\WORK\  
+errorlevel 1
+Invalid parameter - E: 
+errorlevel 0
+E: => D:\JS\WORK
+errorlevel 0
+E: => D:\JS\WORK\SUB
+errorlevel 0
+E: => D:\JS
+Invalid parameter - E:D:\JS\WORK  
+errorlevel 1
+Invalid parameter - E: 
+Incorrect number of parameters - /D  
+errorlevel 1
+== SUBST A: (a floppy drive)
+errorlevel 0
+A: => D:\JS\WORK
+hello from D:
+errorlevel 0
+errorlevel 0
+== SUBST errors
+Invalid parameter - E:  
+errorlevel 1
+Invalid parameter - D:\JS\WORK  
+errorlevel 1
+Invalid parameter - /D  
+errorlevel 1
+Path not found - D:\JS\NOPE  
+errorlevel 1
+Invalid parameter - D:\JS\WORK\HELLO.TXT  
+errorlevel 1
+errorlevel 0
+E: => D:\
+Invalid parameter - D:  
+errorlevel 1
+Path not found - E:\  
+errorlevel 1
+Invalid parameter - C: 
+errorlevel 1
+Invalid parameter - F: 
+errorlevel 1
+Invalid parameter - Q: 
+errorlevel 1
+Path not found - Q:\JS  
+errorlevel 1
+Incorrect number of parameters - EXTRA  
+errorlevel 1
+Invalid switch - /X  
+errorlevel 1
+Invalid switch - /D  
+errorlevel 1
+Invalid switch - /D  
+errorlevel 1
+Path not found - D:\JS\WORK\..\..\..  
+errorlevel 1
+Invalid parameter - 1: 
+errorlevel 1
+Invalid parameter - E 
+errorlevel 1
+errorlevel 0
+== JOIN D: C:\MNT
+errorlevel 0
+D: => C:\MNT
+errorlevel 0
+C:\MNT is D:
+hello from D:
+Invalid drive specification
+C:\
+== JOIN errors with D: joined
+Invalid parameter - D: 
+errorlevel 1
+Invalid parameter - D: 
+errorlevel 1
+errorlevel 0
+E: => C:\MNT\JS
+errorlevel 0
+== JOIN D: /D
+Invalid parameter - /D  
+errorlevel 1
+errorlevel 0
+written through C:\MNT
+C:\MNT is still there
+Invalid parameter - /D  
+errorlevel 1
+== JOIN forms
+errorlevel 0
+D: => C:\MNT
+errorlevel 0
+D: => C:\JN\DEEP
+hello from D:
+Invalid parameter - D:C:\MNT  
+errorlevel 1
+Invalid parameter - /D  
+errorlevel 0
+D: => C:\NEWDIR
+C:\NEWDIR is D:
+errorlevel 0
+D: => C:\JN\DEEP
+Invalid parameter - C:\EMPTY\  
+errorlevel 1
+Invalid parameter - /D  
+errorlevel 0
+A: => C:\FLOPPY
+errorlevel 0
+errorlevel 0
+== JOIN errors
+Invalid parameter - D:  
+errorlevel 1
+Invalid parameter - C:\MNT  
+errorlevel 1
+Invalid parameter - /D  
+errorlevel 1
+Too many parameters - /D  
+errorlevel 1
+Invalid parameter - C: 
+errorlevel 1
+Invalid parameter - D:\JS\EMPTY  
+errorlevel 1
+Invalid parameter - C:\  
+errorlevel 1
+Directory not empty - C:\FULL  
+errorlevel 1
+Invalid parameter - C:\FILE.TXT  
+errorlevel 1
+Invalid parameter - C:\NO\SUCH  
+errorlevel 1
+Invalid parameter - E: 
+errorlevel 1
+Invalid parameter - Q: 
+errorlevel 1
+Invalid parameter - Q:\QJOIN  
+errorlevel 1
+Too many parameters - EXTRA  
+errorlevel 1
+Invalid switch - /X  
+errorlevel 1
+Invalid switch - /D  
+errorlevel 1
+errorlevel 0
+D: => C:\INUSE
+errorlevel 0
+Invalid parameter - C:\INUSE\..\..  
+errorlevel 1
+Invalid parameter - D 
+errorlevel 1
+errorlevel 0
+errorlevel 0
+GRDOS-TEST-END

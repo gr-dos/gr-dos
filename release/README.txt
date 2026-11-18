@@ -25,8 +25,8 @@ and use B: for programs and data. Each also installs GR-DOS on a hard disk
            PRINT, ASSIGN, RECOVER and KEYB, with COUNTRY.SYS and
            KEYBOARD.SYS
   1.2 MB,  those, and APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS,
-  1.44 MB  GRAPHICS.PRO and NLSFUNC, DISPLAY.SYS with EGA.CPI, and
-           PRINTER.SYS with 4201.CPI, 4208.CPI and 5202.CPI
+  1.44 MB  GRAPHICS.PRO, NLSFUNC, JOIN and SUBST, DISPLAY.SYS with
+           EGA.CPI, and PRINTER.SYS with 4201.CPI, 4208.CPI and 5202.CPI
 
 FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on no floppy: FASTOPEN works on
 hard disks only, IFSFUNC needs an installable file system driver, GRVER is
@@ -114,6 +114,8 @@ Contents
   BIN\SORT.EXE     sorts its input
   BIN\TREE.COM     shows the directory tree
   BIN\XCOPY.EXE    copies files and directory trees
+  BIN\JOIN.EXE     makes a drive appear as a directory of another drive
+  BIN\SUBST.EXE    makes a drive letter a name for a directory
   BIN\GRAPHICS.PRO GRAPHICS's printer profile
   BIN\COUNTRY.SYS  country information, for COUNTRY= in CONFIG.SYS
   BIN\KEYBOARD.SYS keyboard layouts, for KEYB
@@ -233,9 +235,9 @@ MIT-licensed work, and it relicenses none of them. GR-DOS's own work is
 MIT licensed. The MS-DOS 4.00 source it is built from keeps its own MIT
 license. MS-DOS is a trademark of Microsoft. GR-DOS is an independent
 project, not endorsed by Microsoft or IBM. ATTRIB.EXE, MEM.EXE, FDISK.EXE,
-FC.EXE and GRVER.EXE are compiled with Open Watcom C, but contain no Open
-Watcom code: their C runtime is libc16 (https://github.com/gr-dos/libc16),
-under its MIT license. TICO.EXE and the other programs from GitHub
+FC.EXE, JOIN.EXE, SUBST.EXE and GRVER.EXE are compiled with Open Watcom C,
+but contain no Open Watcom code: their C runtime is libc16
+(https://github.com/gr-dos/libc16), under its MIT license. TICO.EXE and the other programs from GitHub
 projects are each under their project's license, as named in Contents
 above. A license that requires the program's source, the GNU GPL version
 2 or later or version 1 or later, is met as "Corresponding source" above
