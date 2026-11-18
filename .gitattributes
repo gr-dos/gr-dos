@@ -4,3 +4,5 @@
 /patches/** -text
 # Expected FC output, with its CRs, kept byte-for-byte.
 /tests/fc/expect.log -text
+# Expected JOIN and SUBST output, with its CRs, kept byte-for-byte.
+/tests/join-subst/expect.log -text

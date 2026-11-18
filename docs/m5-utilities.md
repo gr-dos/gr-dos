@@ -30,7 +30,7 @@ DEBUG, MEM and MODE). Of the other 25:
 | GRAFTABL | assembly | built, `GRAFTABL.COM` |
 | GRAPHICS | assembly, and the profile `GRAPHICS.PRO` | built, `GRAPHICS.COM` |
 | IFSFUNC | assembly, with the kernel's objects | built, `IFSFUNC.EXE` |
-| JOIN | C (`JOIN.C`), with assembly helpers | deferred: C |
+| JOIN | C (`JOIN.C`), with assembly helpers | built, `JOIN.EXE`, issue #18 ([join-subst.md](join-subst.md)) |
 | KEYB | assembly | built, `KEYB.COM` |
 | LABEL | assembly | built, `LABEL.COM` |
 | NLSFUNC | assembly | built, `NLSFUNC.EXE` |
@@ -40,15 +40,16 @@ DEBUG, MEM and MODE). Of the other 25:
 | RESTORE | C (14 files), with assembly helpers | deferred: C |
 | SHARE | assembly, with the kernel's objects | built, `SHARE.EXE` |
 | SORT | assembly | built, `SORT.EXE` |
-| SUBST | C (`SUBST.C`), with assembly helpers | deferred: C |
+| SUBST | C (`SUBST.C`), with assembly helpers | built, `SUBST.EXE`, issue #18 ([join-subst.md](join-subst.md)) |
 | TREE | assembly | built, `TREE.COM` |
 | XCOPY | assembly | built, `XCOPY.EXE` |
 
-The six deferred commands are C programs, like ATTRIB, MEM, FDISK and FC:
-their `main` and logic are C, compiled by Microsoft C 5.1, with only the
-message retriever and parser in assembly. Issue #17 is about the assembly
-sources; porting these is C work, like that of [M4](m4-utilities.md) and
-[FC](fc.md), and is left for a later issue.
+The six C commands, like ATTRIB, MEM, FDISK and FC, have their `main` and
+logic in C, compiled by Microsoft C 5.1, with only the message retriever
+and parser in assembly. Issue #17 is about the assembly sources; porting
+these is C work, like that of [M4](m4-utilities.md) and [FC](fc.md). JOIN
+and SUBST are ported (issue #18, [join-subst.md](join-subst.md)); BACKUP,
+FILESYS, REPLACE and RESTORE are left for later issues.
 
 Two built commands need data files from `v4.0/src/DEV`: KEYB needs
 `KEYBOARD.SYS` (`DEV/KEYBOARD`), and NLSFUNC's code page switching
@@ -177,7 +178,9 @@ drive. What a floppy carries is chosen for that use, not to fill it:
   [country-keyboard.md](country-keyboard.md)).
 - **1.2 MB and 1.44 MB:** those, and the rest that work from a floppy:
   APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and its GRAPHICS.PRO, and
-  NLSFUNC; DISPLAY.SYS with EGA.CPI (issue #24,
+  NLSFUNC; JOIN and SUBST (issue #18, [join-subst.md](join-subst.md)),
+  which matter most with a hard disk, so the 720 KB disk keeps its room;
+  DISPLAY.SYS with EGA.CPI (issue #24,
   [codepage.md](codepage.md)); and PRINTER.SYS with 4201.CPI, 4208.CPI
   and 5202.CPI (issue #25, [printer.md](printer.md)). Everything that is
   useful on a floppy fits on 1.2 MB, so the two have the same files.
@@ -189,8 +192,8 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 |---|---:|---:|
 | 360 KB | 17 | 16,384 |
 | 720 KB | 30 | 229,376 |
-| 1.2 MB | 43 | 551,424 |
-| 1.44 MB | 43 | 795,136 |
+| 1.2 MB | 45 | 529,408 |
+| 1.44 MB | 45 | 773,120 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's

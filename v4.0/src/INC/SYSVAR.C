@@ -19,7 +19,11 @@ struct sysVarsType *pSVars ;
 
         *(long *)(&vptr) = (((long)syssegs.es) << 16)+(iregs->x.bx & 0xffffL) ;
 
+#ifdef __WATCOMC__  /* <= copied one byte past the structure, and past SysVars */
+        for (i=0 ; i < sizeof(*pSVars) ; i++)
+#else
         for (i=0 ; i <= sizeof(*pSVars) ; i++)
+#endif
                 *((char *)pSVars+i) = *((char far *)vptr+i) ;
 
 }
@@ -42,7 +46,11 @@ struct sysVarsType *pSVars ;
 
         *(long *)(&vptr) = (((long)syssegs.es) << 16)+(iregs->x.bx & 0xffffL) ;
 
+#ifdef __WATCOMC__  /* <= copied one byte past the structure, and past SysVars */
+        for (i=0 ; i < sizeof(*pSVars) ; i++)
+#else
         for (i=0 ; i <= sizeof(*pSVars) ; i++)
+#endif
                 *((char far *)vptr+i) = *((char *)pSVars+i) ;
 
 }

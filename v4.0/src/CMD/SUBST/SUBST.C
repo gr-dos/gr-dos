@@ -95,6 +95,24 @@
 #include "string.h"
 #include "substpar.h"                                                          /* ;AN000; Parser structures */
 #include "sysvar.h"
+#ifdef __WATCOMC__
+/* libc16's declarations, __cdecl, of the C library functions SUBST.C
+   calls without including their headers */
+#include <stdio.h>
+#include <stdlib.h>
+#include <io.h>
+/* The C calling convention of _MSGRET and _PARSE */
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysgetmsg
+#pragma aux (__cdecl) sysdispmsg
+#pragma aux (__cdecl) parse
+/* Some calls give no outline, for messages that substitute none */
+#include <stdarg.h>
+int dispmsg_terminate(int msg_num, ...) ;
+/* INC's functions that return char, which SUBST.C calls undeclared, as
+   if they returned int: Watcom C returns a char in AL alone */
+extern char fPathErr(), fPhysical(), fNet(), fShared(), getdrv() ;
+#endif
 
 /*컴컴컴컴컴컴컴컴컴컴컴� PARSE EQUATES 컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴*/
 #define ASCII_DRIVE       'A'-1                                                /* ;AN000;P Convert to Ascii drive */
@@ -140,7 +158,9 @@
 /*컴컴컴컴컴컴컴컴컴컴컴� MISCELLANEOUS 컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴*/
 extern long GetDPB() ;
 extern char fDelete() ;                                                        /* SM '87 compiler required extern */
+#ifndef __WATCOMC__  /* libc16's stdlib.h declares it */
 extern char *malloc() ;                                                        /* SM '87 compiler required extern */
+#endif
 extern char *strbscan() ;                                                      /* SM '87 compiler required extern */
 
 char cmdln_drive[64]   = {0} ;                                                 /* ;AN002; Save user's input in   */
@@ -475,7 +495,18 @@ Display()                                                                      /
       if (CDS.cbEnd == 2)
         CDS.cbEnd ++ ;
       CDS.text[CDS.cbEnd] = 0 ;
+#ifdef __WATCOMC__  /* libc16 has no printf: the same line, in one write */
+      {
+        char line[DIRSTRLEN+8] ;
+        strcpy(line, "?: => ") ;
+        line[0] = (char)(i+'A') ;
+        strcat(line, CDS.text) ;
+        strcat(line, "\n") ;
+        fputs(line, stdout) ;
+      }
+#else
       printf("%c: => %s\n", i+'A', CDS.text) ;
+#endif
     }
   return ;                                                                     /* ;AN000; */
 }
@@ -657,10 +688,21 @@ char *outline ;                                                                /
 /*                                                                        */
 /**************************************************************************/
 
+#ifdef __WATCOMC__
+dispmsg_terminate(int msg_num, ...)
+{
+  char *outline ;
+  va_list ap ;
+
+  va_start(ap, msg_num) ;
+  outline = va_arg(ap, char *) ;
+  va_end(ap) ;
+#else
 dispmsg_terminate(msg_num,outline)                                             /* ;AN000;P */
 int msg_num ;                                                                  /* ;AN000;P Message number #define'd */
 char *outline ;                                                                /* ;AN001; Substitution parameter */
 {                                                                              /* ;AN000;P */
+#endif
   display_msg(msg_num,outline) ;                                               /* ;AN000;P First, display the msg */
   exit(ERRORLEVEL1) ;                                                          /* ;AN000;P Then, terminate utility */
 }                                                                              /* ;AN000;P */

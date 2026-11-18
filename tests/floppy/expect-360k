@@ -25,12 +25,18 @@
 ^Bad command or file name$
 ^Bad command or file name$
 
-# SHARE, GRAFTABL, GRAPHICS, APPEND (twice) and NLSFUNC are not on this disk
+# SHARE, GRAFTABL, GRAPHICS, APPEND (twice), NLSFUNC, SUBST (three times)
+# and JOIN are not on this disk; TYPE finds no E:
 ^== FLOPPY-1200$
 ^Bad command or file name$
 ^Bad command or file name$
 ^Bad command or file name$
 ^Bad command or file name$
+^Bad command or file name$
+^Bad command or file name$
+^Bad command or file name$
+^Bad command or file name$
+^Invalid drive specification$
 ^Bad command or file name$
 ^Bad command or file name$
 ^== FILES$

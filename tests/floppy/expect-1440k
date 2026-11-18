@@ -32,13 +32,16 @@
 ^Active code page not available from CON device$
 
 # SHARE (silent), GRAFTABL, GRAPHICS (which finds GRAPHICS.PRO in A:\, its
-# own directory), APPEND and NLSFUNC (silent)
+# own directory), APPEND and NLSFUNC (silent), SUBST E: to B:\SUB, which
+# SUBST lists and TYPE reads through, then removes, and JOIN, with none
 ^== FLOPPY-1200$
 ^Previous Code Page: None$
 ^Active Code Page: 437$
 ^APPEND=SUB$
+^E: => B:\\SUB$
+^zeta$
 ^== FILES$
 
 # The files of A:, the format's with COMP.IN, and the free space
-^ +42 File\(s\) +794112 bytes free$
+^ +44 File\(s\) +772096 bytes free$
 ^GRDOS-TEST-END$
