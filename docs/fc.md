@@ -15,11 +15,11 @@ ATTRIB, MEM and FDISK, linked with `wlink` and libc16, and
 `scripts/check-runtime` checks its map: it takes `cstart`, `exit`, `bdos`,
 `intdos`, `fopen`, `fgetc`, `fgets`, `fputs`, `fwrite`, `malloc`,
 `strerror`, `strcpy`, `strlen`, `strcmp`, `tolower`, `isxdigit`,
-`ltoa` and `ultoa` from libc16 0.04.
+`ltoa` and `ultoa` from libc16 0.07.
 
 | | Microsoft (M1) | GR-DOS |
 |---|---:|---:|
-| `FC.EXE` | 15,807 bytes | 8,392 bytes |
+| `FC.EXE` | 15,807 bytes | 8,398 bytes |
 
 `FC.EXE` is not compared by `make check`, as it is built with a different
 compiler. The six assembly modules assemble to the same code as MASM's.
