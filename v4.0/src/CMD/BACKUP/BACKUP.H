@@ -398,7 +398,11 @@ struct File_Header
 	void	do_backup(void);
 	void	do_copy(void);
 	void	do_dos_error(WORD);
+#ifdef __WATCOMC__  /* MAPPER's SETINT24 takes a word, and pops it */
+	extern unsigned far pascal set_int24_vector(unsigned);
+#else
 	extern unsigned far pascal set_int24_vector(void);	      /*;AN000;*/
+#endif
 	void	error_exit(int);
 	WORD	exist(char *);
 	WORD	extended_open(WORD,WORD,char far *,WORD);	      /*;AN000;5*/

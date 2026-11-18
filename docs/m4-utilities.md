@@ -210,7 +210,7 @@ uninitialised parser result buffers (`sw_buff`, `pos1_buff` to
 size are unchanged.
 
 **libc16 0.15.** GR-DOS pins libc16 0.15 (issue #19), for `rmdir` and
-`spawnl`, which BACKUP calls ([backup-restore.md](backup-restore.md)).
+`spawnv`, which BACKUP calls ([backup-restore.md](backup-restore.md)).
 Two changes since 0.07 reach the existing programs:
 
 - **The startup's code reserve** (0.12, [libc16

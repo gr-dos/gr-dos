@@ -1,0 +1,426 @@
+GRDOS-TEST-BEGIN
+== the files
+ Directory of  D:\BR\SRC
+A        TXT         7 12-31-99  11:58p
+READONLY TXT        11 02-29-00   8:30a
+NOARCH   TXT        16 03-01-01  12:00a
+ Directory of  D:\BR\SRC\SUB
+B        TXT         6 10-10-10  10:10a
+ Directory of  D:\BR\SRC\SUB\DEEP
+C        TXT         7 06-01-88   9:00a
+BIG1     BIN   1200000 01-02-20   3:04a
+BIG2     BIN   2000000 01-02-20   3:04a
+ Directory of  D:\BR\SRC\DOC
+X        DOC         7 05-05-05   5:05a
+Y        DOC         7 05-05-05   5:05a
+Z        TXT         8 05-05-05   5:05a
+  A          D:\BR\SRC\A.TXT
+  A    R     D:\BR\SRC\READONLY.TXT
+             D:\BR\SRC\NOARCH.TXT
+== BACKUP: bad parameters
+Invalid switch - /Z 
+errorlevel 4
+
+Source and target drives are the same
+errorlevel 4
+No source drive specified
+errorlevel 4
+== set EMPTY
+== BACKUP: nothing to back up
+
+WARNING! No files were found to back up
+errorlevel 1
+== set SPAN
+== BACKUP /S, onto three disks, with a log
+
+Insert backup diskette 01 in drive A:
+
+WARNING! Files in the target drive
+A:\ root directory will be erased
+Press any key to continue . . .
+
+*** Backing up files to drive A: ***
+Diskette Number: 01
+
+Logging to file D:\BR\BACKUP.LOG
+
+\BR\SRC\A.TXT
+\BR\SRC\READONLY.TXT
+\BR\SRC\HIDDEN.TXT
+\BR\SRC\NOARCH.TXT
+\BR\SRC\SUB\B.TXT
+\BR\SRC\SUB\DEEP\C.TXT
+\BR\SRC\SUB\DEEP\BIG1.BIN
+\BR\SRC\SUB\DEEP\BIG2.BIN
+
+Insert backup diskette 02 in drive A:
+
+WARNING! Files in the target drive
+A:\ root directory will be erased
+Press any key to continue . . .
+
+*** Backing up files to drive A: ***
+Diskette Number: 02
+
+\BR\SRC\SUB\DEEP\BIG2.BIN
+
+Insert backup diskette 03 in drive A:
+
+WARNING! Files in the target drive
+A:\ root directory will be erased
+Press any key to continue . . .
+
+*** Backing up files to drive A: ***
+Diskette Number: 03
+
+\BR\SRC\SUB\DEEP\BIG2.BIN
+\BR\SRC\DOC\X.DOC
+\BR\SRC\DOC\Y.DOC
+\BR\SRC\DOC\Z.TXT
+errorlevel 0
+
+---------- BACKUP.LOG
+001  \BR\SRC\A.TXT
+001  \BR\SRC\READONLY.TXT
+001  \BR\SRC\HIDDEN.TXT
+001  \BR\SRC\NOARCH.TXT
+001  \BR\SRC\SUB\B.TXT
+001  \BR\SRC\SUB\DEEP\C.TXT
+001  \BR\SRC\SUB\DEEP\BIG1.BIN
+001  \BR\SRC\SUB\DEEP\BIG2.BIN
+002  \BR\SRC\SUB\DEEP\BIG2.BIN
+003  \BR\SRC\SUB\DEEP\BIG2.BIN
+003  \BR\SRC\DOC\X.DOC
+003  \BR\SRC\DOC\Y.DOC
+003  \BR\SRC\DOC\Z.TXT
+== the archive bits BACKUP cleared
+             D:\BR\SRC\A.TXT
+       R     D:\BR\SRC\READONLY.TXT
+             D:\BR\SRC\NOARCH.TXT
+== RESTORE: bad parameters
+No target drive specified
+errorlevel 4
+Invalid switch - /Z 
+errorlevel 4
+
+Source and target drives are the same
+errorlevel 4
+== RESTORE: nothing to restore
+
+Insert backup diskette 01 in drive A:
+Press any key to continue . . .
+
+*** Files were backed up 01-01-2026 ***
+
+*** Restoring files from drive A: ***
+Diskette: 01
+
+
+Insert backup diskette 02 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 02
+
+
+Insert backup diskette 03 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 03
+
+
+WARNING! No files were found to restore
+errorlevel 1
+== all gone
+All files in directory will be deleted!
+Are you sure (Y/N)?Y
+All files in directory will be deleted!
+Are you sure (Y/N)?Y
+All files in directory will be deleted!
+Are you sure (Y/N)?Y
+All files in directory will be deleted!
+Are you sure (Y/N)?Y
+ Directory of  D:\BR\SRC
+== RESTORE /S: everything, the directories made again
+
+Insert backup diskette 01 in drive A:
+Press any key to continue . . .
+
+*** Files were backed up 01-01-2026 ***
+
+*** Restoring files from drive A: ***
+Diskette: 01
+\BR\SRC\A.TXT
+\BR\SRC\READONLY.TXT
+\BR\SRC\HIDDEN.TXT
+\BR\SRC\NOARCH.TXT
+\BR\SRC\SUB\B.TXT
+\BR\SRC\SUB\DEEP\C.TXT
+\BR\SRC\SUB\DEEP\BIG1.BIN
+\BR\SRC\SUB\DEEP\BIG2.BIN
+
+
+Insert backup diskette 02 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 02
+\BR\SRC\SUB\DEEP\BIG2.BIN
+
+
+Insert backup diskette 03 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 03
+\BR\SRC\SUB\DEEP\BIG2.BIN
+\BR\SRC\DOC\X.DOC
+\BR\SRC\DOC\Y.DOC
+\BR\SRC\DOC\Z.TXT
+
+errorlevel 0
+ Directory of  D:\BR\SRC
+A        TXT         7 12-31-99  11:58p
+READONLY TXT        11 02-29-00   8:30a
+NOARCH   TXT        16 03-01-01  12:00a
+ Directory of  D:\BR\SRC\SUB
+B        TXT         6 10-10-10  10:10a
+ Directory of  D:\BR\SRC\SUB\DEEP
+C        TXT         7 06-01-88   9:00a
+BIG1     BIN   1200000 01-02-20   3:04a
+BIG2     BIN   2000000 01-02-20   3:04a
+ Directory of  D:\BR\SRC\DOC
+X        DOC         7 05-05-05   5:05a
+Y        DOC         7 05-05-05   5:05a
+Z        TXT         8 05-05-05   5:05a
+             D:\BR\SRC\A.TXT
+       R     D:\BR\SRC\READONLY.TXT
+             D:\BR\SRC\NOARCH.TXT
+alpha
+gamma
+fc: no differences encountered
+fc: no differences encountered
+== RESTORE a wildcard, without /S
+All files in directory will be deleted!
+Are you sure (Y/N)?Y
+
+Insert backup diskette 01 in drive A:
+Press any key to continue . . .
+
+*** Files were backed up 01-01-2026 ***
+
+*** Restoring files from drive A: ***
+Diskette: 01
+
+
+Insert backup diskette 02 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 02
+
+
+Insert backup diskette 03 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 03
+\BR\SRC\DOC\X.DOC
+\BR\SRC\DOC\Y.DOC
+
+errorlevel 0
+ Directory of  D:\BR\SRC\DOC
+X        DOC         7 05-05-05   5:05a
+Y        DOC         7 05-05-05   5:05a
+SRC\A.TXT was not restored
+== RESTORE /N: only what is not there
+
+Insert backup diskette 01 in drive A:
+Press any key to continue . . .
+
+*** Files were backed up 01-01-2026 ***
+
+*** Restoring files from drive A: ***
+Diskette: 01
+\BR\SRC\A.TXT
+\BR\SRC\SUB\B.TXT
+
+
+Insert backup diskette 02 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 02
+
+
+Insert backup diskette 03 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 03
+\BR\SRC\DOC\Z.TXT
+
+errorlevel 0
+beta
+== RESTORE /P: a read-only file
+
+Insert backup diskette 01 in drive A:
+Press any key to continue . . .
+
+*** Files were backed up 01-01-2026 ***
+
+*** Restoring files from drive A: ***
+Diskette: 01
+
+WARNING! File READONLY.TXT
+is a read-only file
+Replace the file (Y/N)?
+N
+
+Insert backup diskette 02 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 02
+
+
+Insert backup diskette 03 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 03
+
+
+WARNING! No files were found to restore
+errorlevel 1
+== set INC
+== BACKUP /M: what changed
+
+Insert backup diskette 01 in drive A:
+
+WARNING! Files in the target drive
+A:\ root directory will be erased
+Press any key to continue . . .
+
+*** Backing up files to drive A: ***
+Diskette Number: 01
+
+\BR\SRC\SUB\B.TXT
+errorlevel 0
+== BACKUP /A: added to it
+
+Insert last backup diskette in drive A:
+Press any key to continue . . .
+
+*** Backing up files to drive A: ***
+Diskette Number: 01
+
+\BR\SRC\DOC\NEW.DOC
+errorlevel 0
+== RESTORE what was added
+
+Insert backup diskette 01 in drive A:
+Press any key to continue . . .
+
+*** Files were backed up 01-01-2026 ***
+
+*** Restoring files from drive A: ***
+Diskette: 01
+\BR\SRC\SUB\B.TXT
+\BR\SRC\DOC\NEW.DOC
+
+errorlevel 0
+changed
+new
+== set RAWF
+== BACKUP /F: a blank disk, which FORMAT formats
+
+Insert backup diskette 01 in drive A:
+
+WARNING! Files in the target drive
+A:\ root directory will be erased
+Press any key to continue . . .
+
+  0 percent of disk formatted                                          1 percent of disk formatted                                          2 percent of disk formatted                                          3 percent of disk formatted                                          4 percent of disk formatted                                          5 percent of disk formatted                                          6 percent of disk formatted                                          7 percent of disk formatted                                          8 percent of disk formatted                                          9 percent of disk formatted                                         10 percent of disk formatted                                         11 percent of disk formatted                                         12 percent of disk formatted                                         13 percent of disk formatted                                         14 percent of disk formatted                                         15 percent of disk formatted                                         16 percent of disk formatted                                         17 percent of disk formatted                                         18 percent of disk formatted                                         19 percent of disk formatted                                         20 percent of disk formatted                                         21 percent of disk formatted                                         22 percent of disk formatted                                         23 percent of disk formatted                                         24 percent of disk formatted                                         25 percent of disk formatted                                         26 percent of disk formatted                                         27 percent of disk formatted                                         28 percent of disk formatted                                         29 percent of disk formatted                                         30 percent of disk formatted                                         31 percent of disk formatted                                         32 percent of disk formatted                                         33 percent of disk formatted                                         34 percent of disk formatted                                         35 percent of disk formatted                                         36 percent of disk formatted                                         37 percent of disk formatted                                         38 percent of disk formatted                                         39 percent of disk formatted                                         40 percent of disk formatted                                         41 percent of disk formatted                                         42 percent of disk formatted                                         43 percent of disk formatted                                         44 percent of disk formatted                                         45 percent of disk formatted                                         46 percent of disk formatted                                         47 percent of disk formatted                                         48 percent of disk formatted                                         49 percent of disk formatted                                         50 percent of disk formatted                                         51 percent of disk formatted                                         52 percent of disk formatted                                         53 percent of disk formatted                                         54 percent of disk formatted                                         55 percent of disk formatted                                         56 percent of disk formatted                                         57 percent of disk formatted                                         58 percent of disk formatted                                         59 percent of disk formatted                                         60 percent of disk formatted                                         61 percent of disk formatted                                         62 percent of disk formatted                                         63 percent of disk formatted                                         64 percent of disk formatted                                         65 percent of disk formatted                                         66 percent of disk formatted                                         67 percent of disk formatted                                         68 percent of disk formatted                                         69 percent of disk formatted                                         70 percent of disk formatted                                         71 percent of disk formatted                                         72 percent of disk formatted                                         73 percent of disk formatted                                         74 percent of disk formatted                                         75 percent of disk formatted                                         76 percent of disk formatted                                         77 percent of disk formatted                                         78 percent of disk formatted                                         79 percent of disk formatted                                         80 percent of disk formatted                                         81 percent of disk formatted                                         82 percent of disk formatted                                         83 percent of disk formatted                                         84 percent of disk formatted                                         85 percent of disk formatted                                         86 percent of disk formatted                                         87 percent of disk formatted                                         88 percent of disk formatted                                         89 percent of disk formatted                                         90 percent of disk formatted                                         91 percent of disk formatted                                         92 percent of disk formatted                                         93 percent of disk formatted                                         94 percent of disk formatted                                         95 percent of disk formatted                                         96 percent of disk formatted                                         97 percent of disk formatted                                         98 percent of disk formatted                                         99 percent of disk formatted                                        100 percent of disk formatted                                        Format complete                                                     
+
+
+   1457664 bytes total disk space
+   1457664 bytes available on disk
+
+       512 bytes in each allocation unit
+      2847 allocation units available on disk
+
+Volume Serial Number is XXXX-XXXX
+
+Format another (Y/N)?N
+
+*** Backing up files to drive A: ***
+Diskette Number: 01
+
+\BR\SRC\DOC\X.DOC
+\BR\SRC\DOC\Y.DOC
+\BR\SRC\DOC\Z.TXT
+\BR\SRC\DOC\NEW.DOC
+errorlevel 0
+All files in directory will be deleted!
+Are you sure (Y/N)?Y
+
+Insert backup diskette 01 in drive A:
+Press any key to continue . . .
+
+*** Files were backed up 01-01-2026 ***
+
+*** Restoring files from drive A: ***
+Diskette: 01
+\BR\SRC\DOC\X.DOC
+\BR\SRC\DOC\Y.DOC
+\BR\SRC\DOC\Z.TXT
+\BR\SRC\DOC\NEW.DOC
+
+errorlevel 0
+ Directory of  D:\BR\SRC\DOC
+X        DOC         7 05-05-05   5:05a
+Y        DOC         7 05-05-05   5:05a
+Z        TXT         8 05-05-05   5:05a
+SRC\DOC\NEW.DOC was restored
+== set MSSET
+== RESTORE what Microsoft's BACKUP wrote
+All files in directory will be deleted!
+Are you sure (Y/N)?Y
+
+Insert backup diskette 01 in drive A:
+Press any key to continue . . .
+
+*** Files were backed up 01-01-2026 ***
+
+*** Restoring files from drive A: ***
+Diskette: 01
+\BR\SRC\SUB\DEEP\C.TXT
+\BR\SRC\SUB\DEEP\BIG1.BIN
+\BR\SRC\SUB\DEEP\BIG2.BIN
+
+
+Insert backup diskette 02 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 02
+\BR\SRC\SUB\DEEP\BIG2.BIN
+
+
+Insert backup diskette 03 in drive A:
+Press any key to continue . . .
+
+*** Restoring files from drive A: ***
+Diskette: 03
+\BR\SRC\SUB\DEEP\BIG2.BIN
+
+errorlevel 0
+fc: no differences encountered
+fc: no differences encountered
+ Directory of  D:\BR\SRC\SUB\DEEP
+C        TXT         7 06-01-88   9:00a
+BIG1     BIN   1200000 01-02-20   3:04a
+BIG2     BIN   2000000 01-02-20   3:04a
+GRDOS-TEST-END

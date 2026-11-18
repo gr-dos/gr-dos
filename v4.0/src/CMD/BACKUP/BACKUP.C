@@ -78,13 +78,31 @@
 
 				/* "C" supplied include files */
 #include <process.h>
+#ifndef __WATCOMC__  /* libc16's malloc is in stdlib.h */
 #include <malloc.h>
+#endif
 #include <direct.h>		/*;AN000;*/
 #include <string.h>
 #include <dos.h>
 #include <stdlib.h>		/*;AN000;d178*/
 
 #include <doscalls.h>		/* OS/2 Include file */
+
+#ifdef __WATCOMC__
+/* GR-DOS (issue #19, docs/backup-restore.md): Open Watcom C and libc16.
+   The C calling convention of _MSGRET and _PARSE */
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysdispmsg
+#pragma aux (__cdecl) update_logfile
+#pragma aux (__cdecl) parse
+#include <stdarg.h>
+/* libc16 has no sprintf: BACKUP's own, below, for the conversions it uses
+   (backup.h declares it, as sprintf) */
+#define sprintf bk_sprintf
+/* Below: in place of spawnlp, and room for the heap */
+static int bk_spawn(char *, char *);
+static void bk_reserve_heap(void);
+#endif
 
 #include "backup.h"             /* BACKUP structures, defines, ...*/
 #include "backpars.h"           /* DEFINEs and STRUCTs for the DOS Parse service routines */
@@ -1129,6 +1147,9 @@ char	*argv[];
 /***************************************************/
 void alloc_buffer()
 {
+#ifdef __WATCOMC__
+	bk_reserve_heap();
+#endif
 	alloc_seg();
 
 	while ((rc != NOERROR) && (data_file_alloc_size > 2048))
@@ -1307,7 +1328,11 @@ void set_vectors()
 
 	setsignal(ACTIONHOOK,CTRLC);			/* Handle CTRL_C */
 	setsignal(ACTIONHOOK,CTRLBREAK);		/* Handle CTRL_BREAK */
+#ifdef __WATCOMC__  /* MAPPER's SETINT24 takes a word, and pops it */
+	set_int24_vector(0);
+#else
 	set_int24_vector();				/*;AN000; Set Critical error vector (int 24h) */
+#endif
 
 	return;
 }	/* end set_vectors */
@@ -2158,7 +2183,11 @@ void format_target()
 
 	   strcat(format_parms," /BACKUP /V:BACKUP");   /*;AN000;8*/
 
+#ifdef __WATCOMC__
+	   if (bk_spawn(format_path,format_parms) == NOERROR)
+#else
 	   if (spawnlp(P_WAIT,format_path,"FORMAT",format_parms,NUL) == NOERROR) /*;AC000;d178*/
+#endif
 	     {
 	      display_msg(CRLF);			/* Skip a line */
 	     }
@@ -4382,4 +4411,210 @@ WORD	mode;							      /*;AN000;3*/
 
 	return(outreg.x.ax);					      /*;AN000;3*/
 }	/* end extended_open */ 				      /*;AN000;3*/
+
+#ifdef __WATCOMC__
+/* GR-DOS (issue #19, docs/backup-restore.md): what BACKUP took from
+ * Microsoft C's runtime and from COMSUBS.LIB, which is Microsoft C object
+ * code only, written for Open Watcom C and libc16. */
+
+/* bk_dbcs_lead: whether c is a DBCS lead byte, in a range of DOS's DBCS
+ * vector (INT 21h 6300h), as COMSUBS.LIB's check_dbcs: at most five
+ * ranges, ending at a pair of zero bytes */
+static int bk_dbcs_lead(c)
+unsigned char c;
+{
+	static unsigned char far *vec;
+	static char got_vec = FALSE;
+	union REGS r;
+	struct SREGS sr;
+	int i;
+
+	if (!got_vec)
+	 {
+	   segread(&sr);
+	   r.x.ax = 0x6300;
+	   r.x.si = 0;
+	   intdosx(&r,&r,&sr);
+	   vec = (unsigned char far *)(((unsigned long)sr.ds << 16) | r.x.si);
+	   got_vec = TRUE;
+	 }
+
+	if (vec == (unsigned char far *)0)
+	  return(FALSE);
+
+	for (i = 0; i < 10; i += 2)
+	 {
+	   if (vec[i] == 0 && vec[i+1] == 0)
+	     return(FALSE);
+	   if (c >= vec[i] && c <= vec[i+1])
+	     return(TRUE);
+	 }
+	return(FALSE);
+}
+
+/* com_toupper: c in upper case. COMSUBS.LIB's maps it through a table made
+ * by MAPPER's DosCaseMap, which changes a to z alone. */
+int com_toupper(c)
+unsigned char c;
+{
+	return(c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c);
+}
+
+/* com_strchr: the first c in s, or NUL; the second byte of a double byte
+ * character is never a match. With c 0, the end of s. */
+char *com_strchr(s,c)
+unsigned char *s;
+unsigned char c;
+{
+	for (; *s != NUL; s++)
+	  if (bk_dbcs_lead(*s))
+	   {
+	     if (s[1] == NUL)	/* a lead byte last: COMSUBS.LIB read on */
+	       break;
+	     s++;
+	   }
+	  else
+	    if (*s == c)
+	      return((char *)s);
+
+	return(c == NUL ? (char *)s + strlen((char *)s) : (char *)NUL);
+}
+
+/* com_strrchr: the last c in s whose previous byte is not a DBCS lead
+ * byte, or NUL. With c 0, the end of s. */
+unsigned char *com_strrchr(s,c)
+unsigned char *s;
+unsigned char c;
+{
+	int i;
+
+	if (c == NUL)
+	  return(s + strlen((char *)s));
+
+	for (i = strlen((char *)s) - 1; i >= 0; i--)
+	  if (s[i] == c && (i == 0 || !bk_dbcs_lead(s[i-1])))
+	    return(s + i);
+
+	return((unsigned char *)NUL);
+}
+
+/* bk_sprintf: sprintf for the conversions BACKUP uses: %c, %s and %u,
+ * %u with a width and a 0 flag (%02u, %04u), and %%. As Microsoft C's
+ * sprintf, it ends dst with a 0 and returns its length. */
+int cdecl bk_sprintf(char *dst, char *fmt, ...)
+{
+	va_list ap;
+	char *d = dst;
+	char num[6];
+	char *p;
+	char pad;
+	int width, n;
+	unsigned u;
+
+	va_start(ap,fmt);
+	while (*fmt != NUL)
+	 {
+	   if (*fmt != '%')
+	    {
+	      *d++ = *fmt++;
+	      continue;
+	    }
+	   fmt++;
+	   pad = ' ';
+	   if (*fmt == '0')
+	    {
+	      pad = '0';
+	      fmt++;
+	    }
+	   for (width = 0; *fmt >= '0' && *fmt <= '9'; fmt++)
+	     width = width * 10 + (*fmt - '0');
+
+	   switch (*fmt++)
+	    {
+	      case 'c':
+		*d++ = (char)va_arg(ap,int);
+		break;
+	      case 's':
+		for (p = va_arg(ap,char *); *p != NUL; )
+		  *d++ = *p++;
+		break;
+	      case 'u':
+		u = va_arg(ap,unsigned);
+		p = num + sizeof(num) - 1;
+		*p = NUL;
+		do
+		 {
+		   *--p = (char)('0' + u % 10);
+		   u /= 10;
+		 } while (u != 0);
+		for (n = strlen(p); n < width; n++)
+		  *d++ = pad;
+		while (*p != NUL)
+		  *d++ = *p++;
+		break;
+	      case '%':
+		*d++ = '%';
+		break;
+	      default:		/* no other conversion is used */
+		fmt--;
+		break;
+	    }
+	 }
+	va_end(ap);
+	*d = NUL;
+	return(d - dst);
+}
+
+/* bk_spawn: runs FORMAT, path, with the options parms, and returns its exit
+ * code, or -1. Microsoft C's spawnlp(P_WAIT, path, "FORMAT", parms, NULL)
+ * made the command tail " " parms; libc16's spawn functions quote an
+ * argument with a space, so parms is passed as its words, which gives the
+ * same tail. path is a full path, which spawnlp ran without searching. */
+static int bk_spawn(path,parms)
+char *path;
+char *parms;
+{
+	char words[36];		/* format_parms is 35 bytes */
+	char *argv[12];
+	int argc = 0;
+	char *p;
+
+	strncpy(words,parms,sizeof(words)-1);
+	words[sizeof(words)-1] = NUL;
+
+	argv[argc++] = "FORMAT";
+	for (p = words; *p != NUL && argc < 11; )
+	 {
+	   while (*p == ' ')
+	     *p++ = NUL;
+	   if (*p == NUL)
+	     break;
+	   argv[argc++] = p;
+	   while (*p != NUL && *p != ' ')
+	     p++;
+	 }
+	argv[argc] = NUL;
+
+	return(spawnv(P_WAIT,path,argv));
+}
+
+/* bk_reserve_heap: BACKUP keeps its directory tree in the near heap
+ * (alloc_node), and allocates its buffer from DOS (alloc_seg) before
+ * walking the tree. libc16's heap grows the program's memory block as it
+ * needs more, which it cannot once the buffer lies above the block. So the
+ * heap first takes as much of DGROUP's 64 KB as it can, and frees it:
+ * libc16's free keeps the memory for later allocations. */
+static void bk_reserve_heap()
+{
+	unsigned n;
+	void *p;
+
+	for (n = 0xF000; n >= 0x400; n -= 0x400)
+	  if ((p = malloc(n)) != NUL)
+	   {
+	     free(p);
+	     return;
+	   }
+}
+#endif
 

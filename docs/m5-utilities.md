@@ -20,7 +20,7 @@ DEBUG, MEM and MODE). Of the other 25:
 |---|---|---|
 | APPEND | assembly | built, `APPEND.EXE` |
 | ASSIGN | assembly | built, `ASSIGN.COM` |
-| BACKUP | C (`BACKUP.C`), with assembly helpers | deferred: C |
+| BACKUP | C (`BACKUP.C`), with assembly helpers | built, `BACKUP.COM`, issue #19 ([backup-restore.md](backup-restore.md)) |
 | COMP | assembly | built, `COMP.COM` |
 | DISKCOMP | assembly | built, `DISKCOMP.COM` |
 | EDLIN | assembly | built, `EDLIN.COM` |
@@ -37,7 +37,7 @@ DEBUG, MEM and MODE). Of the other 25:
 | PRINT | assembly | built, `PRINT.COM` |
 | RECOVER | assembly | built, `RECOVER.COM` |
 | REPLACE | C (`REPLACE.C`), with assembly helpers | deferred: C |
-| RESTORE | C (14 files), with assembly helpers | deferred: C |
+| RESTORE | C (14 files), with assembly helpers | built, `RESTORE.COM`, issue #19 ([backup-restore.md](backup-restore.md)) |
 | SHARE | assembly, with the kernel's objects | built, `SHARE.EXE` |
 | SORT | assembly | built, `SORT.EXE` |
 | SUBST | C (`SUBST.C`), with assembly helpers | built, `SUBST.EXE`, issue #18 ([join-subst.md](join-subst.md)) |
@@ -48,8 +48,9 @@ The six C commands, like ATTRIB, MEM, FDISK and FC, have their `main` and
 logic in C, compiled by Microsoft C 5.1, with only the message retriever
 and parser in assembly. Issue #17 is about the assembly sources; porting
 these is C work, like that of [M4](m4-utilities.md) and [FC](fc.md). JOIN
-and SUBST are ported (issue #18, [join-subst.md](join-subst.md)); BACKUP,
-FILESYS, REPLACE and RESTORE are left for later issues.
+and SUBST are ported (issue #18, [join-subst.md](join-subst.md)), and BACKUP
+and RESTORE (issue #19, [backup-restore.md](backup-restore.md)); FILESYS and
+REPLACE are left for later issues.
 
 Two built commands need data files from `v4.0/src/DEV`: KEYB needs
 `KEYBOARD.SYS` (`DEV/KEYBOARD`), and NLSFUNC's code page switching
@@ -175,7 +176,9 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 - **720 KB:** those, and the everyday file and disk commands: XCOPY, COMP,
   DISKCOMP, LABEL, TREE, SORT, EDLIN, PRINT, ASSIGN and RECOVER; and KEYB
   with COUNTRY.SYS and KEYBOARD.SYS (issue #23,
-  [country-keyboard.md](country-keyboard.md)).
+  [country-keyboard.md](country-keyboard.md)); and BACKUP and RESTORE
+  (issue #19, [backup-restore.md](backup-restore.md)), for backing a hard
+  disk up to floppies.
 - **1.2 MB and 1.44 MB:** those, and the rest that work from a floppy:
   APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and its GRAPHICS.PRO, and
   NLSFUNC; JOIN and SUBST (issue #18, [join-subst.md](join-subst.md)),
@@ -191,9 +194,9 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 | Image | Files | Bytes free |
 |---|---:|---:|
 | 360 KB | 17 | 16,384 |
-| 720 KB | 30 | 229,376 |
-| 1.2 MB | 45 | 529,408 |
-| 1.44 MB | 45 | 773,120 |
+| 720 KB | 34 | 65,536 |
+| 1.2 MB | 49 | 365,568 |
+| 1.44 MB | 49 | 609,280 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's

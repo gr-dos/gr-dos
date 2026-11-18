@@ -91,6 +91,10 @@ _sysloadmsg proc near
 	push	bp			; save base pointer
 
 ;-------------------------------------------------------------------
+IFDEF __JWASM__ ; Watcom C does not keep ES equal to DS, as MS C did
+	push	ds
+	pop	es
+ENDIF
 	call	sysloadmsg		; call the message retriever
 ;-------------------------------------------------------------------
 
@@ -204,6 +208,10 @@ _sysdispmsg proc near
 	push	bp			; save base pointer
 
 ;-------------------------------------------------------------------
+IFDEF __JWASM__ ; Watcom C does not keep ES equal to DS, as MS C did
+	push	ds
+	pop	es
+ENDIF
 	call	sysdispmsg		; call the message retriever
 ;-------------------------------------------------------------------
 

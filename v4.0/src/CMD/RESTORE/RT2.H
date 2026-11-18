@@ -54,7 +54,11 @@
 /*----------------------------------*/
 /*-    SUBROUTINE DECLARATIONS	    */
 /*----------------------------------*/
+#ifdef __WATCOMC__  /* an array of no elements, which Watcom C refuses */
+void   main(int ,char *[]);
+#else
 void   main(int ,char *[0]);
+#endif
 void   set_input_switches(WORD,BYTE * *,WORD *,struct timedate *);
 void   verify_input_switches(BYTE *,struct timedate   *);
 int    set_reset_test_flag(BYTE *,BYTE ,int );
@@ -65,7 +69,11 @@ void   usererror(WORD );
 void   unexperror(WORD );
 void   exit_routine(WORD );
 void   pascal far signal_handler_routine(void );
+#ifdef __WATCOMC__  /* MAPPER's SETINT24 takes a word, and pops it */
+extern unsigned far pascal set_int24_vector(unsigned);
+#else
 extern unsigned far pascal set_int24_vector(void);	      /*;AN000;*/
+#endif
 void   com_msg(WORD );
 int    checkdosver(void );
 void   dorestore(BYTE ,BYTE ,BYTE *,BYTE *,BYTE *,BYTE *,struct timedate *);
@@ -133,4 +141,17 @@ void Get_DBCS_vector(void);					      /*;AN005;*/
 extern	void	sysloadmsg(union REGS *, union REGS *);   /*_msgret *//*;AN000;6 */
 extern	void	sysdispmsg(union REGS *, union REGS *);   /*_msgret *//*;AN000;6 */
 extern	void	parse	  (union REGS *, union REGS *);   /* _parse *//*;AN000;4 */
+
+#ifdef __WATCOMC__
+/* GR-DOS (issue #19, docs/backup-restore.md): Open Watcom C and libc16.
+   The C calling convention of _MSGRET and _PARSE */
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysdispmsg
+#pragma aux (__cdecl) parse
+/* libc16's declarations, __cdecl, of the C library functions RESTORE
+   calls without including their headers: chdir, mkdir and exit (libc16's
+   include directory is searched before this one, with its DIRECT.H) */
+#include <direct.h>
+#include <stdlib.h>
+#endif
 

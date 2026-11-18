@@ -395,12 +395,20 @@ BYTE destd;
    DWORD free_space;
    WORD drive_num;
    struct fsinfo *fsinfo_buf;
+#ifdef __WATCOMC__
+   /* GR-DOS (issue #19): fsinfo_buf points nowhere, and DOSQFSINFO writes
+      through it: a buffer for it to point to */
+   struct fsinfo fsinfo_space;
+#endif
 
    WORD retcode;
 
    /******************************************************************/
    /*DosQFsinfo: get free space in the hard disk		     */
    /******************************************************************/
+#ifdef __WATCOMC__
+   fsinfo_buf = &fsinfo_space;
+#endif
    drive_num = destd - 'A' + 1;
    retcode = DOSQFSINFO
       ((unsigned)drive_num,	      /* Drive number - 0=default, 1=A, etc */

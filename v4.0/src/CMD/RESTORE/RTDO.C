@@ -16,7 +16,13 @@
 #include "doscalls.h"
 #include "error.h"
 
+#ifdef __WATCOMC__  /* RTT3.C's far pointer: Microsoft C's linker made the
+   communal variable the largest size declared, Open Watcom's takes
+   this definition's */
+char far *buf_pointer;
+#else
 BYTE		   *buf_pointer;
+#endif
 unsigned	   control_file_pointer;
 unsigned	   src_file_handle;
 struct FileFindBuf filefindbuf;
@@ -315,7 +321,11 @@ struct timedate *dt;
 		(struct file_header_new far *)&fheadnew,srcd,destd,&dnumwant,bufsize,
 		inpath,infname,infspec,&control_bufsize,dt);
 
+#ifdef __WATCOMC__  /* libc16 has no printf */
+     fputs("\n",stdout);
+#else
      printf("\n");
+#endif
      set_reset_test_flag(&control_flag2,OUTOF_SEQ,RESET);
      /************************************************************************/
      /*if ( bk disk is not the last one && (the file spec is WILDCARD or file*/

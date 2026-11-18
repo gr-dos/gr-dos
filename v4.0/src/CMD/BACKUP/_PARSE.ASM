@@ -86,6 +86,10 @@ _parse	proc	near
 
 	push	bp			; save base pointer
 ;-------------------------------------------------------------------
+IFDEF __JWASM__ ; Watcom C does not keep ES equal to DS, as MS C did
+	push	ds
+	pop	es
+ENDIF
 	call	sysparse		; call the parser
 ;-------------------------------------------------------------------
 	pop	bp			; restore base pointer

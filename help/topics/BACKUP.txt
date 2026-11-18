@@ -1,0 +1,48 @@
+Topic: BACKUP
+Summary: Backs up files to floppies or another disk, for RESTORE
+Origin: MS-DOS 4.00
+Group: command
+Files: BACKUP.COM
+
+Syntax
+  BACKUP source target: [/S] [/M] [/A] [/D:date] [/T:time] [/F[:size]]
+         [/L[:file]]
+
+  source       The files to back up: a drive, and a path and file name,
+               which may have wildcards (C:\WORK\*.TXT). A directory
+               alone backs up its files.
+  target:      The drive to back up to. On a floppy the files go in its
+               root; on a hard disk, in target:\BACKUP.
+  /S           Backs up the subdirectories too.
+  /M           Only files changed since their last backup (the archive
+               attribute is set), and clears their archive attribute.
+  /A           Adds to the backup already on the target, rather than
+               erasing it.
+  /D:date      Only files changed on or after the date.
+  /T:time      Only files changed at or after the time, on /D's date.
+  /F[:size]    Formats a floppy that is not formatted, with FORMAT, to
+               the size given (360, 720, 1.2, 1.44), or the drive's own.
+  /L[:file]    Writes a log of the files and the floppy each is on, by
+               default to \BACKUP.LOG of the source drive.
+
+Examples
+  BACKUP C:\ A: /S
+    Backs up all of C: to floppies in A:.
+  BACKUP C:\WORK D: /S /M
+    Backs up what changed in C:\WORK to D:\BACKUP.
+
+Exit status
+  0  Done.
+  1  No files were found to back up.
+  2  Some files were not backed up: another program had them open.
+  3  Stopped by Ctrl+C or Ctrl+Break.
+  4  Stopped by an error.
+
+Notes
+  BACKUP asks for each floppy in turn and numbers them: keep them in
+  order. A file too large for what is left on one floppy goes on into
+  the next. Each floppy holds BACKUP.nnn, the files' data, and
+  CONTROL.nnn, their names, and BACKUP erases the floppy's other files
+  in its root unless /A is given. The backup is only of use to
+  RESTORE: HELP RESTORE. BACKUP cannot back up the system files, and
+  should not be used on a drive that JOIN, SUBST or ASSIGN changed.
