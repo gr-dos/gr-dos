@@ -209,6 +209,34 @@ uninitialised parser result buffers (`sw_buff`, `pos1_buff` to
 `pos6_buff`) in a different order within the same block. Its code and
 size are unchanged.
 
+**libc16 0.15.** GR-DOS pins libc16 0.15 (issue #19), for `rmdir` and
+`spawnl`, which BACKUP calls ([backup-restore.md](backup-restore.md)).
+Two changes since 0.07 reach the existing programs:
+
+- **The startup's code reserve** (0.12, [libc16
+  #28](https://github.com/gr-dos/libc16/pull/28)): `cstart` keeps the
+  first bytes of the code segment, so no function is at offset 0 and a
+  near function pointer is never null. Every program with libc16's
+  startup is 16 to 32 bytes larger.
+- **The heap** (0.14, [libc16 #32](https://github.com/gr-dos/libc16/pull/32)):
+  `malloc` keeps segregated free lists and frees what it splits off, so
+  it links `free`. FC and SUBST, which call `malloc`, are some 460 bytes
+  larger. (FC's `fopen` also links `streams`, its stream table, a member
+  of its own since 0.08.)
+
+| | libc16 0.07 | libc16 0.15 |
+|---|---:|---:|
+| `MEM.EXE` | 12,042 bytes | 12,074 bytes |
+| `FDISK.EXE` | 37,608 bytes | 37,640 bytes |
+| `FC.EXE` | 8,398 bytes | 8,862 bytes |
+| `JOIN.EXE` | 10,312 bytes | 10,344 bytes |
+| `SUBST.EXE` | 11,094 bytes | 11,558 bytes |
+| `GRVER.EXE` | 1,754 bytes | 1,770 bytes |
+| `HELP.EXE` | 4,136 bytes | 4,152 bytes |
+| `ATTRIB.EXE` | 19,369 bytes | 19,369 bytes |
+
+ATTRIB has its own startup code and links neither.
+
 ### Assembler edits
 
 The other compatibility edits, all keeping MASM's output identical:
