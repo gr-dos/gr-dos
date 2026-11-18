@@ -1,0 +1,22 @@
+Topic: TRUENAME
+Summary: Shows the full name DOS uses for a file or directory
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  TRUENAME [drive:][path][filename]
+
+  filename     The file or directory to name; the current directory if
+               left out. The file need not exist.
+
+Examples
+  TRUENAME
+    Shows the current drive and directory in full, such as C:\DOS.
+  TRUENAME ..\README.TXT
+    Shows the full name of README.TXT in the directory above.
+
+Notes
+  TRUENAME resolves . and .., the current directory, and drives made by
+  SUBST, JOIN or ASSIGN, to show where a name really is: on a drive
+  made with SUBST E: C:\WORK, TRUENAME E:\X.TXT shows C:\WORK\X.TXT.
+  TRUENAME was left out of the MS-DOS 4.00 manuals.

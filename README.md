@@ -8,7 +8,8 @@ Today the build produces the boot sector, IO.SYS, MSDOS.SYS, COMMAND.COM and
 33 utilities: FORMAT, SYS, CHKDSK, DISKCOPY, FDISK, ATTRIB, MORE, FIND, FC,
 DEBUG, MEM and MODE, every other MS-DOS 4.00 command written in
 assembly ([`docs/m5-utilities.md`](docs/m5-utilities.md)), and JOIN and
-SUBST ([`docs/join-subst.md`](docs/join-subst.md)). It also makes
+SUBST ([`docs/join-subst.md`](docs/join-subst.md)), with offline command
+help, `HELP` ([`docs/help.md`](docs/help.md)). It also makes
 bootable 1.44 MB, 1.2 MB, 720 KB and 360 KB floppy images with the tico16
 editor; the larger ones carry more of the utilities. With FDISK,
 FORMAT and SYS, GR-DOS installs on a hard disk and boots from it
@@ -87,6 +88,7 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `JOIN.EXE`, `SUBST.EXE` ([`docs/join-subst.md`](docs/join-subst.md)) | | | ✓ |
 | `DISPLAY.SYS`, with `EGA.CPI` ([`docs/codepage.md`](docs/codepage.md)) | | | ✓ |
 | `PRINTER.SYS`, with `4201.CPI`, `4208.CPI` and `5202.CPI` ([`docs/printer.md`](docs/printer.md)) | | | ✓ |
+| `HELP.EXE` and `GRDOS.HLP`, GR-DOS's command help ([`docs/help.md`](docs/help.md)) | | ✓ | ✓ |
 | `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
 
 The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on C: only. `image/files-360k.txt` (and so on) lists each image's
@@ -236,6 +238,9 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   and limits.
 - [`docs/grver.md`](docs/grver.md): the kernel's GR-DOS identification
   call (`INT 21h AX=3347h`), GRVER.EXE, and how a program calls it.
+- [`docs/help.md`](docs/help.md): HELP.EXE and GRDOS.HLP, the offline
+  command help, its topic files and how the build checks them against the
+  distribution.
 - [`docs/dist16.md`](docs/dist16.md): the `*16` programs, how they are
   found, pinned and checked, how to add or exclude one, and how a program
   under the GPL ships with its source.

@@ -1,0 +1,20 @@
+Topic: RD
+Aliases: RMDIR
+Summary: Removes an empty directory
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  RD [drive:]path
+
+  path         The directory to remove.
+
+Examples
+  RD \WORK\OLD
+    Removes the directory OLD in \WORK, when it is empty.
+
+Notes
+  The directory must be empty: delete its files first (DEL \WORK\OLD) and
+  remove its subdirectories. Hidden or system files left in it also stop
+  RD (see ATTRIB). The current directory of a drive and the root cannot be
+  removed.

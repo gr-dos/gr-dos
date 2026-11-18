@@ -1,0 +1,42 @@
+Topic: GRDOS
+Aliases: LICENSE ABOUT
+Summary: What GR-DOS adds to MS-DOS 4.00, and its licenses
+Origin: GR-DOS
+Group: guide
+
+GR-DOS is built on Linux, with open tools, from the MS-DOS 4.00 source
+that Microsoft published. Programs see DOS version 4.00, and the
+assembly programs are byte for byte Microsoft's build, apart from what
+is listed here. In HELP INDEX, GR-DOS's own topics are marked *.
+
+What GR-DOS changes or adds
+  - The name: the start-up banner, VER and FDISK's menu say GR-DOS.
+  - An identification call, INT 21h AX=3347h BX=4752h, which gives the
+    GR-DOS release version; GRVER (in C:\DOS) shows it.
+  - INCLUDEFILE= in CONFIG.SYS (HELP CONFIG).
+  - ATTRIB, MEM, FDISK, FC, JOIN and SUBST, which are C, are compiled
+    with Open Watcom C and libc16, GR-DOS's C runtime, where Microsoft
+    used Microsoft C 5.1.
+  - FIND, EXE2BIN and IFSFUNC are not EXEPACKed: the unpacker fails
+    when a program loads in the first 64 KB of memory.
+  - HELP and this help file.
+  - TICO, the editor, and the other *16 programs in C:\DOS (HELP
+    DIST16).
+  - Floppy images in four sizes (HELP FLOPPY), and deploy-cf, which
+    installs on a CF card from Linux (HELP HARDDISK).
+
+Licenses
+  GR-DOS is a collection of separately licensed programs.
+  - GR-DOS's own work: the MIT license.
+  - The MS-DOS 4.00 source, and so the programs built from it: the MIT
+    license, copyright IBM and Microsoft.
+  - libc16: the MIT license.
+  - TICO and the other *16 programs: each its own project's license.
+  The release ZIP's README.txt has every license text. For a program
+  under the GNU GPL, C:\DOS\SOURCES.TXT, when there is one, says where
+  its source is.
+
+MS-DOS is a trademark of Microsoft. GR-DOS is an independent project,
+not endorsed by Microsoft or IBM.
+
+  Source: https://github.com/gr-dos/gr-dos

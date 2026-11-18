@@ -1,0 +1,40 @@
+Topic: GRAPHICS
+Summary: Lets Print Screen print graphics screens
+Origin: MS-DOS 4.00
+Group: command
+Files: GRAPHICS.COM GRAPHICS.PRO
+
+Syntax
+  GRAPHICS [type] [[drive:][path]profile] [/R] [/B] [/LCD]
+           [/PRINTBOX:id]
+
+  type         The printer, as GRAPHICS.PRO names it (GRAPHICS if left
+               out):
+                 GRAPHICS, THERMAL  IBM black and white dot matrix
+                                    printers (4201, 5152 and others)
+                 GRAPHICSWIDE       the same with 13.5-inch paper
+                 COLOR1             IBM 5182, black ribbon
+                 COLOR4             IBM 5182, red, green, blue ribbon
+                 COLOR8             IBM 5182, cyan, magenta, yellow
+                                    ribbon
+  profile      The printer profile; GRAPHICS.PRO in GRAPHICS's own
+               directory if left out.
+  /R           Prints the screen as it looks, white on black, rather
+               than turning black to white.
+  /B           Prints the background colour (colour printers only).
+  /LCD         Prints the PC Convertible's LCD screen (/PRINTBOX:LCD).
+  /PRINTBOX:id The print size from the profile: STD or LCD (/PB:id too).
+
+Examples
+  GRAPHICS
+    Loads GRAPHICS for an IBM-style dot matrix printer.
+  GRAPHICS COLOR4 /B
+    For a 5182 with a colour ribbon, printing the background too.
+
+Notes
+  GRAPHICS stays resident and replaces Print Screen (Shift+PrtSc). In a
+  graphics mode (CGA, EGA or VGA) it prints the screen with the profile's
+  codes for the printer. In a text mode, for a black and white printer,
+  it leaves the screen to the BIOS's own Print Screen. Run again, it
+  takes the new settings. The profile's codes are IBM's; other printers
+  may not understand them.

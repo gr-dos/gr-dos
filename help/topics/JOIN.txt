@@ -1,0 +1,34 @@
+Topic: JOIN
+Summary: Makes a drive appear as a directory of another drive
+Origin: MS-DOS 4.00
+Group: command
+Files: JOIN.EXE
+
+Syntax
+  JOIN
+  JOIN drive: path
+  JOIN drive: /D
+
+  drive:       The drive to join, such as D:.
+  path         The directory it is to appear as, on another drive. JOIN
+               makes it if it does not exist; if it does, it must be
+               empty, and not a root directory.
+  /D           Undoes the join of the drive.
+  (none)       JOIN alone lists the joins, as D: => C:\MNT.
+
+Examples
+  JOIN D: C:\MNT
+    Makes the files of D: appear in C:\MNT.
+  JOIN D: /D
+    Gives D: back its own letter.
+
+Exit status
+  0  Done, or the list was shown.
+  1  An error, such as "Invalid parameter" or "Directory not empty".
+
+Notes
+  While D: is joined, D: is an invalid drive: reach its files through
+  the directory. What you write there goes to D:. The drive cannot be
+  the current drive, a SUBST drive or a network drive, and must have a
+  blank between it and the path (JOIN D:C:\MNT is invalid). Undo joins
+  before working on the disks with CHKDSK, FORMAT or DISKCOPY.

@@ -1,0 +1,234 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Make GRDOS.HLP, HELP's file, from help/topics, and check it against the distribution
+
+=head1 SYNOPSIS
+
+ scripts/mkhelp --cf MANIFEST --floppy 360=LIST ... --dist16 'NAME ...' TOPICS OUT
+
+=head1 DESCRIPTION
+
+Writes F<GRDOS.HLP> (issue #27, F<docs/help.md>) from the topic files in
+the directory C<TOPICS>, F<help/topics>.  A topic file starts with its
+header, one C<Field: value> line each, then a blank line and the topic's
+text:
+
+=over 4
+
+=item C<Topic:> its name, what C<HELP NAME> shows (upper case);
+
+=item C<Aliases:> other names for it, blank separated (optional);
+
+=item C<Summary:> one line, for the index and the topic's first line;
+
+=item C<Origin:> C<MS-DOS 4.00>, C<GR-DOS>, or a C<*16> project;
+
+=item C<Group:> C<guide>, C<command> (a program), C<internal> (COMMAND.COM's),
+C<config> (CONFIG.SYS) or C<data> (a data file or device driver);
+
+=item C<Files:> the distributed files it is about (optional).
+
+=back
+
+From C<Files:>, the C<--cf> manifest (the CF install's files, F<C:\DOS>)
+and each format's file list (C<--floppy SIZE=FILE>), it writes where each
+file is.  It fails unless every program and data file of the
+distribution but the kernel's, COMMAND.COM and the C<*16> programs
+(C<--dist16>) is in a topic's C<Files:> (COMMAND.COM's commands are
+C<internal> topics), every file a topic names is distributed, every name
+and alias is unique, the text is ASCII in lines of at most 79 characters,
+and the first word of each example (an C<Examples> line indented two
+blanks) is a topic or alias.  A C<@DIST16@> line in a topic is replaced
+by the C<*16> programs, and each is an alias of that topic.
+
+The file is CRLF text: each topic starts with a line C<@@NAME ALIAS...>,
+then C<NAME - Summary>, its origin and where its files are, a blank line
+and its text.  The first is C<INDEX>, the list of topics by group.
+
+=cut
+
+my %group_title = (
+  guide    => 'Guides',
+  command  => 'Commands (programs)',
+  internal => 'Commands built into COMMAND.COM',
+  config   => 'CONFIG.SYS',
+  data     => 'Device drivers and data files',
+);
+my @groups = qw( guide command internal config data );
+my %floppy_name = (360 => '360 KB', 720 => '720 KB', 1200 => '1.2 MB', 1440 => '1.44 MB');
+
+my @errors;
+sub fail ($msg) { push @errors, $msg }
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+# Words into lines of at most $width, the later ones indented by $indent.
+sub wrap ($text, $width = 78, $indent = '') {
+  my @lines = ('');
+  for my $w (split ' ', $text) {
+    if(length($lines[-1]) && length($lines[-1]) + 1 + length($w) > $width) {
+      push @lines, $indent . $w;
+    }
+    else {
+      $lines[-1] .= (length($lines[-1]) && $lines[-1] ne $indent ? ' ' : '') . $w;
+    }
+  }
+  return @lines;
+}
+
+sub list_and (@w) {
+  return $w[0] if @w == 1;
+  return join(', ', @w[0 .. $#w - 1]) . " and $w[-1]";
+}
+
+sub main (@args) {
+  my(%floppy, $cf, @dist16);
+  while(@args && $args[0] =~ /^--/) {
+    my $o = shift @args;
+    if($o eq '--cf') { $cf = shift @args }
+    elsif($o eq '--floppy') { my($k, $f) = split /=/, shift(@args), 2; $floppy{$k} = $f }
+    elsif($o eq '--dist16') { @dist16 = split ' ', shift @args }
+    else { die "unknown option $o\n" }
+  }
+  my($dir, $out) = @args;
+  die "usage: $0 --cf MANIFEST --floppy SIZE=LIST ... --dist16 NAMES TOPICS OUT\n"
+    unless defined $out && defined $cf && %floppy;
+
+  # Where each file is.
+  my %cf = map { (split ' ')[-1] => 1 } split /\n/, slurp($cf);
+  my %on;
+  for my $size (sort { $a <=> $b } keys %floppy) {
+    for my $name (split /\n/, slurp($floppy{$size}) =~ s/\r//gr) {
+      push $on{$name}->@*, $size if length $name;
+    }
+  }
+  my %dist16 = map { $_ => 1 } @dist16;
+
+  # The topics.
+  my(%topic, %name_of);
+  opendir my $dh, $dir or die "unable to read $dir: $!";
+  for my $file (sort grep { /\.txt$/ } readdir $dh) {
+    my $text = slurp("$dir/$file");
+    fail("$file: not ASCII") if $text =~ /[^\x0A\x20-\x7E]/;
+    my($head, $body) = split /\n\n/, $text, 2;
+    my %f;
+    for my $line (split /\n/, $head) {
+      my($k, $v) = $line =~ /^([A-Za-z0-9]+): *(.*)$/ or (fail("$file: bad header line: $line"), next);
+      $f{lc $k} = $v;
+    }
+    for my $k (qw( topic summary origin group )) {
+      fail("$file: no $k") unless defined $f{$k};
+    }
+    next unless defined $f{topic};
+    my $t = {
+      file    => $file,
+      name    => $f{topic},
+      aliases => [split ' ', $f{aliases} // ''],
+      summary => $f{summary} // '',
+      origin  => $f{origin} // '',
+      group   => $f{group} // '',
+      files   => [split ' ', $f{files} // ''],
+      body    => $body // '',
+    };
+    fail("$file: Topic $t->{name} is not $file") unless "$t->{name}.txt" eq $file;
+    fail("$file: unknown group $t->{group}") unless $group_title{$t->{group}};
+    $t->{body} =~ s/\n+\z/\n/;
+    if($t->{body} =~ /^\@DIST16\@$/m) {
+      my @lines = map { "  $_" } wrap(list_and(@dist16), 76);
+      $t->{body} =~ s/^\@DIST16\@\n/join '', map { "$_\n" } @lines/me;
+      push $t->{aliases}->@*, map { s/\.EXE$//r } @dist16;
+    }
+    $topic{$t->{name}} = $t;
+  }
+  closedir $dh;
+
+  # Every name first, for the examples.
+  for my $t (map { $topic{$_} } sort keys %topic) {
+    for my $n ($t->{name}, $t->{aliases}->@*) {
+      fail("$t->{file}: name $n is not upper case, or has a blank") unless $n =~ /^[A-Z0-9_.\-]+$/;
+      fail("$t->{file}: $n is also $name_of{$n}") if $name_of{$n};
+      $name_of{$n} = $t->{name};
+    }
+  }
+  for my $t (map { $topic{$_} } sort keys %topic) {
+    for my $line (split /\n/, $t->{body}) {
+      fail("$t->{file}: longer than 79: $line") if length $line > 79;
+    }
+    # Examples: each line indented two blanks, a command.
+    for my $ex ($t->{body} =~ /^Examples\n((?:(?:  .*)?\n)*)/mg) {
+      for my $line (split /\n/, $ex) {
+        next unless $line =~ /^  (\S+)/;
+        my $cmd = uc($1) =~ s/^[A-Z]:\\(?:[^ ]*\\)?//r =~ s/\.(?:EXE|COM|BAT)$//r;
+        fail("$t->{file}: example of unknown command $cmd: $line") unless $name_of{$cmd} || $cmd eq 'HELP';
+      }
+    }
+  }
+
+  # Every distributed program and data file is in a topic.
+  my %documented;
+  for my $t (values %topic) {
+    for my $f ($t->{files}->@*) {
+      fail("$t->{file}: $f is not distributed") unless $cf{$f} || $on{$f};
+      $documented{$f} = $t->{name};
+    }
+  }
+  my %core = map { $_ => 1 } qw( IO.SYS MSDOS.SYS COMMAND.COM AUTOEXEC.BAT CONFIG.SYS GRDOS.ID VERSION
+    MSBOOT.BIN FDBOOT.BIN SOURCES.TXT GRDOS.HLP );
+  for my $f (sort(keys %cf), sort keys %on) {
+    next if $core{$f} || $dist16{$f} || $documented{$f};
+    fail("$f is distributed, but in no topic's Files:");
+    $documented{$f} = 1;
+  }
+
+  die join('', map { "mkhelp: $_\n" } @errors) if @errors;
+
+  # Where a file is.
+  my $where = sub ($f) {
+    my @w;
+    push @w, 'C:\DOS' if $cf{$f};
+    my @fl = ($on{$f} // [])->@*;
+    if(@fl == keys %floppy) { push @w, 'every floppy' }
+    elsif(@fl) { push @w, 'the ' . list_and(map { $floppy_name{$_} // "$_ KB" } @fl) . ' floppies' =~ s/the (\S+ \S+) floppies$/the $1 floppy/r }
+    return "$f: " . (@w ? 'in ' . list_and(@w) : 'not distributed');
+  };
+
+  my @out;
+  # The index.
+  push @out, '@@INDEX', 'GR-DOS help: type HELP and a topic, such as HELP START or HELP XCOPY.',
+    'Topics marked * are GR-DOS\'s own; the others are MS-DOS 4.00\'s.', '';
+  for my $g (@groups) {
+    my @t = sort { $a->{name} cmp $b->{name} } grep { $_->{group} eq $g } values %topic;
+    next unless @t;
+    push @out, $group_title{$g};
+    for my $t (@t) {
+      my $mark = $t->{origin} eq 'MS-DOS 4.00' ? ' ' : '*';
+      my @s = wrap($t->{summary}, 78 - 17);
+      push @out, sprintf(q{  %-12s%s }, $t->{name}, $mark) . shift(@s), map { (q{ } x 17) . $_ } @s;
+    }
+    push @out, '';
+  }
+  for my $t (map { $topic{$_} } sort keys %topic) {
+    my $kind = {
+      guide => 'Guide', command => 'Command', internal => 'Command built into COMMAND.COM',
+      config => 'CONFIG.SYS', data => 'File',
+    }->{$t->{group}};
+    push @out, join(' ', '@@' . $t->{name}, $t->{aliases}->@*);
+    push @out, wrap("$t->{name} - $t->{summary}");
+    push @out, wrap("$kind, from $t->{origin}." . join('', map { ' ' . $where->($_) . '.' } $t->{files}->@*));
+    push @out, '', split /\n/, $t->{body};
+  }
+  open my $fh, '>:raw', "$out.tmp" or die "unable to write $out: $!";
+  print $fh join '', map { "$_\r\n" } @out;
+  close $fh or die "unable to write $out: $!";
+  rename "$out.tmp", $out or die "rename: $!";
+  return 0;
+}
+
+exit main(@ARGV);

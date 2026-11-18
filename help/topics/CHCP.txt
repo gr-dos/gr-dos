@@ -1,0 +1,23 @@
+Topic: CHCP
+Summary: Shows or changes the code page in use
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  CHCP [nnn]
+
+  nnn          The code page to change to, such as 437 (US) or 850
+               (multilingual). Shows the active code page if left out.
+
+Examples
+  CHCP
+    Shows the active code page.
+  CHCP 850
+    Switches the screen, keyboard and printers to code page 850.
+
+Notes
+  Changing the code page needs NLSFUNC loaded, and the code page must be
+  one COUNTRY.SYS lists for the country in use. Devices that use code
+  pages (the screen and printers) must have it prepared first, with MODE
+  CP PREPARE; if one has not, CHCP says it is not prepared for all
+  devices. Showing the active code page needs nothing extra.

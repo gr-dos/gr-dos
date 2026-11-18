@@ -1,0 +1,59 @@
+Topic: CONFIG
+Aliases: CONFIG.SYS BUFFERS FILES FCBS LASTDRIVE SHELL STACKS INSTALL DEVICE IFS SWITCHES INCLUDEFILE
+Summary: CONFIG.SYS, the settings DOS reads when it starts
+Origin: MS-DOS 4.00
+Group: config
+
+DOS reads \CONFIG.SYS on the boot disk once, when it starts, before
+AUTOEXEC.BAT. Each line is one command, KEYWORD=value. Restart the
+computer for a change to take effect. A bad line is reported with its
+line number, and the rest are still used.
+
+Commands
+  BREAK=ON|OFF        ON: Ctrl+C is checked for during most DOS calls,
+                      not only screen and keyboard ones.
+  BUFFERS=n[,m] [/X]  Disk buffers, 1 to 99, and m sectors to read
+                      ahead, 0 to 8. With /X the buffers go in expanded
+                      memory, up to 10000.
+  COUNTRY=nnn[,cp][,file]  Date, time and number formats: HELP COUNTRY.
+  DEVICE=file [options]    Loads a device driver, such as DISPLAY.SYS or
+                      PRINTER.SYS.
+  DRIVPARM=/D:n [/F:f] [/T:t] [/S:s] [/H:h] [/C] [/N] [/I]
+                      Changes a disk drive's parameters: drive (0 is A:),
+                      form factor, tracks, sectors, heads; /C change
+                      line, /N not removable, /I 3.5-inch drive.
+  FCBS=n,m            File control blocks open at once (1 to 255; 4 if
+                      left out), m of them never closed to reuse (0 to n).
+  FILES=n             Files open at once, 8 to 255 (8 if left out).
+  IFS=file [options]  Loads an installable file system driver.
+  INSTALL=file [options]  Runs a resident program, such as FASTOPEN,
+                      KEYB, NLSFUNC or SHARE, after the drivers.
+  LASTDRIVE=x         The last drive letter DOS allows (E: if left out);
+                      SUBST and JOIN need letters up to it.
+  MULTITRACK=ON|OFF   Reads and writes disks a whole track at a time.
+  REM text            A comment. COMMENT=x makes lines starting with x
+                      comments too.
+  SHELL=file [options]  The command interpreter, \COMMAND.COM /P if left
+                      out; for example SHELL=C:\COMMAND.COM C:\ /P.
+  STACKS=n,s          n stacks (8 to 64, or 0) of s bytes (32 to 512, or
+                      0) for hardware interrupts. 0,0 uses none.
+  SWITCHES=/K         Treats an enhanced keyboard as a standard one.
+  CPSW=ON|OFF         Accepted; does nothing in MS-DOS 4.00.
+
+  INCLUDEFILE=d:\path\file   (GR-DOS addition) Reads the lines of that
+                      file as if they were here, in place of this line.
+                      Nothing happens if the file is not there. One per
+                      CONFIG.SYS; the file cannot have its own.
+
+A CONFIG.SYS
+  FILES=20
+  BUFFERS=20
+  COUNTRY=044,850,C:\DOS\COUNTRY.SYS
+  DEVICE=C:\DOS\DISPLAY.SYS CON=(EGA,437,1)
+  INSTALL=C:\DOS\NLSFUNC.EXE
+
+Notes
+  On a CF install, every deploy-cf update writes C:\CONFIG.SYS afresh
+  (FILES=20, BUFFERS=20), so lines added to it are lost. Keep your own
+  lines in D:\CONFIG.SYS, and add the one line INCLUDEFILE=D:\CONFIG.SYS
+  to C:\CONFIG.SYS after an update. See HELP HARDDISK and HELP CODEPAGE.

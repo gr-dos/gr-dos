@@ -1,0 +1,22 @@
+Topic: TYPE
+Summary: Shows the contents of a text file
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  TYPE [drive:][path]filename
+
+  filename     One file; wildcards are not allowed.
+
+Examples
+  TYPE README.TXT
+    Shows README.TXT.
+  TYPE README.TXT | MORE
+    Shows it a screenful at a time.
+  TYPE LETTER.TXT > PRN
+    Prints it.
+
+Notes
+  TYPE stops at the first Ctrl+Z (end of file mark). On the screen, tabs
+  are expanded to every eighth column. A program or other binary file
+  shows as random characters and may beep. Ctrl+S pauses the screen.

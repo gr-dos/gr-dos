@@ -1,0 +1,27 @@
+Topic: TREE
+Summary: Shows the directory structure of a disk as a tree
+Origin: MS-DOS 4.00
+Group: command
+Files: TREE.COM
+
+Syntax
+  TREE [drive:][path] [/F] [/A]
+
+  drive:path   Where the tree starts; the current directory of the
+               current drive if left out.
+  /F           Lists the files in each directory too.
+  /A           Draws the tree with the characters \ - + and | instead of
+               line-drawing ones, for a printer or code page without
+               them.
+
+Examples
+  TREE C:\
+    Shows every directory of drive C:.
+  TREE A: /F | MORE
+    Shows the directories and files of A:, a screen at a time.
+  TREE C:\ /A > PRN
+    Prints the tree of C: on a printer.
+
+Notes
+  TREE first shows the volume label and serial number. If there are no
+  subdirectories it says "No sub-directories exist".

@@ -1,0 +1,18 @@
+Topic: REM
+Summary: Marks a comment in a batch file or CONFIG.SYS
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  REM [comment]
+
+  comment      Any text; it is not run.
+
+Examples
+  REM Copy the day's work to the floppy.
+    A comment, shown while ECHO is on but never run.
+
+Notes
+  REM lines can turn a command off without deleting it: REM DEL *.BAK.
+  CONFIG.SYS also takes REM lines. Lines starting with : are skipped too,
+  as labels (see GOTO), and are not shown even when ECHO is on.

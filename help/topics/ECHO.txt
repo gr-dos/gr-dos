@@ -1,0 +1,27 @@
+Topic: ECHO
+Summary: Shows a message, or turns the echo of batch commands on or off
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  ECHO [ON | OFF]
+  ECHO message
+
+  ON           Shows each line of a batch file before it runs. The
+               default.
+  OFF          Runs the lines without showing them, nor the prompt.
+  message      The text to show.
+
+Examples
+  ECHO OFF
+    Stops batch file lines from being shown.
+  ECHO Copying the files, please wait.
+    Shows the message.
+  ECHO
+    Shows whether ECHO is on or off.
+
+Notes
+  To hide the ECHO OFF line itself, start it with @ (@ECHO OFF): @ hides
+  any one line of a batch file. ECHO. (a period right after ECHO, with no
+  blank) shows an empty line. A message cannot be just ON or OFF. ECHO
+  OFF typed at the prompt hides the prompt until ECHO ON.

@@ -45,8 +45,15 @@
 ^Invalid drive specification$
 ^Bad command or file name$
 ^Bad command or file name$
+^== HELP$
+^XCOPY - Copies files, and directories with their subdirectories$
+^CD - Shows or changes the current directory$
+^No help for NOSUCH\. Type HELP for the list of topics\.$
+^HELP-ERRORLEVEL-1$
+^Usage: HELP \[topic\]$
+^HELP-ERRORLEVEL-3$
 ^== FILES$
 
 # The files of A:, the format's with COMP.IN, and the free space
-^ +29 File\(s\) +228352 bytes free$
+^ +31 File\(s\) +120832 bytes free$
 ^GRDOS-TEST-END$

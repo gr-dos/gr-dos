@@ -1,0 +1,41 @@
+Topic: PRINTER.SYS
+Aliases: PRINTER
+Summary: Code page switching for IBM printers on LPT1 to LPT3
+Origin: MS-DOS 4.00
+Group: data
+Files: PRINTER.SYS 4201.CPI 4208.CPI 5202.CPI
+
+Syntax
+  DEVICE=[d:][path]PRINTER.SYS LPTn[:]=(type[,[hwcp][,n]]) [...]
+
+  LPTn         LPT1, LPT2 or LPT3, or PRN for LPT1. Several may be given.
+  type         4201, 4208 or 5202 (below). Another type is accepted, but
+               the printer then has no code pages.
+  hwcp         The printer's own code page, normally 437, or a list of
+               them in parentheses, such as (437,850).
+  n            How many code pages MODE can prepare.
+
+  4201.CPI     IBM 4201 Proprinter and compatible 9-pin printers: fonts
+               for 850, 860, 863 and 865, sent to the printer.
+  4208.CPI     IBM 4208 Proprinter X24 and XL24: selects the code pages
+               the printer has.
+  5202.CPI     IBM 5202 Quietwriter III: selects the code pages of its
+               font cartridges.
+
+A CONFIG.SYS line
+  DEVICE=C:\DOS\PRINTER.SYS LPT1=(4201,437,1)
+    A Proprinter on LPT1, with room for one code page besides 437.
+
+Examples
+  MODE LPT1 CP PREPARE=((850) C:\DOS\4201.CPI)
+    Gives PRINTER.SYS the font of code page 850.
+  MODE LPT1 CP SELECT=850
+    Sends the font to the printer and selects it.
+  MODE LPT1 CP REFRESH
+    Sends it again, after the printer was switched off.
+
+Notes
+  PRINTER.SYS stays in memory, 11 to 19 KB. Prepare a code page before
+  selecting one. Without PRINTER.SYS, MODE LPT1 CP says "Code page
+  operation not supported on this device". PRINT and GRAPHICS do not
+  need it. See HELP CODEPAGE.

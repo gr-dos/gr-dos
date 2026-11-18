@@ -1,0 +1,36 @@
+Topic: CHKDSK
+Summary: Checks a disk's directories and FAT, and shows its free space
+Origin: MS-DOS 4.00
+Group: command
+Files: CHKDSK.COM
+
+Syntax
+  CHKDSK [drive:][path][filename] [/F] [/V]
+
+  drive:       The disk to check; the current drive if left out.
+  filename     Files to report on: CHKDSK says how many pieces
+               (non-contiguous blocks) each is in. Wildcards may be used.
+  /F           Fixes the errors it finds. Without /F it only reports
+               what it would fix.
+  /V           Lists every file and directory as it checks it.
+
+Examples
+  CHKDSK
+    Checks the current drive and shows its space and the memory free.
+  CHKDSK C: /F
+    Checks C: and writes the corrections to the disk.
+  CHKDSK A:\*.*
+    Reports the files of A:'s root that are fragmented.
+
+Exit status
+  0    The check ran.
+  255  It could not finish (a bad drive, a FAT it cannot read).
+
+Notes
+  CHKDSK shows the disk's total, used and free space, its bad sectors,
+  its serial number and allocation units, then the memory in use. With
+  /F, lost chains (space that belongs to no file) become files named
+  FILE0000.CHK, FILE0001.CHK and so on in the root, if you answer Y, or
+  are freed if you answer N. Look at them, and delete them if useless.
+  Run CHKDSK without /F first, to see what it would change. It refuses a
+  network, SUBSTed or ASSIGNed drive.

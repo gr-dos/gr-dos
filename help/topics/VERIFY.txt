@@ -1,0 +1,22 @@
+Topic: VERIFY
+Summary: Sets whether DOS checks what it writes to disk
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  VERIFY [ON | OFF]
+
+  ON           Has the disk driver read back each write to check that it
+               can be read.
+  OFF          Writes without checking. The default.
+
+Examples
+  VERIFY
+    Shows whether VERIFY is on or off.
+  VERIFY ON
+    Checks every write from now on, for all programs.
+
+Notes
+  VERIFY ON slows writing, and checks only that the data can be read, not
+  that it matches the original. COPY /V and XCOPY /V turn it on for just
+  that copy.

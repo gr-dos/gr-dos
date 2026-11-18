@@ -1,0 +1,32 @@
+Topic: PROMPT
+Summary: Sets the command prompt
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  PROMPT [text]
+
+  text         What to show as the prompt: any characters, and these
+               codes of $ and one character (upper or lower case):
+
+  $P  The current drive and directory   $G  >          $L  <
+  $N  The current drive                 $B  |          $Q  =
+  $D  The date                          $$  $          $_  A new line
+  $T  The time                          $H  Backspace (erases a character)
+  $V  The DOS version (GR-DOS 4.00)     $E  Escape, for ANSI.SYS sequences
+
+Examples
+  PROMPT $P$G
+    Shows the drive and directory, such as C:\DOS>.
+  PROMPT $D $T$_$P$G
+    Shows the date and time, then the directory on the next line.
+  PROMPT
+    Goes back to the plain prompt, such as C>.
+
+Notes
+  PROMPT with no text, or no PROMPT at all, shows the current drive and >.
+  A $ followed by any other character shows nothing. The prompt is kept
+  in the PROMPT environment variable, so it can also be set with SET, and
+  needs room in the environment (see HELP COMMAND, /E). Put PROMPT in
+  AUTOEXEC.BAT to set it at each start. With ANSI.SYS loaded, $E[ starts
+  a sequence that sets colors or moves the cursor.

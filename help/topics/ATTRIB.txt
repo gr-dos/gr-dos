@@ -1,0 +1,34 @@
+Topic: ATTRIB
+Summary: Shows or changes the read-only and archive attributes of files
+Origin: MS-DOS 4.00
+Group: command
+Files: ATTRIB.EXE
+
+Syntax
+  ATTRIB [+R | -R] [+A | -A] [drive:][path]filename [/S]
+
+  filename     The files to show or change; wildcards (* and ?) may be
+               used.
+  +R           Makes the files read-only, so that they cannot be changed
+               or deleted.
+  -R           Makes them writable again.
+  +A           Sets the archive attribute, which marks a file as changed
+               since it was last backed up (see XCOPY /M).
+  -A           Clears the archive attribute.
+  /S           Does the same in each subdirectory, too.
+
+Examples
+  ATTRIB *.*
+    Lists the files of the current directory with their attributes.
+  ATTRIB +R REPORT.TXT
+    Protects REPORT.TXT from being changed or deleted.
+  ATTRIB -A C:\WORK\*.* /S
+    Clears the archive attribute of every file under C:\WORK.
+
+Notes
+  Without + or -, ATTRIB lists each file with an A if its archive
+  attribute is set and an R if it is read-only. The attributes may come
+  before or after the file name, but +R and -R (or +A and -A) cannot be
+  given together. ATTRIB 4.00 has no switches for the hidden and system
+  attributes, and passes over hidden and system files. In GR-DOS it is
+  compiled with Open Watcom C rather than Microsoft C; it works the same.

@@ -1,0 +1,26 @@
+Topic: CD
+Aliases: CHDIR
+Summary: Shows or changes the current directory
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  CD [drive:][path]
+  CD [drive:]
+
+  path         The directory to make current. .. is the one above it, and
+               \ the root.
+  drive:       Alone, shows that drive's current directory.
+
+Examples
+  CD \DOS
+    Makes C:\DOS the current directory, when C: is the current drive.
+  CD ..
+    Goes up one level.
+  CD A:
+    Shows the current directory of A: without changing anything.
+
+Notes
+  Each drive has its own current directory. CD B:\DATA changes it on B:
+  but does not make B: the current drive: type B: for that. CD with no
+  parameters shows the current drive and directory.

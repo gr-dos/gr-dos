@@ -1,0 +1,26 @@
+Topic: DISKCOMP
+Summary: Compares two floppy disks track by track
+Origin: MS-DOS 4.00
+Group: command
+Files: DISKCOMP.COM
+
+Syntax
+  DISKCOMP [drive1: [drive2:]] [/1] [/8]
+
+  drive1:      The drive holding the first disk.
+  drive2:      The drive holding the second disk. It may be the same
+               drive: DISKCOMP then asks you to swap disks.
+  /1           Compares only the first side of the disks.
+  /8           Compares only the first 8 sectors of each track.
+
+Examples
+  DISKCOMP A: B:
+    Compares the disk in A: with the disk in B:.
+
+Notes
+  DISKCOMP reads both disks and reports each track that differs, by side
+  and track number, or "Compare OK" when they are the same. It is meant
+  to check a DISKCOPY: two disks with the same files copied by COPY or
+  XCOPY may still differ. Both disks must be of the same format, and the
+  drives must be floppy drives. Its exit status is 0 even when the disks
+  differ: 1 means a bad parameter or drive, 2 Ctrl+C.

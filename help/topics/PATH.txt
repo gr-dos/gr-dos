@@ -1,0 +1,27 @@
+Topic: PATH
+Summary: Sets the directories searched for programs
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  PATH [drive:]path[;[drive:]path...]
+  PATH ;
+  PATH
+
+  path         The directories to search, in order, separated by ;.
+  ;            Alone, clears the path: only the current directory is
+               searched.
+
+Examples
+  PATH C:\DOS;C:\BIN
+    Searches C:\DOS, then C:\BIN, for commands not in the current
+    directory.
+  PATH
+    Shows the path, or "No Path".
+
+Notes
+  DOS looks in the current directory first, then in each directory of
+  the path, for a .COM, .EXE or .BAT file of the name typed. PATH sets the
+  PATH environment variable (see SET); the directories are not checked
+  until they are searched. Put PATH in AUTOEXEC.BAT so it is set at each
+  start. Data files are not found by PATH (see APPEND).

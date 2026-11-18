@@ -1,0 +1,27 @@
+Topic: SET
+Summary: Shows, sets or removes environment variables
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  SET [name=[value]]
+
+  name         The variable; it is stored in upper case.
+  value        Its text, kept as typed. Left out (SET name=), removes
+               the variable.
+
+Examples
+  SET
+    Lists every variable, such as COMSPEC, PATH and PROMPT.
+  SET TEMP=C:\TEMP
+    Sets TEMP, which some programs use for their work files.
+  SET TEMP=
+    Removes TEMP.
+
+Notes
+  The environment is a list of name=value lines that each program gets a
+  copy of. A batch file reads a variable as %name% (see HELP BATCH). The
+  line must have exactly one =, so a value cannot contain one. When the
+  environment is full, SET shows "Out of environment space": make it
+  bigger with COMMAND /E (see HELP COMMAND). COMSPEC names the
+  COMMAND.COM to reload; change it only to a real copy.

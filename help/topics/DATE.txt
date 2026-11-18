@@ -1,0 +1,22 @@
+Topic: DATE
+Summary: Shows or sets the date
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  DATE [date]
+
+  date         The new date, in the country's order: mm-dd-yy in the US,
+               dd-mm-yy or yy-mm-dd elsewhere. - / or . may separate the
+               parts, and the year may have two or four digits.
+
+Examples
+  DATE
+    Shows the date and asks for a new one; press Enter to keep it.
+  DATE 3-15-1989
+    Sets the date to March 15, 1989 (in the US order).
+
+Notes
+  The order follows COUNTRY= in CONFIG.SYS. Years from 1980 through 2099
+  may be set. DOS sets the date of every file it writes from this date.
+  On a PC/AT or later, DATE also sets the battery-backed clock.

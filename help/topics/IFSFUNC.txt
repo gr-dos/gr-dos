@@ -1,0 +1,21 @@
+Topic: IFSFUNC
+Summary: Supports installable file system drivers (IFS=)
+Origin: MS-DOS 4.00
+Group: command
+Files: IFSFUNC.EXE
+
+Syntax
+  IFSFUNC
+
+Examples
+  IFSFUNC
+    Loads IFSFUNC, which then stays resident.
+
+Notes
+  IFSFUNC is the part of MS-DOS 4.00 that passes file requests to an
+  installable file system (IFS) driver, loaded with IFS= in CONFIG.SYS,
+  such as a network redirector written for it. It takes no parameters.
+  GR-DOS has no IFS driver, so IFSFUNC says "Invalid configuration" but
+  stays resident anyway, using memory to no purpose; run again, it says
+  "IFSFUNC already installed". Load it only if an IFS driver needs it,
+  with INSTALL=C:\DOS\IFSFUNC.EXE in CONFIG.SYS.

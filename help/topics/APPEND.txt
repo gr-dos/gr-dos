@@ -1,0 +1,35 @@
+Topic: APPEND
+Summary: Lets programs open data files in other directories
+Origin: MS-DOS 4.00
+Group: command
+Files: APPEND.EXE
+
+Syntax
+  APPEND [/E] [/X[:ON|OFF]] [/PATH:ON|OFF]
+  APPEND [drive:]path[;[drive:]path...] [/X[:ON|OFF]] [/PATH:ON|OFF]
+  APPEND ;
+  APPEND
+
+  path         The directories to search, separated by ;, for a file not
+               found in the current directory.
+  ;            Clears the list.
+  /X, /X:ON    Applies the list to finding and running programs, and to
+               directory searches, as well as to opening files.
+  /X:OFF       Applies it only to opening files (the default).
+  /PATH:ON     Searches the list also for a file named with a drive or
+               path (the default).
+  /PATH:OFF    Searches it only for a bare file name.
+  /E           Keeps the list in the environment variable APPEND, where
+               SET can see and change it. Only when APPEND is first run.
+
+Examples
+  APPEND C:\DATA;C:\LETTERS
+    Programs find the files of C:\DATA and C:\LETTERS from anywhere.
+  APPEND /E
+    Loads APPEND, keeping its list in the environment.
+  APPEND
+    Shows the list, or "No Append" when it is empty.
+
+Notes
+  The first APPEND stays resident; later ones change its settings. Load
+  APPEND before ASSIGN, or it says "APPEND / ASSIGN Conflict".

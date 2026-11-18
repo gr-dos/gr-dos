@@ -1,0 +1,28 @@
+Topic: NLSFUNC
+Summary: Lets CHCP change the code page, from COUNTRY.SYS
+Origin: MS-DOS 4.00
+Group: command
+Files: NLSFUNC.EXE
+
+Syntax
+  NLSFUNC [[d:][path]COUNTRY.SYS]
+
+  COUNTRY.SYS  Where the country data is. If left out, NLSFUNC uses the
+               file COUNTRY= named in CONFIG.SYS, or \COUNTRY.SYS on the
+               boot disk.
+
+Examples
+  NLSFUNC C:\DOS\COUNTRY.SYS
+    Loads NLSFUNC, with the data in C:\DOS.
+  CHCP 850
+    Then changes the code page to 850.
+
+Notes
+  NLSFUNC stays in memory; it can be loaded only once. CHCP needs it to
+  change the code page: NLSFUNC reads the current country's tables for
+  the new code page from COUNTRY.SYS when CHCP asks. CHCP then also
+  selects that code page on the screen (with DISPLAY.SYS) and printers
+  (with PRINTER.SYS) that have it prepared. A code page COUNTRY.SYS does
+  not have for the country is "Invalid code page". NLSFUNC can also be
+  loaded from CONFIG.SYS, with INSTALL=C:\DOS\NLSFUNC.EXE. See HELP
+  CODEPAGE and HELP COUNTRY.

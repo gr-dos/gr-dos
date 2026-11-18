@@ -1,0 +1,48 @@
+Topic: HARDDISK
+Aliases: INSTALLING CF
+Summary: Installing GR-DOS on a hard disk or CF card
+Origin: GR-DOS
+Group: guide
+
+From a floppy
+  Boot from a GR-DOS floppy. FDISK, then FORMAT, erase the hard disk.
+  1. Run FDISK. Choose 1, Create DOS Partition, then 1, Create Primary
+     DOS Partition, and answer Y to use the whole disk and make it
+     active. FDISK restarts the computer; boot the floppy again.
+  2. FORMAT C: /S, which also copies IO.SYS, MSDOS.SYS and COMMAND.COM.
+  3. Copy the programs you want to a directory, and set PATH to it in
+     C:\AUTOEXEC.BAT.
+  Then remove the floppy and restart. Like MS-DOS 4.00, GR-DOS uses at
+  most 1024 cylinders of a disk and partitions of up to 2 GB.
+
+Examples
+  FORMAT C: /S
+    Formats C: and makes it bootable.
+  MD C:\DOS
+    Makes a directory for the programs.
+  XCOPY A:\*.* C:\DOS
+    Copies the floppy's files to it.
+
+From Linux, on a CF card or disk image
+  scripts/deploy-cf in the GR-DOS source sets up a card in a USB reader:
+  "provision" once (it erases the card), then "update" for each new
+  version. The card gets:
+  C:        About 10 MB: the system. Replaced in full at every update.
+  C:\DOS    Every program and data file, including the *16 programs
+            (HELP DIST16). PATH is C:\DOS.
+  D:, E:..  FAT16 drives over the rest of the card, at most 2000 MB
+            each. An update never writes to them.
+
+What is yours, and what is replaced
+  C:\CONFIG.SYS (FILES=20, BUFFERS=20) and C:\AUTOEXEC.BAT (PROMPT $P$G,
+  PATH C:\DOS) are written again at every update, and anything else
+  you put on C: is removed. C:\AUTOEXEC.BAT ends by calling
+  D:\AUTOEXEC.BAT if there is one: put your own PATH (keep C:\DOS in
+  it), KEYB, MODE and the rest there. CONFIG.SYS lines belong in
+  D:\CONFIG.SYS, with INCLUDEFILE=D:\CONFIG.SYS added to C:\CONFIG.SYS
+  after each update (HELP CONFIG). Keep your files on D: and beyond.
+
+Notes
+  A second hard disk with a DOS partition takes D:, and the card's
+  drives move up a letter. FDISK, FORMAT and deploy-cf's provision
+  erase everything on the disk: copy your files off first.

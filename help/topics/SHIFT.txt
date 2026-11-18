@@ -1,0 +1,25 @@
+Topic: SHIFT
+Summary: Moves a batch file's parameters down by one
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  SHIFT
+
+Examples
+  SHIFT
+    Makes %2 the new %1, %3 the new %2, and so on; the tenth
+    parameter, if any, becomes %9.
+
+Notes
+  A batch file sees only %0 through %9 at a time. SHIFT lets it work
+  through more than nine parameters, or through any number in a loop:
+
+    :NEXT
+    IF "%1"=="" GOTO END
+    COPY %1 A:
+    SHIFT
+    GOTO NEXT
+    :END
+
+  There is no way to shift back. SHIFT does nothing at the prompt.

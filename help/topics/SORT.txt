@@ -1,0 +1,29 @@
+Topic: SORT
+Summary: Sorts lines of text
+Origin: MS-DOS 4.00
+Group: command
+Files: SORT.EXE
+
+Syntax
+  SORT [/R] [/+n] [< input] [> output]
+  command | SORT [/R] [/+n]
+
+  /R           Sorts in reverse order, Z to A and 9 to 0.
+  /+n          Sorts on the text from column n of each line (1 if left
+               out).
+
+  SORT reads its standard input, given with < or a pipe (|), and writes
+  the sorted lines to its standard output.
+
+Examples
+  SORT < NAMES.TXT > SORTED.TXT
+    Writes the lines of NAMES.TXT, in order, to SORTED.TXT.
+  DIR | SORT
+    Lists the directory in order of name.
+  SORT /R < SCORES.TXT
+    Shows SCORES.TXT in reverse order.
+
+Notes
+  SORT orders the lines by the country's collating sequence, in which
+  upper and lower case letters sort together. Numbers are sorted as
+  text: 10 comes before 9. The input can be at most 64 KB.

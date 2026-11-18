@@ -1,0 +1,29 @@
+Topic: EXE2BIN
+Summary: Converts an .EXE program to a .COM or binary image
+Origin: MS-DOS 4.00
+Group: command
+Files: EXE2BIN.EXE
+
+Syntax
+  EXE2BIN [drive:][path]input [[drive:][path]output]
+
+  input        The .EXE file to convert (.EXE if no extension is given).
+  output       The file to write; the input's name with .BIN if left out.
+               Name it .COM to make a program that DOS can run.
+
+Examples
+  EXE2BIN HELLO.EXE HELLO.COM
+    Makes HELLO.COM from HELLO.EXE.
+  EXE2BIN DRIVER
+    Writes DRIVER.BIN, a memory image, from DRIVER.EXE.
+
+Notes
+  The program must have no stack segment and start at CS 0. If it starts
+  at IP 100h it becomes a .COM file: the first 100h bytes are dropped,
+  and it may have no segment fix-ups. If it starts at IP 0 it becomes a
+  binary image; if it then has fix-ups, EXE2BIN asks for the segment it
+  will be loaded at ("Fix-ups needed - base segment (hex):"). Anything
+  else is "File cannot be converted". EXE2BIN 4.00 takes the .EXE header
+  to be a multiple of 512 bytes, as Microsoft's LINK writes it; with a
+  linker that writes a shorter header (such as Open Watcom's wlink) it
+  writes a wrong file.

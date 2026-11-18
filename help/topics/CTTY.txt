@@ -1,0 +1,21 @@
+Topic: CTTY
+Summary: Changes the device used for the console
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  CTTY device
+
+  device       A character device to take the commands from and show the
+               output on, such as COM1, AUX or CON.
+
+Examples
+  CTTY COM1
+    Runs the command prompt on a terminal connected to COM1.
+  CTTY CON
+    Gives the keyboard and screen back the prompt.
+
+Notes
+  Programs that read the keyboard or write to the screen through the BIOS,
+  rather than through DOS, still use the keyboard and screen. Typing CTTY
+  CON on the new device gives the console back.

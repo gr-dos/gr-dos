@@ -1,0 +1,36 @@
+Topic: GRAFTABL
+Summary: Loads the upper 128 characters for CGA graphics modes
+Origin: MS-DOS 4.00
+Group: command
+Files: GRAFTABL.COM
+
+Syntax
+  GRAFTABL [437 | 850 | 860 | 863 | 865 | /STATUS | ?]
+
+  437          United States (the default).
+  850          Multilingual.
+  860          Portuguese.
+  863          Canadian French.
+  865          Nordic.
+  /STATUS      Shows the code page loaded, if any (/STA too).
+  ?            Lists the parameters and code pages.
+
+Examples
+  GRAFTABL
+    Loads the characters of code page 437.
+  GRAFTABL 850
+    Loads code page 850's, or changes to them if GRAFTABL is loaded.
+
+Exit status
+  0  The table was loaded and stays resident.
+  1  A table was loaded already (and replaced, if one was asked for).
+  2  No table was loaded (after /STATUS or ?).
+  3  A bad parameter.
+  4  The wrong DOS version.
+
+Notes
+  In the CGA's graphics modes the BIOS draws only characters 0 to 127;
+  GRAFTABL gives it the rest (accented letters, lines and symbols),
+  through INT 1Fh. The first GRAFTABL stays resident; later ones replace
+  its table in place. On an EGA or VGA with DISPLAY.SYS it is not needed
+  (HELP CODEPAGE).

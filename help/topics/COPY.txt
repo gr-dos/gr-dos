@@ -1,0 +1,40 @@
+Topic: COPY
+Summary: Copies files, or joins several into one
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  COPY [/A | /B] source [/A | /B] [destination [/A | /B]] [/V]
+  COPY [/A | /B] source1 + source2 [+ ...] [destination [/A | /B]] [/V]
+
+  source       The files to copy, which may have wildcards (* and ?), or
+               a device such as CON or COM1.
+  destination  A file, directory, drive or device. If left out, the files
+               are copied to the current directory under the same names.
+  /A           Treats the file as text (ASCII). For a source, copies up to
+               the first Ctrl+Z (end of file mark); for the destination,
+               adds a Ctrl+Z at the end.
+  /B           Treats the file as binary: copies all of it, by its size,
+               and adds nothing. The default, except when joining files.
+  /V           Reads each copy back to check it.
+  +            Joins the sources into one destination file (by default,
+               the first source).
+
+Examples
+  COPY A:*.* B:
+    Copies all the files of A: to B:.
+  COPY REPORT.TXT C:\BACKUP\REPORT.OLD
+    Copies a file to another directory under a new name.
+  COPY CON NOTE.TXT
+    Writes what you type to NOTE.TXT; end with Ctrl+Z (F6) and Enter.
+  COPY PART1.TXT + PART2.TXT ALL.TXT
+    Joins two text files into ALL.TXT.
+  COPY LETTER.TXT PRN
+    Prints a text file.
+
+Notes
+  A /A or /B applies to the file before it and to the files after it,
+  until the next /A or /B. When files are joined, /A is the default, so
+  join binary files with /B. COPY does not copy hidden or system files, nor
+  subdirectories (see XCOPY). If the destination file exists, it is
+  replaced without asking. A file cannot be copied onto itself.

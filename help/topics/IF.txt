@@ -1,0 +1,41 @@
+Topic: IF
+Summary: Runs a command only when a condition is true
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  IF [NOT] ERRORLEVEL number command
+  IF [NOT] string1==string2 command
+  IF [NOT] EXIST filename command
+
+  NOT          Runs the command when the condition is false instead.
+  ERRORLEVEL   True when the last program's exit status is number or
+               more. Many programs set it: see their Exit status.
+  string1==string2
+               True when the two are the same, letter for letter: upper
+               and lower case differ. Usually one has a %1 or a %name%.
+  EXIST        True when the file exists. Wildcards (* and ?) may be
+               used; it is true if any file matches.
+  command      The command to run, which may be another IF.
+
+Examples
+  IF ERRORLEVEL 1 GOTO ERROR
+    Jumps to :ERROR when the last program set exit status 1 or more.
+  IF NOT EXIST C:\TEMP\NUL MD C:\TEMP
+    Makes the directory C:\TEMP unless it is there already.
+  IF "%1"=="" GOTO USAGE
+    Jumps to :USAGE when the batch file was given no parameters.
+  IF %1==A: COPY *.TXT A:
+    Copies the .TXT files when the first parameter is A:.
+
+Notes
+  Because ERRORLEVEL n is "n or more", test the highest value first:
+
+    IF ERRORLEVEL 2 GOTO TWO
+    IF ERRORLEVEL 1 GOTO ONE
+
+  IF NOT ERRORLEVEL 1 is true only when the status is 0. Neither string
+  may be empty or contain blanks, so put both in quotes (or another
+  character) when one could be empty. dir\NUL exists whenever the
+  directory dir does. IF is mostly used in batch files, but also works
+  at the prompt. See HELP BATCH.

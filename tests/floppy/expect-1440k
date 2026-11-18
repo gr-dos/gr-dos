@@ -40,8 +40,15 @@
 ^APPEND=SUB$
 ^E: => B:\\SUB$
 ^zeta$
+^== HELP$
+^XCOPY - Copies files, and directories with their subdirectories$
+^CD - Shows or changes the current directory$
+^No help for NOSUCH\. Type HELP for the list of topics\.$
+^HELP-ERRORLEVEL-1$
+^Usage: HELP \[topic\]$
+^HELP-ERRORLEVEL-3$
 ^== FILES$
 
 # The files of A:, the format's with COMP.IN, and the free space
-^ +44 File\(s\) +772096 bytes free$
+^ +46 File\(s\) +665600 bytes free$
 ^GRDOS-TEST-END$

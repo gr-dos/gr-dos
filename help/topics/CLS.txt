@@ -1,0 +1,16 @@
+Topic: CLS
+Summary: Clears the screen
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  CLS
+
+Examples
+  CLS
+    Clears the screen and puts the prompt at the top.
+
+Notes
+  CLS uses the screen's current colors and size. With ANSI.SYS loaded, or
+  when its output is redirected, it sends the ANSI clear-screen sequence
+  instead of using the BIOS.

@@ -1,0 +1,20 @@
+Topic: PAUSE
+Summary: Waits for a key in a batch file
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  PAUSE [comment]
+
+  comment      Text that is seen only because the PAUSE line is shown
+               while ECHO is on; PAUSE itself ignores it.
+
+Examples
+  PAUSE
+    Shows "Press any key to continue" and waits.
+  PAUSE Put the backup disk in drive A:
+    With ECHO on, the line itself shows the comment, then PAUSE waits.
+
+Notes
+  Pressing Ctrl+C at a PAUSE asks whether to end the batch file
+  ("Terminate batch job (Y/N)?"). See HELP BATCH.

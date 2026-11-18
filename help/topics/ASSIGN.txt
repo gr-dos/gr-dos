@@ -1,0 +1,29 @@
+Topic: ASSIGN
+Summary: Sends the requests for one drive to another drive
+Origin: MS-DOS 4.00
+Group: command
+Files: ASSIGN.COM
+
+Syntax
+  ASSIGN [drive1=drive2 [...]]
+  ASSIGN /STATUS
+
+  drive1       The drive letter that programs use.
+  drive2       The drive that is then used in its place.
+  /STATUS      Lists the drives assigned (/STA also works).
+
+Examples
+  ASSIGN A=C
+    Makes a program that reads drive A: read C: instead.
+  ASSIGN A=C B=C
+    Sends both A: and B: to C:.
+  ASSIGN
+    Undoes every assignment.
+
+Notes
+  ASSIGN is for old programs that insist on a drive letter. The first
+  time it is run it stays resident, using some memory. The letters may
+  have a colon (A:=C:). Undo the assignments before using FORMAT,
+  DISKCOPY or DISKCOMP, so that there is no doubt which disk they use.
+  CHKDSK, LABEL, RECOVER and SYS refuse an assigned drive. If APPEND is
+  used, load it before ASSIGN. SUBST is the better choice for new uses.

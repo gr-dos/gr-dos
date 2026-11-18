@@ -1,0 +1,20 @@
+Topic: VOL
+Summary: Shows a disk's volume label and serial number
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  VOL [drive:]
+
+  drive:       The disk to show; the current drive if left out.
+
+Examples
+  VOL
+    Shows the label of the current drive's disk.
+  VOL A:
+    Shows the label and serial number of the floppy in A:.
+
+Notes
+  The serial number is given to a disk when FORMAT prepares it with
+  MS-DOS 4.00 or later; older disks have none and show only the label.
+  FORMAT /V and LABEL set the label.

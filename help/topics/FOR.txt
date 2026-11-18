@@ -1,0 +1,31 @@
+Topic: FOR
+Summary: Runs a command once for each of a set of files or words
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  FOR %%v IN (set) DO command     (in a batch file)
+  FOR %v IN (set) DO command      (at the prompt)
+
+  %%v          The variable: % twice and one character, in a batch file;
+               % once at the prompt. Upper and lower case differ: %%a is
+               not %%A.
+  set          File names, which may have wildcards (* and ?), or other
+               words, separated by blanks or commas. A name with a
+               wildcard stands for each file it matches.
+  command      The command to run, with %%v in it where each name or word
+               is to go.
+
+Examples
+  FOR %F IN (*.TXT) DO TYPE %F
+    At the prompt, shows each .TXT file in turn.
+  FOR %%D IN (A: B:) DO DIR %%D /W
+    In a batch file, lists the files of A: and then of B:.
+  FOR %%F IN (*.BAK *.TMP) DO DEL %%F
+    In a batch file, deletes the .BAK and .TMP files one at a time.
+
+Notes
+  FOR cannot be nested: the command after DO cannot be another FOR, but it
+  can be CALL of a batch file that has its own FOR. Files the set names
+  without wildcards are used as they are, whether they exist or not.
+  Hidden files are not matched. See HELP BATCH.

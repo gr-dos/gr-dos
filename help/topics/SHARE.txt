@@ -1,0 +1,30 @@
+Topic: SHARE
+Summary: Adds file sharing and locking, and checks for changed disks
+Origin: MS-DOS 4.00
+Group: command
+Files: SHARE.EXE
+
+Syntax
+  SHARE [/F:space] [/L:locks]
+
+  /F:space     Bytes of memory for the names of the files open. The
+               default, 2048, is also the least: a smaller value is
+               ignored.
+  /L:locks     How many file regions can be locked at once. The default,
+               20, is also the least.
+
+Examples
+  SHARE
+    Loads SHARE with the default sizes.
+  SHARE /F:4096 /L:40
+    Loads it with room for more open files and locks.
+
+Notes
+  SHARE stays resident until the computer restarts; run again, it says
+  "SHARE already installed". It makes DOS honour the sharing modes in
+  which programs open files and the regions they lock, which network
+  and multitasking software rely on. MS-DOS 4.00 wants SHARE when
+  a hard disk has a partition of more than 32 MB, and loads SHARE.EXE
+  itself at startup from the directory of SHELL=, or the root without
+  one, warning if it cannot. To load it yourself, put
+  INSTALL=C:\DOS\SHARE.EXE in CONFIG.SYS.

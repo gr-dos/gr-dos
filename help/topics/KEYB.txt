@@ -1,0 +1,44 @@
+Topic: KEYB
+Summary: Loads a keyboard layout for another country
+Origin: MS-DOS 4.00
+Group: command
+Files: KEYB.COM KEYBOARD.SYS
+
+Syntax
+  KEYB [xx[,[cp][,[d:][path]KEYBOARD.SYS]]] [/ID:nnn]
+
+  xx           The layout, from the list below.
+  cp           The code page; the screen's, or the layout's first, if
+               left out.
+  KEYBOARD.SYS Where the layouts are. If left out, KEYB looks in the
+               current directory, its own directory, then the root.
+  /ID:nnn      The keyboard ID, for a layout that has two.
+
+  KEYB alone shows the layout and code page in use.
+
+Layouts (code pages)
+  US United States  437 850 860 863 865   SG Swiss German   850 437
+  GR Germany        437 850               SF Swiss French   850 437
+  FR France         437 850               BE Belgium        850 437
+  IT Italy          437 850               NL Netherlands    437 850
+  UK United Kingdom 437 850               SV Sweden         437 850
+  SP Spain          850 437               SU Finland        850 437
+  PO Portugal       850 860               CF Canada French  863 850
+  DK Denmark        850 865               LA Latin America  850 437
+  NO Norway         850 865
+
+Examples
+  KEYB GR
+    Loads the German layout.
+  KEYB UK,437,C:\DOS\KEYBOARD.SYS
+    Loads the United Kingdom layout, code page 437, from C:\DOS.
+
+Notes
+  KEYB stays in memory. Ctrl+Alt+F1 switches to the US layout, and
+  Ctrl+Alt+F2 back. Running KEYB again with another layout replaces it.
+  On an enhanced keyboard, AltGr (right Alt) gives the third character
+  on a key. Without DISPLAY.SYS the screen shows code page 437, so use
+  437 where the layout has it; PO, DK, NO and CF do not. With DISPLAY.SYS,
+  KEYB follows the screen's code page: HELP CODEPAGE. KEYB can also be
+  loaded from CONFIG.SYS with INSTALL=. On a CF install, put it in
+  D:\AUTOEXEC.BAT.

@@ -1,0 +1,40 @@
+Topic: DISPLAY.SYS
+Aliases: DISPLAY
+Summary: Code page switching for an EGA, VGA or PC Convertible screen
+Origin: MS-DOS 4.00
+Group: data
+Files: DISPLAY.SYS EGA.CPI LCD.CPI
+
+Syntax
+  DEVICE=[d:][path]DISPLAY.SYS CON[:]=([type][,[hwcp][,n|(n,m)]])
+
+  type         EGA (an EGA or VGA), LCD (the IBM PC Convertible), or CGA
+               or MONO, which cannot change their characters. Left out,
+               DISPLAY.SYS finds the display, and does not load on a CGA
+               or MDA.
+  hwcp         The display's own code page, normally 437.
+  n            How many code pages MODE can prepare, up to 12.
+  m            How many font sizes to keep of each (all the display
+               uses, if left out).
+
+  EGA.CPI      Fonts for EGA and VGA: code pages 437, 850, 860, 863, 865.
+  LCD.CPI      The same code pages for the PC Convertible's LCD.
+
+A CONFIG.SYS line
+  DEVICE=C:\DOS\DISPLAY.SYS CON=(EGA,437,1)
+    Room for one code page besides 437, on an EGA or VGA.
+  DEVICE=C:\DOS\DISPLAY.SYS CON=(,437,2)
+    Finds the display; room for two code pages.
+
+Examples
+  MODE CON CP PREPARE=((850) C:\DOS\EGA.CPI)
+    Gives DISPLAY.SYS the font of code page 850.
+  MODE CON CP SELECT=850
+    Shows code page 850's characters.
+
+Notes
+  DISPLAY.SYS stays in memory, about 8 KB, and 2 to 10 KB more for each
+  code page n allows. It keeps the selected font loaded after a program
+  changes the video mode. Selecting the hardware code page gives back
+  the display's own font. On an error it says so at boot and is not
+  loaded. See HELP CODEPAGE for how it works with MODE, CHCP and KEYB.

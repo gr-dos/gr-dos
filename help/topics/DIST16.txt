@@ -1,0 +1,30 @@
+Topic: DIST16
+Summary: The *16 programs in C:\DOS, from the gr-dos GitHub projects
+Origin: GR-DOS
+Group: guide
+
+A hard disk or CF install's C:\DOS, and the release ZIP's BIN, also
+have the DOS programs of the gr-dos GitHub organization's projects whose
+names end in 16 (https://github.com/gr-dos): real-mode DOS programs,
+each a release of its own project, shipped unchanged. They are:
+
+@DIST16@
+
+TICO, the editor, from tico16, is the only one on the floppies (HELP
+TICO).
+
+Help for each
+  Most show their usage with --help after the name, and their release
+  with --version. Each project's page on GitHub has the full documentation.
+
+Examples
+  LESS --help
+    Shows how to use LESS.
+  DIFF16 --help
+    Shows how to use DIFF16.
+
+Licenses
+  Each program is under its own project's license, not GR-DOS's. The
+  release ZIP's README.txt names each one's project, release and
+  license, with the license texts. A program under the GNU GPL brings
+  its source: see C:\DOS\SOURCES.TXT, when there is one.
