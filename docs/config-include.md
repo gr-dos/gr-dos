@@ -1,9 +1,11 @@
 # CONFIG.SYS's INCLUDEFILE= (issue #49)
 
-**Status:** investigated, and prototyped in `patches/kernel/0002-config-include.patch`.
-**Recommendation:** proceed. It works, it is small, and it has no resident cost.
-#48, deploy-cf merging `D:\CONFIG.SYS` into `C:\CONFIG.SYS`, stays open as
-the alternative until this is merged.
+**Status:** done, in `patches/kernel/0002-config-include.patch`. A CF
+install made by `scripts/deploy-cf` uses `D:\CONFIG.SYS` by default
+(#68): its generated `C:\CONFIG.SYS` ends with `INCLUDEFILE=D:\CONFIG.SYS`
+([deploy-cf.md](deploy-cf.md)).
+#48, deploy-cf merging `D:\CONFIG.SYS` into `C:\CONFIG.SYS`, was the
+alternative; see Follow-ups.
 
 ```
 C:\CONFIG.SYS                  D:\CONFIG.SYS (yours, optional)
@@ -216,8 +218,10 @@ C:'s own line.
 
 ## Follow-ups
 
-1. **deploy-cf writes `INCLUDEFILE=D:\CONFIG.SYS`** into the generated
-   `C:\CONFIG.SYS`, after its defaults, so the user's lines override them.
-   No check for the file on D: is needed: when it is absent, the line does
-   nothing.
-2. **#48** stays open as the alternative until this is merged and proven.
+1. **Done (#68): deploy-cf writes `INCLUDEFILE=D:\CONFIG.SYS`** into the
+   generated `C:\CONFIG.SYS`, after its defaults, so the user's lines
+   override them. It doesn't check whether D: has the file, because when
+   it is absent the line does nothing. `make test-deploy-cf` boots without the file and
+   with it, and checks that `update` keeps it.
+2. **#48** stays open as the alternative until this is proven on real
+   hardware; it can be closed then.

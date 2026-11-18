@@ -38,9 +38,10 @@ What is yours, and what is replaced
   PATH C:\DOS) are written again at every update, and anything else
   you put on C: is removed. C:\AUTOEXEC.BAT ends by calling
   D:\AUTOEXEC.BAT if there is one: put your own PATH (keep C:\DOS in
-  it), KEYB, MODE and the rest there. CONFIG.SYS lines belong in
-  D:\CONFIG.SYS, with INCLUDEFILE=D:\CONFIG.SYS added to C:\CONFIG.SYS
-  after each update (HELP CONFIG). Keep your files on D: and beyond.
+  it), KEYB, MODE and the rest there. C:\CONFIG.SYS ends with
+  INCLUDEFILE=D:\CONFIG.SYS: put your CONFIG.SYS lines in D:\CONFIG.SYS
+  (HELP CONFIG). Updates never change D:\AUTOEXEC.BAT or
+  D:\CONFIG.SYS. Keep your files on D: and beyond.
 
 Notes
   A second hard disk with a DOS partition takes D:, and the card's

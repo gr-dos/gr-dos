@@ -112,7 +112,17 @@ following, in this order:
 1. `IO.SYS` and `MSDOS.SYS`, the first two directory entries. IO.SYS starts
    at cluster 2.
 2. `COMMAND.COM`, where DOS looks for it without a `SHELL=` line.
-3. `CONFIG.SYS`: `FILES=20` and `BUFFERS=20`.
+3. `CONFIG.SYS`: `FILES=20` and `BUFFERS=20`, then the line that reads
+   yours from D: ([config-include.md](config-include.md)):
+
+   ```
+   REM GR-DOS system defaults. Every deploy-cf update replaces C:,
+   REM so keep your own settings in D:\CONFIG.SYS.
+   FILES=20
+   BUFFERS=20
+   INCLUDEFILE=D:\CONFIG.SYS
+   ```
+
 4. `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH C:\DOS`, ending with:
 
    ```bat
@@ -138,12 +148,19 @@ following, in this order:
 If `D:\AUTOEXEC.BAT` sets its own `PATH`, include `C:\DOS` in it, for
 example `PATH C:\DOS;D:\BIN`.
 
-`D:\AUTOEXEC.BAT` is yours. Neither command creates or changes it. It runs
-after C:'s defaults, so it can change `PATH`, `PROMPT` and the rest. CALL
-returns to C:'s AUTOEXEC.BAT afterwards, which then ends, so the prompt
-appears. COMMAND.COM 4.00 supports `IF EXIST` and `CALL` in batch files
-(`TBATCH2.ASM`), and restores the caller's echo state when the called file
-returns.
+`D:\AUTOEXEC.BAT` and `D:\CONFIG.SYS` are yours. Neither command creates
+or changes them, and both are optional.
+
+- **`D:\AUTOEXEC.BAT`** runs after C:'s defaults, so it can change `PATH`,
+  `PROMPT` and the rest. CALL returns to C:'s AUTOEXEC.BAT afterwards,
+  which then ends, so the prompt appears. COMMAND.COM 4.00 supports `IF
+  EXIST` and `CALL` in batch files (`TBATCH2.ASM`), and restores the
+  caller's echo state when the called file returns.
+- **`D:\CONFIG.SYS`** is read in place of C:'s `INCLUDEFILE=` line, after
+  `FILES=20` and `BUFFERS=20`, so its own `FILES=` or `BUFFERS=` overrides
+  them. `COUNTRY=`, `DEVICE=`, `INSTALL=` and the rest go there. A change
+  takes effect at the next boot. If there is no `D:\CONFIG.SYS`, the line
+  does nothing and nothing is shown.
 
 ## update's safety contract
 
@@ -256,7 +273,7 @@ in order, which the tests check by reading a sentinel on each drive
 through its letter. With a second hard disk that has a primary DOS
 partition, that partition becomes D:, and the card's logical drives move
 to E: and on. `C:\AUTOEXEC.BAT` would then call `D:\AUTOEXEC.BAT` on the
-other disk. GR-DOS is meant to have the card as its only fixed disk.
+other disk, and `C:\CONFIG.SYS` would include its `D:\CONFIG.SYS`. GR-DOS is meant to have the card as its only fixed disk.
 
 ## What DOS 4.00 needs
 
@@ -302,20 +319,25 @@ Read from the MS-DOS 4.00 source, and followed by `deploy-cf`:
 - **`test-deploy-cf-512m`, `-2g`, `-4g`, `-8g`**:
   - `provision`. The geometry must be the one SeaBIOS gives the drive,
     `scripts/partition-table --chs` must agree with the BIOS geometry,
-    and `fsck.fat` must find C: clean.
+    `fsck.fat` must find C: clean, and `C:\CONFIG.SYS` must be the
+    generated one, with `INCLUDEFILE=D:\CONFIG.SYS`.
   - Sentinel files go on every logical drive, with a `D:\AUTOEXEC.BAT`
     that reports to COM1. Every sector outside C: is hashed: the MBR, the
     record, the extended boot records and the logical drives.
-  - Boot from the hard disk in QEMU. `D:\AUTOEXEC.BAT` must run exactly
-    once. Each sentinel must be read through its letter. CHKDSK on each
+  - Boot from the hard disk in QEMU, with no `D:\CONFIG.SYS`: nothing
+    about the include may be on the screen, and BREAK is off.
+    `D:\AUTOEXEC.BAT` must run exactly once. Each sentinel must be read through its letter. CHKDSK on each
     logical drive must report the free space mtools does. At the prompt
     `D:\AUTOEXEC.BAT` set, a typed command must run, which shows the CALL
     returned.
-  - Put a stray file on C:, then `update` with a distribution in which a
-    file is renamed and another removed. Then `update` twice with the real
-    one. Each time C: must hold exactly the distribution's files, and the
-    hash must not change.
-  - Boot again.
+  - Put a `D:\CONFIG.SYS` with `BREAK=ON`, and hash again. Put a stray
+    file on C:, then `update` with a distribution in which a file is
+    renamed and another removed. Then `update` twice with the real one.
+    Each time C: must hold exactly the distribution's files, and the hash
+    must not change. `C:\CONFIG.SYS` must be the generated one, and
+    `D:\CONFIG.SYS` unchanged.
+  - Boot again. `D:\CONFIG.SYS` must be used: BREAK is on, and nothing
+    about the include is on the screen.
 - **`test-deploy-cf-failures`**. `update` must refuse:
   - a blank disk, and a disk without the record;
   - a changed byte in the master boot record's table, or in an extended

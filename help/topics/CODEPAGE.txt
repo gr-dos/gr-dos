@@ -30,7 +30,7 @@ The order
   4. KEYB, which then takes the screen's code page.
 
 A German setup, on a CF install
-  In C:\CONFIG.SYS (or D:\CONFIG.SYS: HELP CONFIG):
+  In D:\CONFIG.SYS (HELP CONFIG):
     COUNTRY=049,850,C:\DOS\COUNTRY.SYS
     DEVICE=C:\DOS\DISPLAY.SYS CON=(EGA,437,1)
     INSTALL=C:\DOS\NLSFUNC.EXE C:\DOS\COUNTRY.SYS

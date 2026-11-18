@@ -64,9 +64,10 @@ record must still be exact.
 The distribution is the directory C<--dist> (default
 F<build/linux/cf>, made by C<make>): F<manifest.txt>, the files it lists,
 F<MSBOOT.BIN>, F<FDBOOT.BIN> and F<VERSION>.  C:'s root gets IO.SYS and
-MSDOS.SYS first, COMMAND.COM, and a generated F<CONFIG.SYS>,
-F<AUTOEXEC.BAT> (with C<PATH C:\DOS>) and F<GRDOS.ID>; the other files go
-in F<C:\DOS>.
+MSDOS.SYS first, COMMAND.COM, and a generated F<CONFIG.SYS> (with
+C<INCLUDEFILE=D:\CONFIG.SYS>), F<AUTOEXEC.BAT> (with C<PATH C:\DOS>, calling
+F<D:\AUTOEXEC.BAT>) and F<GRDOS.ID>; the other files go in F<C:\DOS>.
+Neither command creates or changes F<D:\CONFIG.SYS> or F<D:\AUTOEXEC.BAT>.
 
 C<provision> and C<update> ask for the target's name (C<sdd>, or the image
 file's name) on the terminal, or take it as C<--confirm NAME>.  C<--dry-run>
@@ -421,8 +422,11 @@ sub system_files ($dist, $l, $disk_id, $now) {
   my $stamp = strftime '%Y-%m-%dT%H:%M:%SZ', gmtime $now;
   my @gen = (
     { name => 'CONFIG.SYS', attr => 0x20, mtime => $now, data => crlf(<<~'END') },
+      REM GR-DOS system defaults. Every deploy-cf update replaces C:,
+      REM so keep your own settings in D:\CONFIG.SYS.
       FILES=20
       BUFFERS=20
+      INCLUDEFILE=D:\CONFIG.SYS
       END
     { name => 'AUTOEXEC.BAT', attr => 0x20, mtime => $now, data => crlf(<<~'END') },
       @ECHO OFF

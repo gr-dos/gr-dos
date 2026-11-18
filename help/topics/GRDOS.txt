@@ -13,7 +13,8 @@ What GR-DOS changes or adds
   - The name: the start-up banner, VER and FDISK's menu say GR-DOS.
   - An identification call, INT 21h AX=3347h BX=4752h, which gives the
     GR-DOS release version; GRVER (in C:\DOS) shows it.
-  - INCLUDEFILE= in CONFIG.SYS (HELP CONFIG).
+  - INCLUDEFILE= in CONFIG.SYS, which a CF install uses to read
+    D:\CONFIG.SYS (HELP CONFIG).
   - ATTRIB, MEM, FDISK, FC, JOIN and SUBST, which are C, are compiled
     with Open Watcom C and libc16, GR-DOS's C runtime, where Microsoft
     used Microsoft C 5.1.
