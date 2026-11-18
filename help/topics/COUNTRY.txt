@@ -42,5 +42,5 @@ Notes
   that code page of it, is not in the file, or the file is missing, DOS
   says so and keeps the United States settings. Code pages 932 to 938
   are double-byte, which GR-DOS cannot show. To change the code page
-  later, use NLSFUNC and CHCP: HELP CODEPAGE. On a CF install, C:\CONFIG.SYS
-  is replaced at every update: HELP CONFIG.
+  later, use NLSFUNC and CHCP: HELP CODEPAGE. On a CF install, put
+  COUNTRY= in D:\CONFIG.SYS: HELP CONFIG.

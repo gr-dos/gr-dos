@@ -55,7 +55,8 @@ image ([`docs/deploy-cf.md`](docs/deploy-cf.md)). `provision` erases the
 card and makes C: (10 MiB) and FAT16 data drives D:, E:, ... over the
 rest. `update` replaces C: only: it checks that the partition tables are as
 it made them, and never writes a sector outside C:. Your own settings go
-in `D:\AUTOEXEC.BAT`, which C:'s calls.
+in `D:\AUTOEXEC.BAT`, which C:'s calls, and `D:\CONFIG.SYS`, which C:'s
+includes with `INCLUDEFILE=`.
 
 ```sh
 scripts/deploy-cf inspect /dev/sdX          # writes nothing

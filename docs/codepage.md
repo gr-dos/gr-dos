@@ -186,8 +186,9 @@ On an error DISPLAY.SYS is not loaded, and says so at boot:
 The first message names `CON`, not the type, as Microsoft's build does.
 
 **On a CF install**, `scripts/deploy-cf` writes `C:\CONFIG.SYS` again at
-every update ([deploy-cf.md](deploy-cf.md)), so a `DEVICE=` line added to
-it is lost at the next update (issue #48).
+every update ([deploy-cf.md](deploy-cf.md)), so put the `DEVICE=` line in
+`D:\CONFIG.SYS`, which `C:\CONFIG.SYS` includes with
+`INCLUDEFILE=D:\CONFIG.SYS` (issue #68, [config-include.md](config-include.md)).
 
 ### MODE and CHCP
 
@@ -221,7 +222,7 @@ CHCP 850
 
 ### A German setup
 
-On a CF install, with `C:\CONFIG.SYS`:
+On a CF install, with `D:\CONFIG.SYS`:
 
 ```
 COUNTRY=049,850,C:\DOS\COUNTRY.SYS

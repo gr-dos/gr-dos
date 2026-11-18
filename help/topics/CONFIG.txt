@@ -53,7 +53,8 @@ A CONFIG.SYS
   INSTALL=C:\DOS\NLSFUNC.EXE
 
 Notes
-  On a CF install, every deploy-cf update writes C:\CONFIG.SYS afresh
-  (FILES=20, BUFFERS=20), so lines added to it are lost. Keep your own
-  lines in D:\CONFIG.SYS, and add the one line INCLUDEFILE=D:\CONFIG.SYS
-  to C:\CONFIG.SYS after an update. See HELP HARDDISK and HELP CODEPAGE.
+  On a CF install, every deploy-cf update writes C:\CONFIG.SYS afresh,
+  so lines added to it are lost. Put your lines in D:\CONFIG.SYS: C:'s
+  file has FILES=20, BUFFERS=20 and then INCLUDEFILE=D:\CONFIG.SYS, so
+  yours are read after the defaults and override them. Updates never
+  change D:. See HELP HARDDISK and HELP CODEPAGE.

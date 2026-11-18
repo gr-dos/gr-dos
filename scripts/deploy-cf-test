@@ -26,7 +26,8 @@ reports, and check that the tool chose the geometry SeaBIOS gives DOS,
 and the partitions with F<scripts/partition-table --chs>; and that
 F<C:\DOS\SOURCES.TXT> is installed, with the licenses of each program
 under a source license, such as the GPL, and where its source is, or is
-absent if there is none (issue #56);
+absent if there is none (issue #56); and that F<C:\CONFIG.SYS> is the
+generated one, ending C<INCLUDEFILE=D:\CONFIG.SYS> (issue #68);
 
 =item 2.
 
@@ -37,7 +38,8 @@ the logical drives);
 
 =item 3.
 
-boot it in QEMU (F<scripts/hd-boot-test>): GR-DOS starts from C:, runs
+boot it in QEMU (F<scripts/hd-boot-test>), with no F<D:\CONFIG.SYS>:
+GR-DOS starts from C:, shows nothing about the include, has BREAK off, runs
 F<D:\AUTOEXEC.BAT> exactly once, reads each sentinel through its drive
 letter, and CHKDSK reports for each logical drive the free space mtools
 does; FASTOPEN, TREE and GRAPHICS run from C:\DOS, and FASTOPEN and
@@ -47,13 +49,15 @@ command runs;
 
 =item 4.
 
-put a stray file on C:, C<update> with a distribution in which a file is
-renamed and another removed, then twice with the real one; C: must have
-exactly the distribution's files each time, and the hash must not change;
+put a F<D:\CONFIG.SYS> with C<BREAK=ON> and hash again; put a stray file
+on C:, C<update> with a distribution in which a file is renamed and another
+removed, then twice with the real one; C: must have exactly the
+distribution's files each time, F<C:\CONFIG.SYS> must be the generated one,
+F<D:\CONFIG.SYS> must be unchanged, and the hash must not change;
 
 =item 5.
 
-boot it again.
+boot it again: F<D:\CONFIG.SYS> is used, so BREAK is on.
 
 =back
 
@@ -211,6 +215,26 @@ sub check_sources ($img, $r, $out) {
   ok($rc == 0 && slurp("$out/SOURCES.TXT") eq slurp("$dist/SOURCES.TXT"), 'C:\DOS\SOURCES.TXT is installed, unchanged');
 }
 
+# C:\CONFIG.SYS as deploy-cf generates it (issue #68): the defaults, then
+# the user's D:\CONFIG.SYS, if there is one.
+my $config_sys = join '', map { "$_\r\n" } 'REM GR-DOS system defaults. Every deploy-cf update replaces C:,',
+  'REM so keep your own settings in D:\CONFIG.SYS.', 'FILES=20', 'BUFFERS=20', 'INCLUDEFILE=D:\CONFIG.SYS';
+
+# A file's contents, read with mtools from the partition at $lba.
+sub mread ($img, $lba, $name, $out) {
+  my $local = "$out/mread.tmp";
+  unlink $local;
+  my($rc) = run('mcopy', '-n', '-i', at($img, $lba), "::$name", $local);
+  return $rc ? undef : slurp($local);
+}
+
+# What the screen showed at the end of a boot must say nothing about the
+# include, nor any error in CONFIG.SYS.
+sub screen_quiet ($dir) {
+  my $screen = eval { slurp("$dir/screen.txt") } // return 0;
+  return $screen !~ /INCLUDEFILE|Error in CONFIG\.SYS|Unrecognized/;
+}
+
 sub c_files ($img, $r) {
   my $out = must('mdir', '-/', '-a', '-b', '-i', at($img, $r->{sys_start}), '::');
   return join ' ', sort map { m{^::/(.*)} ? $1 : () } split /\n/, $out;
@@ -242,6 +266,8 @@ sub test_size ($size, $out) {
   ok($table =~ /^mbr 1 80 0[146] 0\/1\/1 /m && $table =~ /^mbr 2 00 05 /m
     && (() = $table =~ /^ebr \d+ 1 00 0[146] /mg) == $n, "partition table: C: active, $n logical drives");
   check_sources($img, $r, $out);
+  ok((mread($img, $r->{sys_start}, 'CONFIG.SYS', $out) // '') eq $config_sys,
+    'C:\CONFIG.SYS has the defaults and INCLUDEFILE=D:\CONFIG.SYS');
   my $fsck_c = "$out/c.img";
   must('dd', "if=$img", "of=$fsck_c", 'bs=512', "skip=$r->{sys_start}", "count=$r->{sys_len}", 'status=none');
   my($rc) = run('fsck.fat', '-n', $fsck_c);
@@ -250,7 +276,7 @@ sub test_size ($size, $out) {
 
   # Sentinels, and the user's D:\AUTOEXEC.BAT.
   my $letter = 'D';
-  my(@bat, @expect);
+  my @bat;
   for my $l ($r->{logical}->@*) {
     my($ebr, $start) = @$l;
     spew("$out/VOL$letter.TXT", "sentinel $letter $ebr\r\n");
@@ -270,28 +296,40 @@ sub test_size ($size, $out) {
   my @dist16 = dist16_programs();
   my %version_option = ('DIFF16.EXE' => '--help');
   push @extras, 'CTTY AUX', (map { "$_->{name} " . ($version_option{$_->{name}} // '--version') } @dist16), 'CTTY CON';
-  spew("$out/AUTOEXEC.BAT", join "\r\n", '@ECHO OFF', 'ECHO GRDOS-USER-AUTOEXEC>AUX', 'VER>AUX', 'PATH>AUX',
+  spew("$out/AUTOEXEC.BAT", join "\r\n", '@ECHO OFF', 'ECHO GRDOS-USER-AUTOEXEC>AUX', 'VER>AUX', 'PATH>AUX', 'BREAK>AUX',
     'TYPE C:\GRDOS.ID>AUX', @bat, @extras, 'PROMPT GR$G', '');
   must('mcopy', '-i', at($img, $r->{logical}[0][1]), "$out/AUTOEXEC.BAT", '::');
-  # What DOS must find free on each drive: what mtools finds.
-  $letter = 'D';
-  for my $l ($r->{logical}->@*) {
-    my($free) = must('mdir', '-i', at($img, $l->[1]), '::') =~ /([\d ]+) bytes free/;
-    $free =~ tr/ //d;
-    push @expect, "^sentinel $letter $l->[0]\$", "^ *$free bytes available on disk\$";
-    $letter++;
-  }
-  spew("$out/expect", join "\n", '^GRDOS-USER-AUTOEXEC$', '^GR-DOS Version 4\.00$', '^PATH=C:\\\\DOS$',
-    '^layout 1$', @expect, '^FASTOPEN installed$', '^\\xC0\\xC4{3}DOS$',
-    '^  [0-9A-F]{6}      FASTOPEN     [0-9A-F]{6}     Program +$',
-    '^  [0-9A-F]{6}      GRAPHICS     [0-9A-F]{6}     Program +$',
-    (map { "(?i)\\b\Q$_->{stem}\E\\b.*\\b\Q$_->{version}\E\\b" } @dist16),
-    '^GRDOS-TEST-END$', 'count 1 ^GRDOS-USER-AUTOEXEC$', '');
-  my $hash = hash_outside_c($img, $r);
+  # The boot's expected output, written to $path. What DOS must find free on
+  # each drive is what mtools finds, so it is read just before each boot.
+  # Without D:\CONFIG.SYS, BREAK is off, as before issue #68; with it, on.
+  my $expect = sub ($path, $break) {
+    my @expect;
+    my $letter = 'D';
+    for my $l ($r->{logical}->@*) {
+      my($free) = must('mdir', '-i', at($img, $l->[1]), '::') =~ /([\d ]+) bytes free/;
+      $free =~ tr/ //d;
+      push @expect, "^sentinel $letter $l->[0]\$", "^ *$free bytes available on disk\$";
+      $letter++;
+    }
+    spew($path, join "\n", '^GRDOS-USER-AUTOEXEC$', '^GR-DOS Version 4\.00$', '^PATH=C:\\\\DOS$',
+      "^BREAK is $break\$", '^layout 1$', @expect, '^FASTOPEN installed$', '^\\xC0\\xC4{3}DOS$',
+      '^  [0-9A-F]{6}      FASTOPEN     [0-9A-F]{6}     Program +$',
+      '^  [0-9A-F]{6}      GRAPHICS     [0-9A-F]{6}     Program +$',
+      (map { "(?i)\\b\Q$_->{stem}\E\\b.*\\b\Q$_->{version}\E\\b" } @dist16),
+      '^GRDOS-TEST-END$', 'count 1 ^GRDOS-USER-AUTOEXEC$', '');
+  };
+  $expect->("$out/expect-off", 'off');
   my @boot = ("$root/scripts/hd-boot-test", '--chs', $drive, '--timeout', 120, '--prompt', '^GR>$',
-    '--type', 'ECHO GRDOS-TEST-END>AUX', $img, "$out/expect");
-  ($rc) = run(@boot, "$out/boot-provisioned");
+    '--type', 'ECHO GRDOS-TEST-END>AUX', $img);
+  ($rc) = run(@boot, "$out/expect-off", "$out/boot-provisioned");
   ok($rc == 0, 'boots from C:, runs D:\AUTOEXEC.BAT once and returns to the prompt');
+  ok(screen_quiet("$out/boot-provisioned"), 'with no D:\CONFIG.SYS, the include is silent');
+
+  # The user's D:\CONFIG.SYS (issue #68), which updates must keep.
+  my $user_config = "BREAK=ON\r\n";
+  spew("$out/CONFIG.SYS", $user_config);
+  must('mcopy', '-i', at($img, $r->{logical}[0][1]), "$out/CONFIG.SYS", '::');
+  my $hash = hash_outside_c($img, $r);
 
   # Updates: a stray file on C:, a distribution with a file renamed and
   # one removed, then the real one twice.
@@ -315,8 +353,14 @@ sub test_size ($size, $out) {
     ok(c_files($img, $r) eq dist_files($dist), "update $i: C: has exactly the distribution's files");
     ok(hash_outside_c($img, $r) eq $hash, "update $i: every sector outside C: is unchanged");
   }
-  ($rc) = run(@boot, "$out/boot-updated");
-  ok($rc == 0, 'boots after the updates');
+  ok((mread($img, $r->{sys_start}, 'CONFIG.SYS', $out) // '') eq $config_sys,
+    'after the updates, C:\CONFIG.SYS is the generated one');
+  ok((mread($img, $r->{logical}[0][1], 'CONFIG.SYS', $out) // '') eq $user_config,
+    'the updates keep D:\CONFIG.SYS');
+  $expect->("$out/expect-on", 'on');
+  ($rc) = run(@boot, "$out/expect-on", "$out/boot-updated");
+  ok($rc == 0, 'boots after the updates, with D:\CONFIG.SYS used: BREAK is on');
+  ok(screen_quiet("$out/boot-updated"), '... and nothing about the include on the screen');
   unlink $img unless $failed;
 }
 

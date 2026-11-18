@@ -92,9 +92,10 @@ the case mapping and the collating sequence of function 65h: SORT
 sorts by that sequence, and `FC /C` folds case with DOS's case map.
 
 **On a CF install**, `scripts/deploy-cf` writes `C:\CONFIG.SYS` again at
-every update ([deploy-cf.md](deploy-cf.md)), so a `COUNTRY=` line added to
-it is lost at the next update. `D:\AUTOEXEC.BAT` cannot set the country,
-because only `CONFIG.SYS` can.
+every update ([deploy-cf.md](deploy-cf.md)), so put the `COUNTRY=` line in
+`D:\CONFIG.SYS`, which `C:\CONFIG.SYS` includes with
+`INCLUDEFILE=D:\CONFIG.SYS` (issue #68, [config-include.md](config-include.md)).
+`D:\AUTOEXEC.BAT` cannot set the country, because only `CONFIG.SYS` can.
 
 ### NLSFUNC and CHCP
 
