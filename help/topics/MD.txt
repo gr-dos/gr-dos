@@ -1,0 +1,22 @@
+Topic: MD
+Aliases: MKDIR
+Summary: Makes a directory
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  MD [drive:]path
+
+  path         The new directory. Its parent must already exist.
+
+Examples
+  MD \WORK
+    Makes the directory WORK in the root of the current drive.
+  MD A:LETTERS
+    Makes LETTERS in the current directory of A:.
+
+Notes
+  MD makes one directory at a time: to make C:\A\B, make C:\A first.
+  A root directory holds a fixed number of entries (112 on a 360 KB
+  floppy), while a subdirectory grows as needed, so keep most files in
+  subdirectories. RD removes a directory, CD makes it current.

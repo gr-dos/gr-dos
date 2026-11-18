@@ -1,0 +1,46 @@
+Topic: BATCH
+Aliases: BAT AUTOEXEC AUTOEXEC.BAT
+Summary: Batch files: running a list of commands, with parameters
+Origin: MS-DOS 4.00
+Group: guide
+
+A batch file is a text file with a .BAT extension and one command on each
+line. Type its name, without .BAT, to run its lines in turn. Any command
+may be used, and these mostly in batch files: CALL, ECHO, FOR, GOTO, IF,
+PAUSE, REM and SHIFT.
+
+Parameters and variables
+  %0           The batch file's name, as typed.
+  %1 to %9     The words typed after the name (SHIFT reaches more).
+  %name%       The environment variable name (see SET), such as %PATH%.
+  %%           One %, as in a FOR variable: %%F.
+  A parameter or variable that was not given is replaced by nothing.
+
+Lines
+  @            At the start of a line, does not show that line even when
+               ECHO is on: @ECHO OFF as the first line hides them all.
+  :LABEL       A label for GOTO; never run nor shown.
+  Ctrl+C       Asks "Terminate batch job (Y/N)?": Y ends the batch file,
+               N goes on with the next line.
+
+Exit status
+  A program's exit status (ERRORLEVEL) is tested with IF ERRORLEVEL n,
+  which is true for n or more: test the highest number first.
+
+Examples
+  ECHO OFF
+    Stops showing the lines that follow.
+  IF ERRORLEVEL 1 GOTO FAILED
+    Goes to :FAILED when the program before ended with an error.
+  CALL OTHER %1
+    Runs OTHER.BAT, then comes back to this one.
+  FOR %%F IN (*.TXT) DO COPY %%F A:
+    Copies the .TXT files one at a time.
+
+Notes
+  Naming another batch file runs it in place of this one, which does not
+  go on: use CALL to come back. AUTOEXEC.BAT, in the root of the boot
+  disk, is run each time the computer starts; it usually sets PATH and
+  PROMPT and loads programs such as KEYB. If the disk holding a running
+  batch file is taken out, DOS asks for it back. COMMAND.COM reads one
+  line at a time, so do not edit a batch file while it runs.

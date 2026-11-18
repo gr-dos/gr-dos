@@ -1,0 +1,31 @@
+Topic: FASTOPEN
+Summary: Remembers where recently used files are on a hard disk
+Origin: MS-DOS 4.00
+Group: command
+Files: FASTOPEN.EXE
+
+Syntax
+  FASTOPEN drive:[=names] [...] [/X]
+  FASTOPEN drive:[=(names,extents)] [...] [/X]
+
+  drive:       A hard disk drive to speed up, such as C:.
+  names        How many file and directory names to remember, 10 to
+               999 (48 if left out).
+  extents      How many file pieces (extents) to remember, 1 to 999.
+  /X           Keeps the lists in expanded (EMS) memory.
+
+Examples
+  FASTOPEN C:
+    Speeds up opening files on C:, with the default lists.
+  FASTOPEN C:=(100,200) D:=50
+    Remembers 100 names and 200 extents on C:, and 50 names on D:.
+
+Notes
+  FASTOPEN stays resident and keeps, in memory, the location of the
+  files and directories opened most recently, so that opening them again
+  needs no directory search. It can be run once only; "FASTOPEN already
+  installed" means it is loaded. The totals for all drives must not pass
+  999. It works on hard disks only: on a floppy it says "Cannot use
+  FASTOPEN for drive A:". To load it at startup, put
+  INSTALL=C:\DOS\FASTOPEN.EXE C: in CONFIG.SYS. Each name takes some
+  memory, so keep the numbers modest on a small machine.

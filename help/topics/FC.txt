@@ -1,0 +1,45 @@
+Topic: FC
+Summary: Compares two files and shows the differences
+Origin: MS-DOS 4.00
+Group: command
+Files: FC.EXE
+
+Syntax
+  FC [/A] [/C] [/L] [/LBn] [/N] [/T] [/W] [/nnnn] file1 file2
+  FC /B file1 file2
+
+  file1 file2  The two files to compare. Wildcards are not taken.
+  /A           Shows only the first and last line of each block of
+               differing lines, with ... between.
+  /B           Compares byte by byte, and lists each differing byte's
+               offset and the two values in hex.
+  /C           Ignores the difference between upper and lower case.
+  /L           Compares line by line (the default but for .EXE, .COM,
+               .SYS, .OBJ, .LIB and .BIN files).
+  /LBn         Sets the size of FC's line buffer to n lines (100 if left
+               out). Large values run out of memory.
+  /N           Shows the line numbers.
+  /T           Leaves tabs as they are; otherwise FC expands them.
+  /W           Ignores blank lines, and blanks and tabs within lines.
+  /nnnn        How many lines must match again before FC takes the files
+               to be back in step (2 if left out).
+
+Examples
+  FC OLD.TXT NEW.TXT
+    Lists the lines that differ between the two files.
+  FC /C /W A:REPORT.TXT B:REPORT.TXT
+    Compares them, ignoring case and spacing.
+  FC /B PROG1.COM PROG2.COM
+    Compares two programs byte by byte.
+
+Exit status
+  0  No differences were found.
+  1  Differences were found, or an error. After line differences the
+     status may be 0 or 1; do not rely on it.
+
+Notes
+  /B cannot be given with /L or /N. When the files differ too much for FC
+  to find matching lines, it says "Resync failed". GR-DOS builds FC with
+  Open Watcom C rather than Microsoft C; it gives the same output, but
+  exits with 1 when it runs out of memory, and takes longer file names
+  safely.

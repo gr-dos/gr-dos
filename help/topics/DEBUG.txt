@@ -1,0 +1,59 @@
+Topic: DEBUG
+Summary: Tests, changes and assembles programs, and edits memory and disks
+Origin: MS-DOS 4.00
+Group: command
+Files: DEBUG.COM
+
+Syntax
+  DEBUG [[drive:][path]filename [parameters]]
+
+  filename     A program or file to load, at offset 100h (an .EXE or
+               .HEX file is loaded as a program); BX:CX holds its size.
+  parameters   The command line given to the program loaded.
+
+Commands
+  DEBUG prompts with -. Numbers are in hexadecimal. An address is
+  [segment:]offset; a range is address address, or address L length.
+
+  A [address]          Assembles 8086/8087 instructions; Enter alone ends.
+  C range address      Compares two blocks of memory.
+  D [range]            Dumps memory in hex and ASCII.
+  E address [list]     Enters bytes, from the list or one at a time.
+  F range list         Fills memory with the bytes of the list.
+  G [=address] [addr]  Runs the program, stopping at the addresses given.
+  H value value        Shows the sum and difference of two numbers.
+  I port               Reads a byte from an I/O port.
+  L [address [drive sector count]]
+                       Loads the named file, or disk sectors (drive 0 is
+                       A:).
+  M range address      Moves (copies) a block of memory.
+  N name [parameters]  Names the file for L and W, or the program's
+                       parameters.
+  O port byte          Writes a byte to an I/O port.
+  P [=address] [n]     Steps over calls, interrupts and loops.
+  Q                    Quits, without saving.
+  R [register]         Shows all registers, or changes one (R F: flags).
+  S range list         Searches memory for the bytes of the list.
+  T [=address] [n]     Traces n instructions, showing the registers.
+  U [range]            Unassembles code.
+  W [address [drive sector count]]
+                       Writes BX:CX bytes to the named file, or sectors.
+  XA count             Allocates count pages of expanded (EMS) memory.
+  XD handle            Frees an EMS handle.
+  XM lpage ppage handle
+                       Maps a logical EMS page to a physical page.
+  XS                   Shows the state of EMS memory.
+
+Examples
+  DEBUG HELLO.COM
+    Loads HELLO.COM to examine or run it.
+  DEBUG
+    Starts with no file; then, for example, D F000:FFF0 shows the end of
+    the BIOS ROM.
+
+Notes
+  A list is hex bytes and "strings" in quotes. W cannot write .EXE or
+  .HEX files: write the program under another name. L and W with sectors
+  bypass the file system; a wrong W can destroy a disk. The X commands
+  need an EMS driver. GR-DOS's tests assemble, write and run a program
+  with DEBUG.

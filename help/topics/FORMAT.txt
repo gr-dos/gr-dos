@@ -1,0 +1,45 @@
+Topic: FORMAT
+Summary: Prepares a disk for use by DOS, erasing all that is on it
+Origin: MS-DOS 4.00
+Group: command
+Files: FORMAT.COM
+
+Syntax
+  FORMAT drive: [/V[:label]] [/S] [/B] [/F:size | /T:tracks /N:sectors]
+  FORMAT drive: [/V[:label]] [/S] [/B] [/1] [/4] [/8]
+
+  drive:       The drive to format: a floppy drive, or a hard disk
+               partition made with FDISK.
+  /V[:label]   Gives the disk a volume label of up to 11 characters.
+               Without the label, or without /V, FORMAT asks for one.
+  /S           Copies the system (IO.SYS, MSDOS.SYS and COMMAND.COM) so
+               that the disk can start the computer.
+  /B           Leaves room for the system files, to add them later with
+               SYS. Not with /S.
+  /F:size      The floppy's capacity: 160, 180, 320, 360, 720, 1200 or
+               1440 (K, KB, 1.2 and 1.44 also work).
+  /T:tracks    The number of tracks per side (with /N).
+  /N:sectors   The number of sectors per track (with /T).
+  /1           Formats one side only.
+  /4           Formats a 360 KB disk in a 1.2 MB drive.
+  /8           Formats 8 sectors per track, as DOS 1 did. Not with /V.
+
+Examples
+  FORMAT B:
+    Formats the floppy in B: to the capacity of the drive.
+  FORMAT B: /F:360 /S /V:BOOTDISK
+    Makes a bootable 360 KB disk in a 1.2 MB drive, labelled BOOTDISK.
+
+Exit status
+  0  The disk was formatted.
+  3  Stopped with Ctrl+C.
+  4  A fatal error (bad parameters, disk error).
+  5  You answered N when asked to format a hard disk.
+
+Notes
+  FORMAT destroys every file on the disk, so check the drive letter, and
+  run DIR on the disk first if unsure. On a hard disk it warns and asks
+  Y/N, and if the disk has a label you must type it. Only /V, /S and /B
+  apply to a hard disk. FORMAT reports any bad sectors, which DOS then
+  avoids, and gives the disk a serial number. Formatting a 720 KB disk in
+  a 1.44 MB drive needs a BIOS with INT 13h function 18h.

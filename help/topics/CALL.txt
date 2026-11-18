@@ -1,0 +1,22 @@
+Topic: CALL
+Summary: Runs a batch file from another, then goes on with the first
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  CALL [drive:][path]filename [parameters]
+
+  filename     The batch file to run; .BAT may be left out.
+  parameters   What it sees as %1, %2 and so on.
+
+Examples
+  CALL SETUP
+    Runs SETUP.BAT, then returns to the line after the CALL.
+  CALL C:\BIN\SAVE.BAT %1
+    Runs SAVE.BAT with this batch file's first parameter.
+
+Notes
+  Without CALL, naming another batch file in a batch file runs it in
+  place of the first one: the rest of the first is never run. CALL is
+  only useful in batch files. A batch file may CALL itself, but each
+  CALL uses some memory until it ends. See HELP BATCH.

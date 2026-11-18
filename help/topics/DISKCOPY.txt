@@ -1,0 +1,33 @@
+Topic: DISKCOPY
+Summary: Copies a whole floppy disk to another of the same format
+Origin: MS-DOS 4.00
+Group: command
+Files: DISKCOPY.COM
+
+Syntax
+  DISKCOPY [drive1: [drive2:]] [/1]
+
+  drive1:      The floppy drive holding the disk to copy (the source).
+  drive2:      The drive holding the disk to copy to (the target). It may
+               be the same drive: DISKCOPY then asks you to swap disks.
+  /1           Copies only the first side of the disk.
+
+Examples
+  DISKCOPY A: B:
+    Copies the disk in A: to the disk in B:.
+  DISKCOPY A: A:
+    Copies with one drive, asking for the source and target in turn.
+
+Exit status
+  0  The copy ran (see its messages for read or write errors).
+  1  A bad parameter, or drives or disks that cannot be used.
+  2  Stopped with Ctrl+C.
+
+Notes
+  DISKCOPY copies track by track, so the target becomes an exact copy:
+  everything that was on it is lost. Write-protect the source disk so
+  that swapping the disks by mistake cannot harm it. Both drives must
+  take the same format; a target that is not formatted is formatted
+  while copying. The copy gets its own serial number. DISKCOPY works on
+  floppies only, not on a hard disk, a SUBSTed, ASSIGNed or JOINed
+  drive, or a network drive. Check a copy with DISKCOMP.

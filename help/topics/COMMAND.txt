@@ -1,0 +1,44 @@
+Topic: COMMAND
+Summary: The command interpreter, COMMAND.COM: the prompt and batch files
+Origin: MS-DOS 4.00
+Group: command
+
+Syntax
+  COMMAND [[drive:]path] [device] [/E:size] [/P [/MSG]] [/C string]
+
+  path         Where COMMAND.COM is, to read it again from (its part in
+               high memory is overwritten by large programs). Sets
+               COMSPEC.
+  device       A character device, such as COM1, to use for input and
+               output in place of the keyboard and screen (see CTTY).
+  /E:size      The size of the environment, in bytes, 160 to 32768,
+               rounded up to a multiple of 16. 160 if left out.
+  /P           Makes this COMMAND.COM permanent: it runs \AUTOEXEC.BAT,
+               or if there is none asks for the date and time, and EXIT
+               does not leave it. Used by SHELL= in CONFIG.SYS.
+  /MSG         With /P, keeps all its messages in memory, rather than
+               reading some from the disk when they are needed. Use it
+               when COMMAND.COM is on a floppy that may be taken out.
+  /C string    Runs the command in string, then exits. It must be last:
+               the rest of the line is the command.
+
+Examples
+  COMMAND /C DIR A:
+    Runs DIR in a second COMMAND.COM, which then exits.
+  COMMAND
+    Starts a second COMMAND.COM; EXIT goes back to the first.
+
+Notes
+  DOS starts COMMAND.COM from the root of the boot disk unless SHELL= in
+  CONFIG.SYS names another, as in
+
+    SHELL=C:\DOS\COMMAND.COM C:\DOS /E:512 /P
+
+  which makes the environment 512 bytes and reloads it from C:\DOS. A
+  larger /E is needed when SET or PATH says "Out of environment space".
+  A second COMMAND.COM gets a copy of the environment: what it changes
+  is lost on EXIT. Two more switches, left out of the 4.00 manuals, are
+  accepted: /D, with /P, skips AUTOEXEC.BAT and the date and time; /F
+  answers Fail to every disk error ("Abort, Retry, Fail?") without
+  asking. COMMAND.COM's built-in commands are listed by HELP, each with
+  its own topic; HELP BATCH explains batch files.

@@ -1,0 +1,45 @@
+Topic: START
+Aliases: GETTINGSTARTED INTRO
+Summary: Getting started with GR-DOS
+Origin: GR-DOS
+Group: guide
+
+GR-DOS is MS-DOS 4.00, built from the source Microsoft published under
+the MIT license, with a few additions of its own. It runs on any IBM PC
+compatible, from the 8088 up, with 256 KB of memory or more.
+
+The prompt
+  C:\> shows the current drive and directory (PROMPT $P$G). Type a
+  command and press Enter. Commands and file names may be in upper or
+  lower case. To run a program, type its name without .EXE, .COM or
+  .BAT. DOS finds it in the current directory, then in each directory
+  of the PATH.
+
+Keys at the prompt
+  F1           Types the next character of the last command.
+  F3           Types the rest of the last command.
+  Esc          Cancels the line you are typing.
+  Ctrl+C       Stops the command that is running.
+  Ctrl+S       Pauses the screen; any key goes on.
+  Ctrl+P       Sends what appears on the screen to the printer too, until
+               Ctrl+P again.
+  Ctrl+Alt+Del Restarts the computer.
+
+First commands
+  DIR          Lists the files.        CD     Changes directory.
+  COPY         Copies files.           DEL    Deletes files.
+  TYPE         Shows a text file.      MORE   Shows it a screen at a time.
+  TICO         Edits a text file.      MEM    Shows the memory in use.
+  FORMAT       Prepares a new disk.    HELP   Shows this help.
+
+Examples
+  HELP DIR
+    Shows how to use DIR.
+  TICO NOTES.TXT
+    Edits the file NOTES.TXT.
+
+Where to go next
+  HELP FLOPPY    Working with the GR-DOS floppy in A: and your data in B:.
+  HELP HARDDISK  Installing on a hard disk or CF card, and C:\DOS.
+  HELP CONFIG    CONFIG.SYS, read when the computer starts.
+  HELP GRDOS     What GR-DOS adds to MS-DOS 4.00, and its licenses.

@@ -1,0 +1,23 @@
+Topic: BREAK
+Summary: Sets how often DOS checks for Ctrl+C
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  BREAK [ON | OFF]
+
+  ON           Checks for Ctrl+C (and Ctrl+Break) at every DOS call, such
+               as each disk read or write.
+  OFF          Checks only when a program reads the keyboard or writes to
+               the screen, printer or a serial port. The default.
+
+Examples
+  BREAK
+    Shows whether BREAK is on or off.
+  BREAK ON
+    Lets Ctrl+C stop a program that is busy with the disk.
+
+Notes
+  BREAK ON makes a long compile or sort easier to stop, at a small cost in
+  speed. The setting can also be made when the computer starts, with
+  BREAK=ON in CONFIG.SYS.

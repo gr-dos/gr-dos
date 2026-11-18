@@ -1,0 +1,44 @@
+Topic: FLOPPY
+Aliases: FLOPPIES
+Summary: Using GR-DOS from a floppy, with your data in B:
+Origin: GR-DOS
+Group: guide
+
+Each GR-DOS floppy is a boot disk for a PC with two floppy drives. Keep
+it in A: and put your programs and data on a disk in B:. Its
+AUTOEXEC.BAT sets PROMPT $P$G and PATH A:\, so the commands on A: run
+whichever drive is current: type B: and work there.
+
+What each disk carries
+  360 KB    IO.SYS, MSDOS.SYS, COMMAND.COM, FORMAT, SYS, CHKDSK, DISKCOPY,
+            FDISK, ATTRIB, MORE, FIND, FC, DEBUG, MEM, MODE, TICO and
+            AUTOEXEC.BAT.
+  720 KB    Those, and XCOPY, COMP, DISKCOMP, LABEL, TREE, SORT, EDLIN,
+            PRINT, ASSIGN, RECOVER, KEYB with COUNTRY.SYS and
+            KEYBOARD.SYS, and HELP with GRDOS.HLP.
+  1.2 MB,   Those, and APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS with
+  1.44 MB   GRAPHICS.PRO, NLSFUNC, JOIN, SUBST, DISPLAY.SYS with EGA.CPI,
+            and PRINTER.SYS with 4201.CPI, 4208.CPI and 5202.CPI.
+
+The 360 KB disk has no room for HELP. FASTOPEN, IFSFUNC, GRVER, LCD.CPI
+and the *16 programs but TICO are on no floppy: they are in C:\DOS on a
+hard disk install (HELP HARDDISK) and in the release ZIP.
+
+Examples
+  DISKCOPY A: B:
+    Copies the GR-DOS disk to a blank one of the same size: work from
+    the copy and keep the original safe.
+  FORMAT B: /S
+    Makes a new boot disk in B:, with IO.SYS, MSDOS.SYS and COMMAND.COM.
+  FORMAT B: /F:720
+    Formats a 720 KB data disk in a 1.44 MB drive.
+  COPY A:AUTOEXEC.BAT B:\
+    Copies the startup file to it too.
+
+Notes
+  To boot from a disk made with FORMAT /S, copy the programs you need
+  onto it, and an AUTOEXEC.BAT with PATH A:\. A disk of the right density
+  matters: 1.44 MB and 1.2 MB disks are high density (HD), 720 KB and
+  360 KB double density (DD). CONFIG.SYS, if you add one, goes in the
+  root of A: (HELP CONFIG). With one drive, DOS uses it as both A: and
+  B:, and asks you to swap disks.

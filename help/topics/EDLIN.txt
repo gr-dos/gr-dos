@@ -1,0 +1,46 @@
+Topic: EDLIN
+Summary: The MS-DOS line editor
+Origin: MS-DOS 4.00
+Group: command
+Files: EDLIN.COM
+
+Syntax
+  EDLIN [drive:][path]filename [/B]
+
+  filename     The file to edit; a new file if it does not exist.
+  /B           Reads the whole file, past any Ctrl+Z in it.
+
+Commands
+  EDLIN prompts with *. A line is a number, . (the current line), # (the
+  line after the last) or +n or -n from the current line.
+
+  line         Shows the line to edit, with the keys of the DOS prompt
+               (F1, F3); Enter alone at * edits the next line.
+  [line]I      Inserts lines before it. Ctrl+C ends, or Ctrl+Z at the
+               start of a line.
+  [l1][,l2]L   Lists lines, about a screenful.
+  [l1][,l2]P   Lists a page and makes its last line the current one.
+  [l1][,l2]D   Deletes lines.
+  l1,l2,lnC    Copies lines l1 to l2 to before line ln; l1,l2,ln,nC
+               copies them n times.
+  l1,l2,lnM    Moves lines l1 to l2 to before line ln.
+  [l1][,l2][?]Stext
+               Finds text; with ?, asks O.K.? at each match.
+  [l1][,l2][?]Rold^Znew
+               Replaces old with new; type Ctrl+Z (^Z) between them.
+  [ln]Tfile    Merges another file in before line ln.
+  [n]A         Reads n more lines of a file too big for memory.
+  [n]W         Writes n lines out to make room.
+  E            Saves the file, keeping the old one as .BAK, and quits.
+  Q            Quits without saving, after Abort edit (Y/N)?.
+
+Examples
+  EDLIN CONFIG.SYS
+    Edits CONFIG.SYS.
+  EDLIN NOTES.TXT /B
+    Edits NOTES.TXT, keeping any text after a Ctrl+Z.
+
+Notes
+  Several commands may be given on one line, separated by ;. EDLIN
+  cannot edit a .BAK file. GR-DOS also has TICO, a full-screen editor
+  (HELP TICO).

@@ -1,0 +1,46 @@
+Topic: COUNTRY
+Summary: COUNTRY= in CONFIG.SYS: date, time, number and currency formats
+Origin: MS-DOS 4.00
+Group: config
+Files: COUNTRY.SYS
+
+Syntax
+  COUNTRY=nnn[,[cp][,[d:][path]COUNTRY.SYS]]
+
+  nnn          The country code, from the list below.
+  cp           The code page; the country's first in the list if left
+               out.
+  COUNTRY.SYS  Where the country data is; \COUNTRY.SYS on the boot disk
+               if left out.
+
+A CONFIG.SYS line
+  COUNTRY=049
+    Germany, code page 437, from \COUNTRY.SYS.
+  COUNTRY=044,850,C:\DOS\COUNTRY.SYS
+    The United Kingdom in code page 850.
+  COUNTRY=033,,C:\DOS\COUNTRY.SYS
+    France, in its first code page, from C:\DOS.
+
+Countries and code pages
+  001 United States   437 850   047 Norway          850 865
+  002 Canada (French) 863 850   049 Germany         437 850
+  003 Latin America   850 437   061 Intl. English   437 850
+  031 Netherlands     437 850   081 Japan           932 437
+  032 Belgium         850 437   082 Korea           934 437
+  033 France          437 850   086 China           936 437
+  034 Spain           850 437   088 Taiwan          938 437
+  039 Italy           437 850   351 Portugal        850 860
+  041 Switzerland     850 437   358 Finland         850 437
+  044 United Kingdom  437 850   785 Arab states     864 850
+  045 Denmark         850 865   972 Israel          862 850
+  046 Sweden          437 850
+
+Notes
+  The country sets how DATE, TIME and DIR show dates, times and numbers,
+  the currency sign programs are told, and the upper case and sorting
+  tables (SORT uses them). Only CONFIG.SYS can set it. If the country, or
+  that code page of it, is not in the file, or the file is missing, DOS
+  says so and keeps the United States settings. Code pages 932 to 938
+  are double-byte, which GR-DOS cannot show. To change the code page
+  later, use NLSFUNC and CHCP: HELP CODEPAGE. On a CF install, C:\CONFIG.SYS
+  is replaced at every update: HELP CONFIG.

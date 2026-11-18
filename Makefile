@@ -240,10 +240,18 @@ PRT_DATA     := $(addprefix $(SRC)/,DEV/PRINTER/PRINTER.SYS $(PRT_COPIED) DEV/PR
 extra_files = $(call extra,$(1)) $(if $(filter GRAPHICS,$(1)),$(GRAPHICS_PRO)) \
 	$(if $(filter KEYB,$(1)),$(NLS_DATA)) $(if $(filter DISPLAY,$(1)),$(filter-out %/LCD.CPI,$(CP_DATA))) \
 	$(if $(filter PRINTER,$(1)),$(PRT_DATA))
+# HELP (issue #27, docs/help.md): GR-DOS's command help, HELP.EXE (help/help.c)
+# and its file GRDOS.HLP, made by scripts/mkhelp from help/topics. They are
+# in C:\DOS and on every floppy but the frozen 360 KB one, before
+# AUTOEXEC.BAT.
+HELP_EXE   := $(BUILD)/help/HELP.EXE
+HELP_HLP   := $(BUILD)/help/GRDOS.HLP
+HELP_FILES := $(HELP_EXE) $(HELP_HLP)
+
 FILES_360  := $(FILES)
-FILES_720  := $(PROGRAMS) $(call extra_files,$(FLOPPY_720)) $(BUILD)/image/AUTOEXEC.BAT
-FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(BUILD)/image/AUTOEXEC.BAT
-FILES_1440 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1440)) $(BUILD)/image/AUTOEXEC.BAT
+FILES_720  := $(PROGRAMS) $(call extra_files,$(FLOPPY_720)) $(HELP_FILES) $(BUILD)/image/AUTOEXEC.BAT
+FILES_1200 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1200)) $(HELP_FILES) $(BUILD)/image/AUTOEXEC.BAT
+FILES_1440 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1440)) $(HELP_FILES) $(BUILD)/image/AUTOEXEC.BAT
 
 # GRVER (issue #46, docs/grver.md): GR-DOS's own program, in grver/, which
 # reports the release version from the kernel's identification call.
@@ -252,11 +260,11 @@ GRVER := $(BUILD)/grver/GRVER.EXE
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
 # programs, then all of issue #17's in CMD's order, JOIN and SUBST, GRAPHICS.PRO,
 # COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI and LCD.CPI,
-# PRINTER.SYS, 4201.CPI, 4208.CPI and 5202.CPI, GRVER, and the other *16
-# programs.
+# PRINTER.SYS, 4201.CPI, 4208.CPI and 5202.CPI, GRVER, HELP and GRDOS.HLP,
+# and the other *16 programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(addprefix $(SRC)/,$(JOIN_SUBST)) \
 	$(GRAPHICS_PRO) \
-	$(NLS_DATA) $(CP_DATA) $(PRT_DATA) $(GRVER) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
+	$(NLS_DATA) $(CP_DATA) $(PRT_DATA) $(GRVER) $(HELP_FILES) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
 
 # GR-DOS's own file names, which no *16 program may have, even with
 # another extension (COMMAND.COM would run only one of them).
@@ -528,7 +536,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
 	  scripts/dist16 notices $(DIST16); \
-	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE and GRVER.EXE)\n-------------------------------------------------------------------------------------\n\n'; \
+	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE, GRVER.EXE and HELP.EXE)\n-----------------------------------------------------------------------------------------------\n\n'; \
 	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	scripts/dist16 check-dist $(DIST)/$(NAME) $(DIST16)
@@ -810,6 +818,33 @@ $(GRVER): $(BUILD)/grver/GRVER.OBJ $(TOOLS) $(BUILD)/libc16.stamp scripts/check-
 	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
 	  name $@ file $< library $(LIBC16)
 	scripts/check-runtime $(@:.EXE=.MAP) $(LIBC16) $<
+
+# HELP, C with libc16 and its startup, like GRVER.
+$(BUILD)/help/HELP.OBJ: help/help.c $(TOOLS) $(BUILD)/libc16.stamp
+	mkdir -p $(@D)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
+	  wcc $(filter-out -w0 -I$(CURDIR)/$(SRC)/H,$(WCFLAGS)) -w4 -we -fo=$@ $<
+
+$(HELP_EXE): $(BUILD)/help/HELP.OBJ $(TOOLS) $(BUILD)/libc16.stamp scripts/check-runtime
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos \
+	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
+	  name $@ file $< library $(LIBC16)
+	scripts/check-runtime $(@:.EXE=.MAP) $(LIBC16) $<
+
+# GRDOS.HLP, checked against the distribution: the names of ALL_FILES (for
+# C:\DOS, and not the files, which GRDOS.HLP is one of) and of each
+# floppy's (image/files-*k.txt), and the *16 programs, which have their own
+# --help.
+HELP_TOPICS := $(sort $(wildcard help/topics/*.txt))
+
+$(BUILD)/help/files.txt: Makefile dist16/lock
+	mkdir -p $(@D)
+	printf '%s\n' $(notdir $(ALL_FILES)) > $@
+
+$(HELP_HLP): $(HELP_TOPICS) $(BUILD)/help/files.txt $(foreach f,$(FORMATS),image/files-$(f)k.txt) scripts/mkhelp \
+	dist16/lock
+	scripts/mkhelp --cf $(BUILD)/help/files.txt $(foreach f,$(FORMATS),--floppy $(f)=image/files-$(f)k.txt) \
+	  --dist16 '$(notdir $(DIST16_EXTRA))' help/topics $@
 
 # EXE2BIN; the image is padded to the size Microsoft LINK gives it.
 size = $$(scripts/mslink-layout --size $(filter %.OBJ,$^))

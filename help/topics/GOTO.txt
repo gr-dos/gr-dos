@@ -1,0 +1,23 @@
+Topic: GOTO
+Summary: Jumps to a label in a batch file
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  GOTO label
+
+  label        A word on a line of its own in the batch file, after a
+               colon (:LABEL). The GOTO names it without the colon.
+
+Examples
+  GOTO END
+    Goes on with the line after :END.
+  IF ERRORLEVEL 1 GOTO FAILED
+    Jumps to :FAILED when the last program ended with an error.
+
+Notes
+  GOTO looks for the label from the start of the file. Only the first
+  eight characters count, and upper and lower case are the same. If the
+  label is not found, DOS shows "Label not found" and ends the batch
+  file. A line starting with : is never run, so labels can also serve as
+  comments. GOTO does nothing at the prompt.

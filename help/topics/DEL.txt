@@ -1,0 +1,24 @@
+Topic: DEL
+Aliases: ERASE
+Summary: Deletes files
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  DEL [drive:][path]filename [/P]
+
+  filename     The files to delete; wildcards (* and ?) may be used. A
+               directory name alone means all the files in it.
+  /P           Shows each file's name and asks (Y/N) before deleting it.
+
+Examples
+  DEL OLD.TXT
+    Deletes OLD.TXT in the current directory.
+  DEL B:*.BAK /P
+    Deletes the .BAK files on B:, asking about each one.
+
+Notes
+  When every file in a directory would go (*.* or a directory name), DEL
+  without /P asks "Are you sure (Y/N)?" first. DEL does not delete
+  directories (see RD), nor read-only, hidden or system files (see
+  ATTRIB). MS-DOS 4.00 has no command to bring a deleted file back.

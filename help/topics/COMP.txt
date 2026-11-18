@@ -1,0 +1,34 @@
+Topic: COMP
+Summary: Compares files byte by byte
+Origin: MS-DOS 4.00
+Group: command
+Files: COMP.COM
+
+Syntax
+  COMP [[drive:][path]filename1] [[drive:][path][filename2]]
+
+  filename1    The first file or files; wildcards (* and ?) may be used.
+               A drive or a directory alone means all of its files.
+  filename2    What to compare them with: a file name, which may have
+               wildcards, or a drive or directory, where COMP takes the
+               files of the same names.
+
+Examples
+  COMP REPORT.TXT B:REPORT.TXT
+    Compares the file with its copy on B:.
+  COMP A:*.ASM B:*.BAK
+    Compares each .ASM file on A: with the .BAK file of the same name on
+    B:.
+  COMP A:\ B:\
+    Compares every file in the root of A: with its namesake on B:.
+
+Notes
+  COMP asks for any name left out; pressing Enter at the second prompt
+  means all files of the same names in the current directory. For each
+  pair it lists the names, then each differing byte (its offset and the
+  two values, in hex), or "Files compare ok". Files of different sizes
+  are not compared, and COMP stops a pair after 10 differences. When
+  done it asks "Compare more files (Y/N)?". "Eof mark not found" means
+  the last byte is not a Ctrl+Z; it matters only for old files whose
+  size is a multiple of 128 bytes. COMP has no switches; FC compares
+  text files line by line.

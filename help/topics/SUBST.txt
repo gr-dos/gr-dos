@@ -1,0 +1,35 @@
+Topic: SUBST
+Summary: Makes a drive letter a short name for a directory
+Origin: MS-DOS 4.00
+Group: command
+Files: SUBST.EXE
+
+Syntax
+  SUBST
+  SUBST drive: path
+  SUBST drive: /D
+
+  drive:       The new drive letter, such as E:. It must not be in use,
+               and must be within LASTDRIVE (E: by default).
+  path         The directory the drive stands for. It must exist, and
+               must not end with \ (except a root, as D:\).
+  /D           Removes the substitute drive.
+  (none)       SUBST alone lists them, as E: => D:\WORK.
+
+Examples
+  SUBST E: C:\PROJECTS\REPORTS
+    Makes E:\ the same as C:\PROJECTS\REPORTS.
+  SUBST E: /D
+    Removes E:.
+
+Exit status
+  0  Done, or the list was shown.
+  1  An error, such as "Path not found" or "Invalid parameter".
+
+Notes
+  A relative path is completed with the drive's current directory. SUBST
+  refuses the current drive, a drive already substituted or joined, and
+  a path on the drive itself. Leave a blank between drive and path
+  (SUBST E:C:\WORK is invalid). CHKDSK, LABEL, RECOVER and SYS refuse a
+  SUBST drive; do not use FORMAT or DISKCOPY on one either. To use
+  letters past E:, set LASTDRIVE= in CONFIG.SYS.

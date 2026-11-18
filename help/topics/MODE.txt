@@ -1,0 +1,58 @@
+Topic: MODE
+Summary: Sets up the serial ports, printers, screen, keyboard and code pages
+Origin: MS-DOS 4.00
+Group: command
+Files: MODE.COM
+
+Syntax
+  MODE COMn[:] baud[,parity[,data[,stop[,retry]]]]
+  MODE COMn[:] BAUD=b [PARITY=p] [DATA=d] [STOP=s] [RETRY=r]
+  MODE LPTn[:] [cols][,[lines][,retry]]
+  MODE LPTn[:] [COLS=c] [LINES=l] [RETRY=r]
+  MODE LPTn[:]=COMm[:]
+  MODE display[,shift[,T]]
+  MODE CON[:] [COLS=c] [LINES=l]
+  MODE CON[:] RATE=r DELAY=d
+  MODE device CP PREPARE=((cp,...) file) | SELECT=cp | REFRESH | /STATUS
+  MODE [device] /STATUS
+
+  baud         110, 150, 300, 600, 1200, 2400, 4800, 9600 or 19200; the
+               first two digits are enough (96 is 9600).
+  parity       N (none), E (even), O (odd), M (mark) or S (space).
+  data, stop   Data bits 5 to 8; stop bits 1, 1.5 or 2.
+  retry        What happens when the printer is busy: B or P keeps
+               trying, E reports an error, R reports ready, N does not
+               retry.
+  cols, lines  For a printer: 80 or 132 columns, 6 or 8 lines per inch
+               (sent as IBM printer escape codes).
+  =COMm        Sends LPTn's output to a serial port; MODE LPTn undoes it.
+  display      40, 80, BW40, BW80, CO40, CO80 or MONO.
+  shift, T     R or L moves a CGA screen right or left; T shows a test
+               pattern to line it up.
+  COLS, LINES  For the screen: 40 or 80 columns; 25, 43 or 50 lines,
+               which needs ANSI.SYS.
+  RATE, DELAY  Keyboard repeat rate 1 to 32 and delay 1 to 4, given
+               together, on machines whose BIOS has the call.
+  CP           Code pages of CON or LPTn: see HELP CODEPAGE.
+  /STATUS      Shows the settings of the device, or of all (/STA too).
+
+Examples
+  MODE COM1 9600,N,8,1
+    Sets COM1 to 9600 baud, no parity, 8 data bits and 1 stop bit.
+  MODE LPT1:132,8
+    Sets an IBM printer to 132 columns and 8 lines per inch.
+  MODE LPT1=COM1
+    Sends what is printed on LPT1 to a serial printer on COM1.
+  MODE CO80
+    Sets the colour text mode of 80 columns.
+  MODE CON RATE=32 DELAY=1
+    Makes the keyboard repeat fastest.
+  MODE CON CP SELECT=850
+    Changes the screen to code page 850 (HELP CODEPAGE).
+
+Notes
+  19200 baud, M and S parity, 5 or 6 data bits and 1.5 stop bits need a
+  PS/2's BIOS. With retry, or =COMm, part of MODE stays resident. GR-DOS has
+  no ANSI.SYS yet, so MODE CON LINES= says that ANSI.SYS must be installed.
+  In GR-DOS the code page commands need DISPLAY.SYS (for CON) or PRINTER.SYS
+  (for LPTn) in CONFIG.SYS.

@@ -1,0 +1,24 @@
+Topic: REN
+Aliases: RENAME
+Summary: Renames files
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  REN [drive:][path]filename newname
+
+  filename     The files to rename; wildcards (* and ?) may be used.
+  newname      The new name, with no drive or path: the files stay in
+               their directory. A wildcard keeps that part of the old
+               name.
+
+Examples
+  REN LETTER.TXT LETTER.OLD
+    Renames LETTER.TXT to LETTER.OLD.
+  REN B:\WORK\*.TXT *.DOC
+    Renames each .TXT file in B:\WORK to a .DOC file of the same name.
+
+Notes
+  REN cannot move a file to another directory or drive: copy it, then
+  delete it. If a file of the new name exists already, REN shows
+  "Duplicate file name or file not found" and leaves the file as it was.

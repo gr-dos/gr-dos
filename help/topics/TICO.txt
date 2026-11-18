@@ -1,0 +1,23 @@
+Topic: TICO
+Summary: A full-screen text editor
+Origin: tico16
+Group: command
+Files: TICO.EXE
+
+Syntax
+  TICO [[drive:][path]filename]
+
+  filename     The text file to edit.
+
+Examples
+  TICO NOTES.TXT
+    Edits the file NOTES.TXT.
+  TICO A:\AUTOEXEC.BAT
+    Edits the AUTOEXEC.BAT of the floppy in A:.
+
+Notes
+  TICO is the tico16 editor, version 0.02, from
+  github.com/tico-edit/tico16, under the MIT license. It is not built
+  from source here: GR-DOS ships the release's TICO.EXE, checked against
+  a pinned checksum. Its keys are shown in its own help. TICO is on every
+  GR-DOS floppy, and takes the place of EDLIN on the 360 KB one.

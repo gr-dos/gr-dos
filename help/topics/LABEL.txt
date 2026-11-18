@@ -1,0 +1,32 @@
+Topic: LABEL
+Summary: Creates, changes or deletes a disk's volume label
+Origin: MS-DOS 4.00
+Group: command
+Files: LABEL.COM
+
+Syntax
+  LABEL [drive:][label]
+
+  drive:       The disk to label; the current drive if left out.
+  label        The new label, up to 11 characters. Without it, LABEL
+               shows the current label and serial number and asks for a
+               new one.
+
+Examples
+  LABEL B:BACKUP1
+    Names the disk in B: BACKUP1.
+  LABEL
+    Shows the current drive's label and asks for a new one.
+
+Exit status
+  0  Done.
+  1  An error.
+
+Notes
+  At LABEL's prompt, press Enter alone to keep no label: LABEL then asks
+  whether to delete the current one (Y/N). A label longer than 11
+  characters is cut short. Characters such as * ? / \ | . , ; : + = [ ]
+  < > and " are not allowed. Changing the label replaces the old one; the
+  files on the disk are not touched, but a program or batch file that
+  checks the label may no longer find the disk. VOL shows the label.
+  LABEL refuses a network, SUBSTed or ASSIGNed drive.

@@ -1,0 +1,58 @@
+Topic: CODEPAGE
+Aliases: CODEPAGES
+Summary: How code page switching fits together
+Origin: MS-DOS 4.00
+Group: guide
+
+A code page is a set of 256 characters. The PC's own is 437; 850 has
+more accented letters, and 860, 863 and 865 suit Portugal, French
+Canada and Norway. Several parts each look after one piece:
+
+  COUNTRY=     (CONFIG.SYS) DOS's code page and country formats at
+               start-up. HELP COUNTRY.
+  DISPLAY.SYS  (DEVICE= in CONFIG.SYS) the screen: EGA, VGA or PC
+               Convertible LCD. HELP DISPLAY.SYS.
+  PRINTER.SYS  (DEVICE= in CONFIG.SYS) IBM printers on LPT1 to LPT3.
+               HELP PRINTER.SYS.
+  MODE         Gives a driver the fonts of code pages (PREPARE), and
+               chooses one (SELECT).
+  NLSFUNC      Lets CHCP load another code page's tables from
+               COUNTRY.SYS.
+  CHCP         Changes DOS's code page, and that of every device with
+               it prepared, at once.
+  KEYB         The keyboard layout; it follows the screen's code page.
+
+The order
+  1. CONFIG.SYS: COUNTRY=, then DEVICE= DISPLAY.SYS and PRINTER.SYS, and
+     INSTALL= NLSFUNC (or run NLSFUNC later).
+  2. MODE CON CP PREPARE (and MODE LPT1 CP PREPARE), from a .CPI file.
+  3. MODE CON CP SELECT, or CHCP to change DOS and the devices together.
+  4. KEYB, which then takes the screen's code page.
+
+A German setup, on a CF install
+  In C:\CONFIG.SYS (or D:\CONFIG.SYS: HELP CONFIG):
+    COUNTRY=049,850,C:\DOS\COUNTRY.SYS
+    DEVICE=C:\DOS\DISPLAY.SYS CON=(EGA,437,1)
+    INSTALL=C:\DOS\NLSFUNC.EXE C:\DOS\COUNTRY.SYS
+  and in D:\AUTOEXEC.BAT:
+
+Examples
+  MODE CON CP PREPARE=((850) C:\DOS\EGA.CPI)
+    Gives DISPLAY.SYS code page 850's font.
+  MODE CON CP SELECT=850
+    Shows it.
+  KEYB GR
+    Loads the German layout, in code page 850.
+  CHCP 437
+    Later, back to the display's own font and KEYB's 437 table.
+  MODE CON CP /STATUS
+    Shows the code page selected and those prepared.
+  MODE CON CP REFRESH
+    Loads the font again after a program has changed it.
+
+Notes
+  Without DISPLAY.SYS the screen always shows 437, CHCP changes only
+  DOS's tables, and MODE CON CP says "Code page operation not supported
+  on this device". A CGA or MDA cannot change its characters; GRAFTABL
+  gives a CGA's graphics modes those of another code page. On a 1.2 MB
+  or 1.44 MB floppy all the files are in A:\.

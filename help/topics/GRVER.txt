@@ -1,0 +1,29 @@
+Topic: GRVER
+Summary: Shows the GR-DOS release version
+Origin: GR-DOS
+Group: command
+Files: GRVER.EXE
+
+Syntax
+  GRVER [/?]
+
+  /?           Shows a short help.
+
+Examples
+  GRVER
+    Shows, for example, GR-DOS 0.04.
+
+Exit status
+  0  GR-DOS (or /?).
+  1  Not GR-DOS: "GR-DOS kernel not detected."
+  2  The kernel's answer was not valid.
+  3  A bad parameter.
+
+Notes
+  Programs see DOS 4.00 (INT 21h function 30h), as on MS-DOS 4.00. GRVER
+  asks the GR-DOS kernel for its own release number instead, with INT 21h
+  AX=3347h (BX=4752h), and checks the answer twice; on another DOS it
+  says the kernel was not detected. In a batch file:
+    GRVER > NUL
+    IF ERRORLEVEL 1 GOTO NOTGRDOS
+  GRVER is in C:\DOS on a hard disk install, not on the floppies.

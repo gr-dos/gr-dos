@@ -1,0 +1,39 @@
+Topic: PRINT
+Summary: Prints text files in the background while you work
+Origin: MS-DOS 4.00
+Group: command
+Files: PRINT.COM
+
+Syntax
+  PRINT [/D:device] [/B:size] [/Q:files] [/S:n] [/U:n] [/M:n]
+  PRINT [/T] [[drive:][path]filename [/C] [/P] ...]
+
+  filename     A file to add to the queue.
+  /P           Adds the file before it, and those after, to the queue.
+  /C           Takes the file before it, and those after, off the queue.
+  /T           Empties the queue, stopping the file being printed.
+  /D:device    The printer device, such as LPT1 or COM1. Without /D,
+               the first PRINT asks for it (PRN if you press Enter).
+  /B:size      The buffer size in bytes, 512 to 16384 (512).
+  /Q:files     How many files the queue holds, 4 to 32 (10).
+  /S:n         Clock ticks DOS keeps before PRINT gets a turn, 1 to 255
+               (10).
+  /U:n         Ticks PRINT waits for a busy printer, 1 to 255 (1).
+  /M:n         Ticks PRINT may print for at each turn, 1 to 255 (2).
+
+Examples
+  PRINT /D:LPT1 REPORT.TXT
+    Loads PRINT for LPT1 and prints REPORT.TXT.
+  PRINT LETTER1.TXT LETTER2.TXT
+    Adds two files to the queue.
+  PRINT
+    Lists the files in the queue.
+  PRINT OLD.TXT /C
+    Takes OLD.TXT off the queue.
+
+Notes
+  The first PRINT stays resident; /D, /B, /Q, /S, /U and /M can be given
+  only then. PRINT prints while DOS is idle, as at the prompt, or between
+  a program's DOS calls. While a file is printing, another program's
+  output to the same printer fails with "Not ready". The files may have
+  wildcards.

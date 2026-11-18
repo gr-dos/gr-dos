@@ -1,0 +1,33 @@
+Topic: SYS
+Summary: Copies the DOS system files to a disk to make it bootable
+Origin: MS-DOS 4.00
+Group: command
+Files: SYS.COM
+
+Syntax
+  SYS [source] drive:
+
+  source       Where to find IO.SYS and MSDOS.SYS: a drive, or a drive
+               and directory. The current drive's root if left out.
+  drive:       The disk to make bootable. It cannot be the current
+               drive.
+
+Examples
+  SYS B:
+    Copies the system files from the current drive to the disk in B:.
+  SYS A:\ C:
+    Copies them from the floppy in A: to the hard disk C:.
+
+Exit status
+  0  The system was transferred.
+  1  It was not.
+
+Notes
+  SYS writes a new boot sector and copies IO.SYS and MSDOS.SYS to the
+  disk. It does not copy COMMAND.COM: do that with COPY afterwards, or the
+  disk will not start. The disk must have room for the system files where
+  DOS needs them: a new, empty disk, one formatted with FORMAT /B, or one
+  that already has a system. SYS replaces the boot sector and any system
+  files already there, but leaves the other files alone. Check the drive
+  letter: SYS on the wrong disk replaces that disk's system. SYS does not
+  work on a network, SUBSTed or ASSIGNed drive.

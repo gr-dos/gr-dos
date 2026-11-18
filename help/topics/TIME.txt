@@ -1,0 +1,25 @@
+Topic: TIME
+Summary: Shows or sets the time
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  TIME [hh[:mm[:ss[.xx]]]] [A | P]
+
+  hh           Hours, 0 to 23; mm minutes, ss seconds, xx hundredths.
+               Parts left out are set to 0.
+  A | P        AM or PM, for a 12-hour time (AM, PM, A or P).
+
+Examples
+  TIME
+    Shows the time and asks for a new one; press Enter to keep it.
+  TIME 13:45
+    Sets the time to 1:45 in the afternoon.
+  TIME 1:45P
+    The same, with a 12-hour time.
+
+Notes
+  The separators, and whether the time is shown with 12 or 24 hours,
+  follow COUNTRY= in CONFIG.SYS. DOS sets the time of every file it writes
+  from this clock. On a PC/AT or later, TIME also sets the battery-backed
+  clock.

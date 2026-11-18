@@ -1,0 +1,36 @@
+Topic: FIND
+Summary: Finds the lines of files that hold a string
+Origin: MS-DOS 4.00
+Group: command
+Files: FIND.EXE
+
+Syntax
+  FIND [/V] [/C] [/N] "string" [[drive:][path]filename ...]
+
+  "string"     The text to look for, in double quotes. To find a double
+               quote, write two ("").
+  filename     The files to search; several may be given. Without one,
+               FIND reads its standard input, from < or a pipe (|).
+  /V           Shows the lines that do NOT hold the string.
+  /C           Shows only how many lines hold it (with /V, how many do
+               not), for each file.
+  /N           Puts each line's number before it.
+
+Examples
+  FIND "Smith" ADDRESS.TXT
+    Shows the lines of ADDRESS.TXT that hold Smith.
+  FIND /C "ERROR" LOG1.TXT LOG2.TXT
+    Counts the lines with ERROR in each of the two files.
+  DIR | FIND "<DIR>"
+    Lists only the subdirectories.
+
+Exit status
+  0  The search was made, whether or not the string was found.
+  2  A bad switch, a missing string, or not enough memory.
+
+Notes
+  Upper and lower case differ: "smith" does not find Smith. FIND takes no
+  wildcards in file names. A file that cannot be opened is reported, and
+  FIND goes on with the next. Each file's lines come after a line
+  "---------- NAME". In GR-DOS, FIND.EXE is linked without EXEPACK, as
+  the packed program fails when loaded low in memory; it works the same.

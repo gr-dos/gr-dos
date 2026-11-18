@@ -1,0 +1,35 @@
+Topic: FDISK
+Summary: Creates, deletes and shows the partitions of a hard disk
+Origin: MS-DOS 4.00
+Group: command
+Files: FDISK.EXE
+
+Syntax
+  FDISK [/Q]
+  FDISK disk [/PRI:size] [/EXT:size] [/LOG:size] [/Q]
+
+  disk         The hard disk, 1 or 2, for the switches below, which
+               create partitions without the menu. Sizes are 1 to 4000.
+  /PRI:size    Creates a Primary DOS Partition of size MB (all the free
+               space if bigger) and makes it active, if the disk has none.
+  /EXT:size    Creates an Extended DOS Partition of size MB.
+  /LOG:size    Creates a logical drive of size MB in the extended one.
+  /Q           Returns to DOS instead of restarting the computer.
+
+Examples
+  FDISK
+    Shows the menu: create a partition or logical drive, set the active
+    partition, delete one, show them, or choose the next disk.
+  FDISK 1 /PRI:8 /EXT:12 /LOG:5 /Q
+    On a blank disk 1, makes an 8 MB primary partition, a 12 MB extended
+    one and a 5 MB logical drive in it, without restarting.
+
+Notes
+  Deleting a partition or logical drive loses all the data in it, at
+  once and for good. Back up first, and use option 4 to check which disk
+  and partition you are on before deleting. Creating a partition also
+  writes test data at the start of the free space. After a change, FDISK
+  restarts the computer; then FORMAT each new drive (FORMAT C: /S for the
+  one to start from). The computer starts from the active partition.
+  FDISK 4.00 sees at most 1024 cylinders (about 8 GB); it knows nothing
+  of FAT32 or LBA. GR-DOS's menu says GR-DOS Version 4.00.

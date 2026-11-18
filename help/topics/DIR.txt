@@ -1,0 +1,24 @@
+Topic: DIR
+Summary: Lists the files and subdirectories of a directory
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  DIR [drive:][path][filename] [/P] [/W]
+
+  filename     The files to list; wildcards (* and ?) may be used. All
+               files (*.*) if left out.
+  /P           Stops after each screenful; press a key to go on.
+  /W           Lists the names only, five to a line.
+
+Examples
+  DIR
+    Lists the current directory.
+  DIR A:\*.TXT /W
+    Lists the .TXT files in the root of A:, by name.
+
+Notes
+  DIR shows each file's size and the date and time it was last changed,
+  and ends with the number of files and the bytes free on the disk.
+  Hidden and system files, such as IO.SYS, are not listed. DIR has no
+  switch to sort: use DIR | SORT.

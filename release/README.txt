@@ -28,6 +28,10 @@ and use B: for programs and data. Each also installs GR-DOS on a hard disk
   1.44 MB  GRAPHICS.PRO, NLSFUNC, JOIN and SUBST, DISPLAY.SYS with
            EGA.CPI, and PRINTER.SYS with 4201.CPI, 4208.CPI and 5202.CPI
 
+All but the 360 KB disk also have HELP and its file GRDOS.HLP: type HELP
+for the list of topics, HELP START to get started, or HELP and a command,
+such as HELP XCOPY.
+
 FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on no floppy: FASTOPEN works on
 hard disks only, IFSFUNC needs an installable file system driver, GRVER is
 for C:\DOS and this archive, and LCD.CPI is for the IBM PC Convertible.
@@ -127,6 +131,8 @@ Contents
   BIN\4208.CPI     IBM 4208 Proprinter X24 and XL24 code pages, for MODE
   BIN\5202.CPI     IBM 5202 Quietwriter III code pages, for MODE
   BIN\GRVER.EXE    shows the GR-DOS release version, from the kernel
+  BIN\HELP.EXE     GR-DOS's command help: HELP, or HELP and a topic
+  BIN\GRDOS.HLP    HELP's topics, for every command and CONFIG.SYS
 @DIST16@
   BIN\AUTOEXEC.BAT sets the prompt and PATH A:\
   BUILDINFO        the commit and the tool versions it was built with
@@ -137,7 +143,7 @@ Contents
 The utilities are built from the MS-DOS 4.00 source. ATTRIB.EXE, MEM.EXE,
 FDISK.EXE and FC.EXE are compiled with Open Watcom C, where Microsoft's were
 compiled with Microsoft C 5.1, and linked with libc16, a C runtime for DOS
-programs. GRVER.EXE is GR-DOS's own, built the same way. FIND.EXE, EXE2BIN.EXE and IFSFUNC.EXE are not EXEPACKed, as
+programs. GRVER.EXE and HELP.EXE are GR-DOS's own, built the same way. FIND.EXE, EXE2BIN.EXE and IFSFUNC.EXE are not EXEPACKed, as
 Microsoft's were: the EXEPACK loader fails with "Packed file is corrupt"
 when a program is loaded in the first 64 KB of memory, as it is on
 GR-DOS. TICO.EXE and the programs listed after GRVER.EXE are the
@@ -235,7 +241,7 @@ MIT-licensed work, and it relicenses none of them. GR-DOS's own work is
 MIT licensed. The MS-DOS 4.00 source it is built from keeps its own MIT
 license. MS-DOS is a trademark of Microsoft. GR-DOS is an independent
 project, not endorsed by Microsoft or IBM. ATTRIB.EXE, MEM.EXE, FDISK.EXE,
-FC.EXE, JOIN.EXE, SUBST.EXE and GRVER.EXE are compiled with Open Watcom C,
+FC.EXE, JOIN.EXE, SUBST.EXE, GRVER.EXE and HELP.EXE are compiled with Open Watcom C,
 but contain no Open Watcom code: their C runtime is libc16
 (https://github.com/gr-dos/libc16), under its MIT license. TICO.EXE and the other programs from GitHub
 projects are each under their project's license, as named in Contents

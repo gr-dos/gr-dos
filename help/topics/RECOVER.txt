@@ -1,0 +1,26 @@
+Topic: RECOVER
+Summary: Saves the readable parts of a file on a disk with bad sectors
+Origin: MS-DOS 4.00
+Group: command
+Files: RECOVER.COM
+
+Syntax
+  RECOVER [drive:][path]filename
+  RECOVER drive:
+
+  filename     The file to recover. Wildcards may be used.
+  drive:       Recovers every file of the disk (see the warning below).
+
+Examples
+  RECOVER B:REPORT.TXT
+    Rereads REPORT.TXT on B:, drops its bad sectors, and keeps the rest.
+
+Notes
+  RECOVER asks you to press a key, then reads the file and marks the bad
+  sectors it finds so that DOS does not use them again. The data in
+  those sectors is lost, so a text file has gaps, and a program file
+  may no longer run: use a backup when you have one. Never give a drive
+  alone unless the directory itself is damaged: RECOVER then makes each
+  file and directory of the disk a file named FILE0001.REC, FILE0002.REC
+  and so on in the root, losing every name and subdirectory. Name one
+  file instead. RECOVER refuses a network, SUBSTed or ASSIGNed drive.

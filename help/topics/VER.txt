@@ -1,0 +1,18 @@
+Topic: VER
+Summary: Shows the DOS version
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  VER
+
+Examples
+  VER
+    Shows "GR-DOS Version 4.00".
+
+Notes
+  GR-DOS is MS-DOS 4.00 built from its published source: VER and the
+  banner COMMAND.COM shows when it starts say GR-DOS, but the version
+  number programs are told is still 4.00, so programs written for
+  MS-DOS 4.00 run unchanged. VER takes no parameters. See HELP GRDOS for
+  what GR-DOS adds.

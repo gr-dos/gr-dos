@@ -1,0 +1,16 @@
+Topic: EXIT
+Summary: Leaves a second copy of COMMAND.COM
+Origin: MS-DOS 4.00
+Group: internal
+
+Syntax
+  EXIT
+
+Examples
+  EXIT
+    Returns to the program, or the COMMAND, that started this one.
+
+Notes
+  A program that lets you "shell to DOS" starts a second COMMAND.COM;
+  EXIT goes back to the program. EXIT does nothing in the COMMAND.COM
+  started with /P when the computer starts (see HELP COMMAND).

@@ -1,0 +1,28 @@
+Topic: MEM
+Summary: Shows the memory in use and free
+Origin: MS-DOS 4.00
+Group: command
+Files: MEM.EXE
+
+Syntax
+  MEM [/PROGRAM | /DEBUG]
+
+  /PROGRAM     Lists what is in memory, block by block, with its address,
+               name, size and type: the parts of DOS, each program and its
+               environment, and the free blocks.
+  /DEBUG       As /PROGRAM, and lists the device drivers too, and the
+               EMS handles when there is expanded memory.
+
+Examples
+  MEM
+    Shows the total and free conventional memory, and the largest
+    program that can be run.
+  MEM /PROGRAM | MORE
+    Lists the programs in memory, a screen at a time.
+
+Notes
+  Sizes are in bytes, and the addresses and sizes of the lists in hex.
+  MEM also shows the total and free expanded (EMS) memory, when an EMS
+  driver is loaded, and the extended memory of an AT or later. Only one
+  switch may be given. In GR-DOS, MEM is compiled with Open Watcom C
+  rather than Microsoft C; its output is the same.
