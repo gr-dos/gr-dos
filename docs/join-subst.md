@@ -43,8 +43,8 @@ same, but with `malloc`, `open` and `access` in place of `mkdir`.
 
 | | Microsoft (M1) | GR-DOS |
 |---|---:|---:|
-| `JOIN.EXE` | 17,813 bytes | 10,408 bytes |
-| `SUBST.EXE` | 18,467 bytes | 11,174 bytes |
+| `JOIN.EXE` | 17,813 bytes | 10,312 bytes |
+| `SUBST.EXE` | 18,467 bytes | 11,094 bytes |
 
 `make check` compares their message files (`JOIN.CL1`, `JOIN.CL2`,
 `JOIN.CLA`, `JOIN.CTL`, and SUBST's) with the M1 reference build. It does
@@ -87,10 +87,10 @@ assembly, so the Microsoft build is unchanged:
   `AH` as it is, so a FALSE could read as true. The programs declare them.
 - **`dispmsg_terminate`.** Its K&R definition takes a message number and a
   substitution, but its calls for the messages that substitute nothing
-  (`MSG_NETERR`, `MSG_NOMEM`) pass only the number, which Watcom refuses.
-  For Watcom it is variadic and reads the second argument with `va_arg`.
-  It reads stack garbage for those calls, as Microsoft's does, and never
-  uses it.
+  (`MSG_NETERR`, `MSG_NOMEM`) pass only the number, which Watcom refuses,
+  and which leaves `outline` undefined. For Watcom those calls pass a null
+  pointer, and a prototype declares both parameters. `display_msg` uses no
+  substitution for those messages, so the output is the same.
 - **`printf`.** libc16 has none. `DoList` and `Display` print
   `"%c: => %s\n"`. They build the same line and write it with one `fputs`,
   and `ERRTST.C`'s `Fatal`, which nothing calls, writes its message with

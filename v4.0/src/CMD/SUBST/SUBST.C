@@ -106,9 +106,8 @@
 #pragma aux (__cdecl) sysgetmsg
 #pragma aux (__cdecl) sysdispmsg
 #pragma aux (__cdecl) parse
-/* Some calls give no outline, for messages that substitute none */
-#include <stdarg.h>
-int dispmsg_terminate(int msg_num, ...) ;
+/* The calls for messages that substitute nothing give a null outline */
+int dispmsg_terminate(int msg_num, char *outline) ;
 /* INC's functions that return char, which SUBST.C calls undeclared, as
    if they returned int: Watcom C returns a char in AL alone */
 extern char fPathErr(), fPhysical(), fNet(), fShared(), getdrv() ;
@@ -362,7 +361,11 @@ char *p ;
 
   if (*p1 != NULL)
     if ((p1 = malloc(strlen(p)+2)) == NULL)
+#ifdef __WATCOMC__
+      dispmsg_terminate(MSG_NOMEM, (char *)0) ;
+#else
       dispmsg_terminate(MSG_NOMEM) ;                                           /* ;AN000;M */
+#endif
     else
     {
       strcpy(p1, p) ;
@@ -440,11 +443,19 @@ char *s, *d ;
   drived = *d - 'A' ;
 
   if (fNet(drives))                                                            /* Src can't be net drive, is reuse of CDS */
+#ifdef __WATCOMC__
+    dispmsg_terminate(MSG_NETERR, (char *)0) ;
+#else
     dispmsg_terminate(MSG_NETERR) ;                                            /* ;AC000;M */
+#endif
 
   strcpy(fix_es_reg,NULL);                                                     /* ;AN000;P (Set es reg correct) */
   if (fNet(drived))                                                            /* Dest can't be a net drive either */
+#ifdef __WATCOMC__
+    dispmsg_terminate(MSG_NETERR, (char *)0) ;
+#else
     dispmsg_terminate(MSG_NETERR) ;                                            /* ;AC000;M */
+#endif
 
   /* If src or dest invalid; or dest too long; or drives the same; or can't */
   /* get CDS for source; or source is current drive; or drive is net,       */
@@ -688,21 +699,10 @@ char *outline ;                                                                /
 /*                                                                        */
 /**************************************************************************/
 
-#ifdef __WATCOMC__
-dispmsg_terminate(int msg_num, ...)
-{
-  char *outline ;
-  va_list ap ;
-
-  va_start(ap, msg_num) ;
-  outline = va_arg(ap, char *) ;
-  va_end(ap) ;
-#else
 dispmsg_terminate(msg_num,outline)                                             /* ;AN000;P */
 int msg_num ;                                                                  /* ;AN000;P Message number #define'd */
 char *outline ;                                                                /* ;AN001; Substitution parameter */
 {                                                                              /* ;AN000;P */
-#endif
   display_msg(msg_num,outline) ;                                               /* ;AN000;P First, display the msg */
   exit(ERRORLEVEL1) ;                                                          /* ;AN000;P Then, terminate utility */
 }                                                                              /* ;AN000;P */
