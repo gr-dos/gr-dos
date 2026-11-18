@@ -188,6 +188,27 @@ MEM's own memory, as `MEM /PROGRAM` lists it, is 3A70h bytes with libc16,
 ATTRIB's and MEM's output is the same with each runtime, as checked by
 running the utility tests with each in QEMU.
 
+**libc16 0.07.** GR-DOS pins libc16 0.07 (issue #55). Its `cstart`
+paragraph-aligns `LIBC16_NULL`, so DGROUP starts at offset 0 of its
+segment and `DS:0000` is the null-pointer guard ([libc16
+#15](https://github.com/gr-dos/libc16/pull/15)). Before, DGROUP started
+2 to 10 bytes into a paragraph. Each program links the same libc16 modules
+as with 0.04; the alignment padding is the only change:
+
+| | libc16 0.04 | libc16 0.07 | Memory (`MZ` image + minimum allocation) |
+|---|---:|---:|---|
+| `MEM.EXE` | 12,036 bytes | 12,042 bytes | 920 paragraphs, unchanged |
+| `FDISK.EXE` | 37,594 bytes | 37,608 bytes | 2,734 → 2,735 paragraphs |
+| `FC.EXE` | 8,392 bytes | 8,398 bytes | 750 → 751 paragraphs |
+| `GRVER.EXE` | 1,742 bytes | 1,754 bytes | 255 paragraphs, unchanged |
+| `ATTRIB.EXE` | 19,369 bytes | 19,369 bytes | 1,208 paragraphs, unchanged |
+
+ATTRIB has its own startup code and links no `cstart`, so its layout is
+unchanged. Its bytes still differ: `wlink` places seven of `ATTRIB.H`'s
+uninitialised parser result buffers (`sw_buff`, `pos1_buff` to
+`pos6_buff`) in a different order within the same block. Its code and
+size are unchanged.
+
 ### Assembler edits
 
 The other compatibility edits, all keeping MASM's output identical:
