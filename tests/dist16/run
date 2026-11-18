@@ -22,7 +22,7 @@ Runs F<scripts/dist16> against fixtures in OUTDIR, which stand in for the
 GitHub API, release downloads and raw files through C<file://> URLs, so
 it needs no network. Each case is a config, the repositories and releases
 GitHub has, and what C<resolve>, C<check> or C<fetch> must then do:
-gr-dos/libc16 excluded; include and exclude precedence; no release, a
+gr-dos/libc16 and the other lib*16 libraries excluded (issue #61); include and exclude precedence; no release, a
 pinned release and a prerelease; malformed releases; checksum and size
 mismatches; unexpected and ambiguous asset names; collisions with GR-DOS's
 files and between programs; missing and disallowed licenses; 32-bit and
@@ -166,14 +166,16 @@ sub dist16 ($dir, @args) {
 sub lock_lines ($dir) { [ grep { !/^#/ } split /\n/, slurp("$dir/lock") // '' ] }
 sub has ($lines, $re) { scalar grep { $_ =~ $re } @$lines }
 
-my $base_config = "discover gr-dos 16\nexclude gr-dos/libc16 a C runtime library, not a DOS program\nlicense MIT\n";
+my $base_config = "discover gr-dos 16\nlicense MIT\n";
+my $LIBRARY = 'library repository (lib*16 convention), not a DOS executable';
 sub prog ($name, %r) {
   return { name => $name, releases => [ { tag => 'v0.01', latest => 1, license => 'MIT',
     assets => { ($name =~ s/16$//r) . '.exe' => mz(600, $name) }, %r } ] };
 }
 
-# 1. gr-dos/libc16 is excluded, though its name ends in 16 and it has a
-# release; the others are included, in a deterministic, sorted lock.
+# 1. gr-dos/libc16 is excluded as a library (lib*16), with no exclude,
+# though its name ends in 16 and it has a release; the others are
+# included, in a deterministic, sorted lock.
 {
   my $dir = github(config => $base_config, owners => { 'gr-dos' => [
     prog('md5sum16'), prog('crcsum16'),
@@ -183,9 +185,9 @@ sub prog ($name, %r) {
   my($rc, $o) = dist16($dir, 'resolve');
   my $lines = lock_lines($dir);
   ok($rc == 0, 'resolve succeeds');
-  ok(has($lines, qr{^skip gr-dos/libc16 excluded a C runtime library}), 'gr-dos/libc16 is excluded, with its reason');
+  ok(has($lines, qr{^skip gr-dos/libc16 excluded \Q$LIBRARY\E$}), 'gr-dos/libc16 is excluded, with its reason');
   ok(!has($lines, qr{^program gr-dos/libc16}), 'gr-dos/libc16 is not a program');
-  ok($o =~ m{^excluded +gr-dos/libc16: a C runtime library}m, 'the report says libc16 is excluded');
+  ok($o =~ m{^excluded +gr-dos/libc16: \Q$LIBRARY\E$}m, 'the report says libc16 is excluded');
   ok(@$lines == 3 && $lines->[0] =~ m{^program gr-dos/crcsum16 v0\.01 [0-9a-f]{40} crcsum\.exe CRCSUM\.EXE 600 }
     && $lines->[1] =~ m{^program gr-dos/libc16|^skip gr-dos/libc16} && $lines->[2] =~ m{^program gr-dos/md5sum16 },
     'only *16 repositories, sorted by name');
@@ -233,7 +235,7 @@ sub prog ($name, %r) {
 
 # 2. Include and exclude precedence.
 {
-  my $dir = github(config => "$base_config" . "include gr-dos/libc16\n", owners => { 'gr-dos' => [ prog('libc16') ] });
+  my $dir = github(config => "$base_config" . "exclude gr-dos/libc16 a library\ninclude gr-dos/libc16\n", owners => { 'gr-dos' => [ prog('libc16') ] });
   my($rc, $o) = dist16($dir, 'resolve');
   ok($rc == 2 && $o =~ /both included and excluded/ && !-e "$dir/lock", 'a repository both included and excluded is an error');
 
@@ -535,6 +537,9 @@ sub prog ($name, %r) {
     ok(has($lines, qr{^skip gr-dos/$name failed v0\.01: \Q$why{$name}\E}), "a GPL program fails: $why{$name}")
       or diag(grep { m{gr-dos/$name } } @$lines);
   }
+  ok(has($lines, qr{^skip gr-dos/libc16 excluded \Q$LIBRARY\E$}) && !has($lines, qr{^program gr-dos/libc16 }),
+    'libc16 is excluded as a program, while gpl16 and perl16 depend on its source');
+  ok(slurp("$dir/lock") =~ m{^skip gr-dos/libc16 }m, 'and its skip line is in the lock');
   ok(has($lines, qr{^skip gr-dos/sources16 failed SOURCES\.EXE has the name of GR-DOS's SOURCES\.TXT}),
     'no program may be named SOURCES, the source description\'s name');
   my $first = slurp("$dir/lock");
@@ -638,6 +643,68 @@ sub prog ($name, %r) {
   spew("$dir/config", $base_config . "license GPL-2.0\nsource-license GPL-2.0-or-later\n");
   ($rc, $o) = dist16($dir, 'list');
   ok($rc == 2 && $o =~ /GPL-2\.0-or-later is both a license and a source-license/, 'a license may not be both');
+}
+
+# 11. The lib*16 convention (issue #61): libraries are excluded without an
+# exclude, in any case; other *16 repositories are programs; an include
+# makes a library a program; an explicit exclude keeps its own reason;
+# and a GPL program's depends on an excluded library still ships its
+# source.
+{
+  my $lib = sub ($name) { { name => $name, releases => [ { tag => 'v0.01', latest => 1, license => 'MIT',
+    assets => { "$name-0.01.zip" => 'PK', 'lib.exe' => mz(600, $name) } } ] } };
+  my $libc = { name => 'libc16', releases => [ { tag => 'v0.07', latest => 1, license => 'MIT',
+    assets => { 'libc16-0.07.zip' => 'PK', 'libc16-0.07-src.zip' => zip('libc16-0.07/LICENSE' => license_text('gr-dos/libc16', 'MIT')) } } ] };
+  my $m = "license GPL-2.0-or-later\nsource patch-0.01-src.tar.gz\nbuild BUILDING.md\ndepends gr-dos/libc16 v0.07 libc16-0.07-src.zip\n";
+  my $patch = { name => 'patch16', releases => [ { tag => 'v0.01', latest => 1, license => 'GPL-2.0', license_path => 'COPYING',
+    files => { 'dist16.source' => $m },
+    assets => { 'patch.exe' => mz(600, 'patch16'), 'patch-0.01-src.tar.gz' => tgz('patch-0.01/dist16.source' => $m,
+      'patch-0.01/COPYING' => license_text('gr-dos/patch16', 'GPL-2.0'), 'patch-0.01/BUILDING.md' => "make\n") } } ] };
+  my $config = "discover gr-dos 16\nexclude gr-dos/hello16 the template\nlicense MIT\nsource-license GPL-2.0-or-later\n";
+  my $owners = { 'gr-dos' => [ $libc, $lib->('libkitchen16'), $lib->('libfoo16'), $lib->('LibMixed16'), $lib->('LIBUPPER16'),
+    prog('diff16'), $patch, prog('perl16'), prog('hello16'), prog('glib16'), prog('library') ],
+    other => [ { name => 'libother16', releases => [ { tag => 'v0.01', latest => 1, license => 'MIT',
+      assets => { 'libother16-0.01.zip' => 'PK', 'libother.exe' => mz(600, 'libother16') } } ] } ] };
+  my $dir = github(config => $config, owners => $owners);
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'lib*16: resolve succeeds');
+  for my $name (qw( libc16 libkitchen16 libfoo16 LibMixed16 LIBUPPER16 )) {
+    ok(has($lines, qr{^skip gr-dos/$name excluded \Q$LIBRARY\E$}) && $o =~ m{^excluded +gr-dos/$name: \Q$LIBRARY\E$}m,
+      "gr-dos/$name is excluded as a library, reported and locked, with no exclude");
+  }
+  ok(!has($lines, qr{^program gr-dos/lib}i), 'no library is a program');
+  ok(has($lines, qr{^program gr-dos/diff16 }) && has($lines, qr{^program gr-dos/perl16 }) && has($lines, qr{^program gr-dos/glib16 }),
+    'other *16 repositories are programs, glib16 among them (lib* is the whole name)');
+  ok(has($lines, qr{^program gr-dos/patch16 v0\.01 \S+ patch\.exe PATCH\.EXE \d+ \S+ GPL-2\.0-or-later COPYING })
+    && has($lines, qr{^depend gr-dos/patch16 gr-dos/libc16 v0\.07 [0-9a-f]{40} libc16-0\.07-src\.zip \d+ [0-9a-f]{64} MIT LICENSE }),
+    'patch16\'s depends on the excluded libc16 still resolves libc16\'s source');
+  ok(has($lines, qr{^skip gr-dos/hello16 excluded the template$}), 'hello16 keeps its explicit exclusion');
+  ok(!has($lines, qr{library$}) && !has($lines, qr{libother16}), 'only repositories that end in 16, of the discovered owner');
+  ok($o !~ /matches no discovered repository/, 'no stale exclude note');
+  my $first = slurp("$dir/lock");
+  my(undef, $o2) = dist16($dir, 'resolve');
+  ok(slurp("$dir/lock") eq $first && $o2 eq $o, 'lib*16: resolve output and lock are deterministic');
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest");
+  ok($rc == 0 && -f "$dir/dest/source/PATCH/libc16-0.07-src.zip" && !-e "$dir/dest/LIB.EXE",
+    'fetch ships libc16\'s source with PATCH.EXE, and no library program');
+
+  # An explicit include is the exception: the library is a program.
+  $dir = github(config => "$config" . "include gr-dos/libfoo16 asset=lib.exe\ninclude other/libother16\n", owners => $owners);
+  ($rc, $o) = dist16($dir, 'resolve');
+  $lines = lock_lines($dir);
+  ok($rc == 0 && has($lines, qr{^program gr-dos/libfoo16 v0\.01 \S+ lib\.exe LIB\.EXE }), 'an include ships a lib*16 repository as a program');
+  ok(has($lines, qr{^program other/libother16 v0\.01 \S+ libother\.exe LIBOTHER\.EXE }),
+    'an include of another owner\'s lib*16 is a candidate program too');
+  ok(has($lines, qr{^skip gr-dos/libkitchen16 excluded \Q$LIBRARY\E$}), 'the other libraries are still excluded');
+
+  # An explicit exclude gives its reason; with an include, it is an error.
+  $dir = github(config => "$config" . "exclude gr-dos/libc16 the C runtime\n", owners => $owners);
+  ($rc, $o) = dist16($dir, 'resolve');
+  ok($rc == 0 && has(lock_lines($dir), qr{^skip gr-dos/libc16 excluded the C runtime$}), 'an explicit exclude of a library keeps its reason');
+  $dir = github(config => "$config" . "exclude gr-dos/libc16 the C runtime\ninclude gr-dos/libc16\n", owners => $owners);
+  ($rc, $o) = dist16($dir, 'resolve');
+  ok($rc == 2 && $o =~ /both included and excluded/, 'a library both included and excluded is still an error');
 }
 
 say "1..$tests";

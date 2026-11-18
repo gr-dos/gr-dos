@@ -13,7 +13,8 @@ program gr-dos/df16 v0.02 3119638466d454e8266d384d63c86c24861a55b1 df.exe DF.EXE
 program gr-dos/diff16 v0.01 734a4b03a7b7166cdf52f5135e70bff68fac583e diff16.exe DIFF16.EXE 16286 11fab205e8c31619e62aa80533ca8216b01bea387f9bff26f1ad1f77538239ec MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 skip gr-dos/hello16 excluded the template for gr-dos *16 programs, not a utility
 program gr-dos/less16 v0.01 7a73e763d05f6f74a92ac43268e30de3d3a11725 less.exe LESS.EXE 41962 23efcfaa671a9dbc874c79ed210effa27b8d213f12652900a24d41ced098a4c0 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
-skip gr-dos/libc16 excluded a C runtime library, not a DOS program
+skip gr-dos/libc16 excluded library repository (lib*16 convention), not a DOS executable
+skip gr-dos/libkitchen16 excluded library repository (lib*16 convention), not a DOS executable
 program gr-dos/md5sum16 v0.02 b3adaa7658607dbd0d93e528a86eb30b96b015a5 md5sum.exe MD5SUM.EXE 14302 d992a6a2b599acd4c1e66c07bed270f549afad5ab53121b22f64d93054d43cbe MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 skip gr-dos/patch16 unavailable no release
 skip gr-dos/perl16 unavailable no release

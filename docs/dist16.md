@@ -26,7 +26,7 @@ and WHICH from `gr-dos`, and TICO from `tico-edit`. It leaves these out:
 
 | Repository | Why |
 |---|---|
-| `gr-dos/libc16` | excluded: a C runtime library, not a DOS program |
+| `gr-dos/libc16`, `libkitchen16` | excluded: library repositories (`lib*16`), not DOS programs |
 | `gr-dos/hello16` | excluded: the template the other repositories are made from |
 | `gr-dos/patch16`, `perl16`, `term16` | unavailable: no release yet |
 
@@ -54,6 +54,18 @@ idea and changes the rest:
 - **Owner.** `discover gr-dos 16` lists the public repositories of the
   `gr-dos` organization (`GET /users/gr-dos/repos`, all pages), and keeps
   those whose names end in `16`, ignoring case.
+- **Libraries.** A discovered repository whose name (not its owner)
+  matches `lib*16`, ignoring case (`^lib.*16$`), such as `gr-dos/libc16`
+  or `gr-dos/libkitchen16`, is a library, not a program. It is excluded
+  before its releases are read, and is reported and locked as
+  `skip REPO excluded library repository (lib*16 convention), not a DOS
+  executable`, so a new library needs no `exclude` in `dist16/config`.
+  An explicit `exclude` gives its own reason instead, and an `include`
+  makes the repository a candidate program again. This is only about
+  shipping a library *as a program* in `C:\DOS` and the ZIP's `BIN`
+  (no): a program's `depends` on a library in `dist16.source` still
+  resolves, verifies, fetches and ships that library's *source*
+  ([Source licenses](#source-licenses)) (yes), as patch16's on libc16 does.
 - **Forks, archived and private.** Forks and archived repositories are
   reported unavailable. Private ones are not listed by GitHub, and an
   `include` of one fails, because its release would not be downloadable.
@@ -119,7 +131,7 @@ line with the reason, so the lock shows why a program is missing:
 
 ```text
 included     gr-dos/which16 v0.03 which.exe as WHICH.EXE, MIT (ignored: which.com)
-excluded     gr-dos/libc16: a C runtime library, not a DOS program
+excluded     gr-dos/libc16: library repository (lib*16 convention), not a DOS executable
 unavailable  gr-dos/term16: no release
 failed       gr-dos/foo16: v0.01: license GPL-3.0 is not one dist16/config allows
 failed       gr-dos/bar16: v0.01: license GPL-2.0 needs the program's source, but there is no dist16.source at its commit
@@ -337,7 +349,18 @@ exclude gr-dos/foo16 experimental: its file format is not settled
 ```
 
 A repository both included and excluded is an error. An `exclude` that
-matches no repository is reported, so stale ones are noticed.
+matches no repository is reported, so stale ones are noticed. A `lib*16`
+library needs no `exclude` ([Discovery](#discovery)).
+
+### Shipping a lib*16 repository as a program
+
+A repository named `lib*16` is excluded as a library. If one also
+releases a DOS program to ship, `include` it, which is the exception to
+the convention:
+
+```text
+include gr-dos/libfoo16
+```
 
 ### Choosing the asset, or holding a release
 
@@ -355,7 +378,12 @@ matches no repository is reported, so stale ones are noticed.
 fixtures served from `file://` URLs, in place of the GitHub API, release
 downloads and raw files. It needs no network. It covers:
 
-- **Exclusion:** `gr-dos/libc16` is excluded, a named case.
+- **Exclusion:** `gr-dos/hello16` is excluded by name, and the `lib*16`
+  libraries (`libc16`, `libkitchen16`, `libfoo16`, and `LibMixed16` in
+  mixed case) by the naming convention, with no `exclude`, while
+  `diff16`, `patch16` and `perl16` are programs; an `include` of a
+  library ships it, and a GPL program's `depends` on the excluded
+  `libc16` still resolves its source.
 - **Include and exclude precedence:** include and exclude of one
   repository, an exclude without a reason, an include of another owner's
   repository, an include of a discovered repository (pinned, with no

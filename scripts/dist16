@@ -60,7 +60,12 @@ One directive a line; C<#> starts a comment.
 =item discover OWNER SUFFIX
 
 Every public repository of the GitHub user or organization OWNER whose
-name ends in SUFFIX. Forks and archived repositories are left out.
+name ends in SUFFIX. Forks and archived repositories are left out, and so
+are libraries: a repository whose name (not its owner's) matches
+C<lib*16>, in any case, such as gr-dos/libc16, is excluded, with the
+reason C<library repository (lib*16 convention), not a DOS executable>.
+This is only about shipping the library as a program: its source, as a
+program's C<depends> (F<dist16.source>), is resolved and shipped as before.
 
 =item exclude OWNER/NAME REASON
 
@@ -68,7 +73,8 @@ Leave a repository out; the reason is required, and is in the lock.
 
 =item include OWNER/NAME [tag=TAG] [asset=FILE] [required]
 
-Add a repository from any owner, or set options for a discovered one.
+Add a repository from any owner, or set options for a discovered one;
+it is then not excluded as a library (C<lib*16>).
 C<tag=> pins a release instead of the latest; C<asset=> names the release
 asset to ship; C<required> makes C<resolve> fail, not skip it, if it
 cannot be included. An include overrides fork and archived. A repository
@@ -181,6 +187,13 @@ my @DEPEND = qw( repo dep tag commit asset size sha256 spdx license license_sha2
 
 # A program under a source license has this at its release's commit.
 my $MANIFEST = 'dist16.source';
+
+# A repository whose name is lib*16, any case, is a library, not a
+# program: it is excluded from discovery with this reason.
+my $LIBRARY_RE = qr/^lib.*16$/i;
+my $LIBRARY_REASON = 'library repository (lib*16 convention), not a DOS executable';
+
+sub is_library ($repo) { ($repo =~ m{([^/]+)$})[0] =~ $LIBRARY_RE }
 
 # Where the build stages the source description, beside the programs; no
 # program may have its name.
@@ -438,6 +451,10 @@ sub resolve_one ($c, $r, $notes) {
   if(my $why = $c->{exclude}{lc $repo}) {
     return $skip->('excluded', $why);
   }
+  # A discovered library (gr-dos/libc16, gr-dos/libkitchen16) is not a
+  # program; an include overrides this. Its source, as a program's
+  # dependency (dist16.source), is not affected.
+  return $skip->('excluded', $LIBRARY_REASON) if !$i->{repo} && is_library($repo);
   my $meta = $r->{meta} //= api("/repos/$repo") // return $skip->('failed', 'no such repository');
   $repo = $res{repo} = $meta->{full_name} // $repo;
   return $skip->('failed', 'private') if $meta->{private};
