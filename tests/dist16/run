@@ -335,7 +335,7 @@ sub prog ($name, %r) {
   ok($rc == 0, 'resolve succeeds');
   ok(has($lines, qr{^skip gr-dos/zip16 unavailable v0\.01 has no program asset zip\.exe or zip\.com \(assets: README zip16-1\.0\.zip\)$}),
     'only unexpected assets: unavailable, listing them');
-  ok(has($lines, qr{^program gr-dos/both16 v0\.01 \S+ both\.exe BOTH\.EXE }) && $o =~ /both\.exe as BOTH\.EXE, MIT \(ignored: both\.com\)/,
+  ok(has($lines, qr{^program gr-dos/both16 v0\.01 \S+ both\.exe BOTH\.EXE }) && $o =~ /both\.exe as BOTH\.EXE, MIT, \.exe preferred \(the default\) \(ignored: both\.com\)/,
     'NAME.exe and NAME.com: the .exe, and the .com is reported ignored');
   ok(has($lines, qr{^program gr-dos/two16 v0\.01 \S+ two\.exe }), 'an asset with another name is ignored');
   ok(has($lines, qr{^skip gr-dos/ambi16 failed v0\.01 has more than one program \(ambi\.exe ambi16\.exe\): set asset=}),
@@ -344,6 +344,55 @@ sub prog ($name, %r) {
   ok(has($lines, qr{^program gr-dos/pick16 v0\.01 \S+ pick\.com PICK\.COM }), 'asset= chooses the .com');
   ok(has($lines, qr{^skip gr-dos/nopick16 failed v0\.01 has no asset other\.exe \(assets: nopick\.exe\)$}), 'asset= naming no asset: failed');
   ok(has($lines, qr{^skip gr-dos/longname16 failed v0\.01: longname16\.exe is not an 8\.3 \.COM or \.EXE name$}), 'a name longer than 8.3: failed');
+}
+
+# 5a. prefer= and prefer (issue #42): the .com, the fallback to the .exe,
+# the global default and its per-repository override, and asset= with
+# prefer= an error.
+{
+  my $both = sub ($name) { prog($name, assets => { "$name.exe" =~ s/16\././r => mz(600, $name), "$name.com" =~ s/16\././r => "\xC3" }) };
+  my $owners = { 'gr-dos' => [ $both->('com16'), $both->('exe16'), $both->('dflt16'),
+    prog('noc16'), prog('onlyc16', assets => { 'onlyc.com' => "\xC3" }) ] };
+  my $dir = github(config => "$base_config" . "include gr-dos/com16 prefer=com\ninclude gr-dos/noc16 prefer=com\n", owners => $owners);
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'prefer=: resolve succeeds');
+  ok(has($lines, qr{^program gr-dos/com16 v0\.01 \S+ com\.com COM\.COM 1 })
+    && $o =~ m{gr-dos/com16 v0\.01 com\.com as COM\.COM, MIT, \.com preferred \(prefer=com\) \(ignored: com\.exe\)},
+    'prefer=com ships the .com, and the report says why');
+  ok(has($lines, qr{^program gr-dos/noc16 v0\.01 \S+ noc\.exe NOC\.EXE })
+    && $o =~ m{gr-dos/noc16 v0\.01 noc\.exe as NOC\.EXE, MIT, no \.com, so the \.exe \(prefer=com\)},
+    'prefer=com with no .com falls back to the .exe, and says so');
+  ok(has($lines, qr{^program gr-dos/dflt16 v0\.01 \S+ dflt\.exe DFLT\.EXE }) && $o =~ /dflt\.exe as DFLT\.EXE, MIT, \.exe preferred \(the default\)/,
+    'without prefer, the .exe');
+  ok(has($lines, qr{^program gr-dos/onlyc16 v0\.01 \S+ onlyc\.com ONLYC\.COM }) && $o =~ /onlyc\.com as ONLYC\.COM, MIT\n/,
+    'only a .com: shipped, with nothing to say about a preference');
+
+  # The global prefer com, overridden by prefer=exe, and by asset=.
+  $dir = github(config => "$base_config" . "prefer com\ninclude gr-dos/exe16 prefer=exe\ninclude gr-dos/com16 asset=com.exe\n", owners => $owners);
+  ($rc, $o) = dist16($dir, 'resolve');
+  $lines = lock_lines($dir);
+  ok($rc == 0, 'prefer com: resolve succeeds');
+  ok(has($lines, qr{^program gr-dos/dflt16 v0\.01 \S+ dflt\.com DFLT\.COM }) && $o =~ /dflt\.com as DFLT\.COM, MIT, \.com preferred \(prefer com\)/,
+    'prefer com ships the .com of every repository');
+  ok(has($lines, qr{^program gr-dos/noc16 v0\.01 \S+ noc\.exe NOC\.EXE }) && $o =~ /noc\.exe as NOC\.EXE, MIT, no \.com, so the \.exe \(prefer com\)/,
+    'prefer com with no .com falls back to the .exe');
+  ok(has($lines, qr{^program gr-dos/exe16 v0\.01 \S+ exe\.exe EXE\.EXE }) && $o =~ /exe\.exe as EXE\.EXE, MIT, \.exe preferred \(prefer=exe\)/,
+    'prefer=exe overrides prefer com');
+  ok(has($lines, qr{^program gr-dos/com16 v0\.01 \S+ com\.exe COM\.EXE }), 'asset= overrides prefer com');
+
+  # Errors in the config.
+  my %bad = (
+    "include gr-dos/com16 asset=com.com prefer=com\n" => qr{gr-dos/com16 has both asset= and prefer=},
+    "include gr-dos/com16 prefer=bin\n" => qr{prefer=bin: prefer= is com or exe},
+    "prefer bin\n" => qr{prefer com\|exe},
+    "prefer com\nprefer exe\n" => qr{prefer is set twice},
+  );
+  for my $cfg (sort keys %bad) {
+    spew("$dir/config", $base_config . $cfg);
+    ($rc, $o) = dist16($dir, 'list');
+    ok($rc == 2 && $o =~ $bad{$cfg}, "a config error: @{[ $cfg =~ s/\n/; /gr ]}");
+  }
 }
 
 # 6. Names: GR-DOS's own, and each other's.

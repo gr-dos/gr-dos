@@ -71,14 +71,24 @@ program's C<depends> (F<dist16.source>), is resolved and shipped as before.
 
 Leave a repository out; the reason is required, and is in the lock.
 
-=item include OWNER/NAME [tag=TAG] [asset=FILE] [required]
+=item include OWNER/NAME [tag=TAG] [asset=FILE | prefer=com|exe] [required]
 
 Add a repository from any owner, or set options for a discovered one;
 it is then not excluded as a library (C<lib*16>).
 C<tag=> pins a release instead of the latest; C<asset=> names the release
-asset to ship; C<required> makes C<resolve> fail, not skip it, if it
-cannot be included. An include overrides fork and archived. A repository
+asset to ship; C<prefer=> chooses between a release's F<STEM.com> and
+F<STEM.exe> (issue #42), overriding C<prefer>, below; C<asset=> and
+C<prefer=> together are an error; C<required> makes C<resolve> fail, not
+skip it, if it cannot be included. An include overrides fork and archived. A repository
 both included and excluded is an error.
+
+=item prefer com|exe
+
+Which program to ship when a release has both a F<STEM.com> and a
+F<STEM.exe>, for every repository without its own C<prefer=> or
+C<asset=>. The default is C<exe>, the C reference build. With C<com>, a
+release with no F<.com> ships its F<.exe>. The report says which was
+chosen, and why.
 
 =item license SPDX...
 
@@ -124,7 +134,8 @@ covered by its manifest.
 A repository's program is the asset of its release named F<STEM.exe> or
 F<STEM.com>, where STEM is the repository name with or without the suffix
 (F<crcsum16>: F<crcsum.exe> or F<crcsum16.exe>). With both, the F<.exe>,
-the C reference of the gr-dos/hello16 conventions, is shipped. Other
+the C reference of the gr-dos/hello16 conventions, is shipped, unless
+C<prefer> chooses the F<.com>. Other
 assets are ignored. The program must have an 8.3 name that is not one of
 GR-DOS's own (C<--reserved>), nor another program's, ignoring the
 extension, since COMMAND.COM would run only one of them; be a real-mode
@@ -269,7 +280,8 @@ sub api ($path) {
 }
 
 sub read_config ($path) {
-  my %c = (discover => [], exclude => {}, include => {}, license => {}, source_license => {}, order => []);
+  my %c = (discover => [], exclude => {}, include => {}, license => {}, source_license => {}, order => [], prefer => 'exe');
+  my $prefer_line;
   my $n = 0;
   for my $line (split /\n/, slurp($path)) {
     $n++;
@@ -288,16 +300,25 @@ sub read_config ($path) {
       die "$where: $key is excluded twice\n" if $c{exclude}{$key};
       $c{exclude}{$key} = "@w";
     } elsif($cmd eq 'include') {
-      die "$where: include OWNER/NAME [tag=TAG] [asset=FILE] [required]\n" unless @w && $w[0] =~ $repo_re;
+      die "$where: include OWNER/NAME [tag=TAG] [asset=FILE | prefer=com|exe] [required]\n" unless @w && $w[0] =~ $repo_re;
       my $repo = shift @w;
       die "$where: $repo is included twice\n" if $c{include}{lc $repo};
       my %i = (repo => $repo);
       for (@w) {
         if(/^(tag|asset)=(\S+)$/) { $i{$1} = $2 }
+        elsif(/^prefer=(com|exe)$/) { $i{prefer} = $1 }
+        elsif(/^prefer=/) { die "$where: $_: prefer= is com or exe\n" }
         elsif($_ eq 'required') { $i{required} = 1 }
         else { die "$where: unknown include option $_\n" }
       }
+      die "$where: $repo has both asset= and prefer=: asset= names the program, so prefer= would do nothing\n"
+        if defined $i{asset} && defined $i{prefer};
       $c{include}{lc $repo} = \%i;
+    } elsif($cmd eq 'prefer') {
+      die "$where: prefer com|exe\n" unless @w == 1 && $w[0] =~ /^(com|exe)$/;
+      die "$where: prefer is set twice (first at $prefer_line)\n" if $prefer_line;
+      $prefer_line = $where;
+      $c{prefer} = $w[0];
     } elsif($cmd eq 'license') {
       die "$where: license SPDX...\n" unless @w;
       $c{license}{$_} = 1 for @w;
@@ -501,7 +522,19 @@ sub resolve_one ($c, $r, $notes) {
       unless @progs;
     return $skip->('failed', "$tag has more than one program (@{[ join ' ', map { $_->{name} } @progs ]}): set asset= in dist16/config")
       if keys %bases > 1;
-    ($asset) = sort { (lc($a->{name}) =~ /\.exe$/ ? 0 : 1) <=> (lc($b->{name}) =~ /\.exe$/ ? 0 : 1) } @progs;
+    # A .COM and an .EXE: the prefer= of its include, or prefer, or the
+    # .exe, the C reference (issue #42).
+    my $prefer = $i->{prefer} // $c->{prefer};
+    my $why = defined $i->{prefer} ? "prefer=$prefer" : $prefer eq 'exe' ? 'the default' : "prefer $prefer";
+    my %ext;
+    $ext{lc($_->{name}) =~ s/.*\.//r} = $_ for @progs;
+    if($ext{$prefer}) {
+      $asset = $ext{$prefer};
+      $res{chosen} = ".$prefer preferred ($why)" if keys %ext > 1;
+    } else {
+      ($asset) = values %ext;
+      $res{chosen} = "no .$prefer, so the .@{[ lc($asset->{name}) =~ s/.*\.//r ]} ($why)" unless $why eq 'the default';
+    }
   }
   $res{asset} = $asset->{name};
   $res{name} = uc $asset->{name};
@@ -752,7 +785,8 @@ sub report ($results, $notes) {
       if(my $s = $res->{source}) {
         $src = ", source $s->{asset}" . join '', map { ", with $_->{dep} $_->{tag} ($_->{spdx}, source $_->{asset})" } $res->{depends}->@*;
       }
-      say sprintf '%-12s %s %s %s as %s, %s%s%s', 'included', $res->{repo}, $res->{tag}, $res->{asset}, $res->{name}, $res->{spdx}, $src, $ign;
+      my $chosen = $res->{chosen} ? ", $res->{chosen}" : '';
+      say sprintf '%-12s %s %s %s as %s, %s%s%s%s', 'included', $res->{repo}, $res->{tag}, $res->{asset}, $res->{name}, $res->{spdx}, $src, $chosen, $ign;
     } else {
       say sprintf '%-12s %s: %s', $res->{kind}, $res->{repo}, $res->{reason};
     }

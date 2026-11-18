@@ -93,9 +93,10 @@ A repository's release is shipped when it has:
 1. **A program asset**, named `STEM.exe` or `STEM.com`, where STEM is the
    repository name with or without `16` (`crcsum16`: `crcsum.exe`;
    `diff16`: `diff16.exe`). If both an `.exe` and a `.com` are present, the
-   `.exe` is shipped. The gr-dos/hello16 conventions make the C `.EXE` the
-   reference, and the `.COM` an assembly version of it (which16,
-   truncate16, crcsum16). Any other asset is ignored and shown in the
+   `.exe` is shipped, unless `prefer` chooses the `.com`
+   ([Shipping the .COM](#shipping-the-com)). The gr-dos/hello16 conventions
+   make the C `.EXE` the reference, and the `.COM` an assembly version of
+   it (which16, truncate16, crcsum16). Any other asset is ignored and shown in the
    report. Several program names, such as `foo.exe` and `foo16.exe`, are
    ambiguous: the release fails until `asset=` chooses one.
 2. **An 8.3 name** that is none of GR-DOS's own file names and no other
@@ -130,7 +131,7 @@ A repository that fails is reported, and recorded in the lock as a `skip`
 line with the reason, so the lock shows why a program is missing:
 
 ```text
-included     gr-dos/which16 v0.03 which.exe as WHICH.EXE, MIT (ignored: which.com)
+included     gr-dos/which16 v0.03 which.exe as WHICH.EXE, MIT, .exe preferred (the default) (ignored: which.com)
 excluded     gr-dos/libc16: library repository (lib*16 convention), not a DOS executable
 unavailable  gr-dos/term16: no release
 failed       gr-dos/foo16: v0.01: license GPL-3.0 is not one dist16/config allows
@@ -364,13 +365,59 @@ include gr-dos/libfoo16
 
 ### Choosing the asset, or holding a release
 
-- `include gr-dos/foo16 asset=foo.com` ships the `.COM` instead of the
-  `.EXE`.
+- `include gr-dos/foo16 asset=foo.com` ships that exact asset. To choose
+  the `.COM` over the `.EXE` without naming the file, use `prefer=com`
+  ([Shipping the .COM](#shipping-the-com)).
 - `include gr-dos/foo16 tag=v0.02` holds the program at that release. The
   report notes each newer one.
 - TICO is held at v0.02 this way, because it is on the frozen 360 KB
   floppy. It is also marked `required`, so if it cannot be included,
   `resolve` fails rather than dropping it.
+
+### Shipping the .COM
+
+Many releases have both a C `STEM.exe` and an assembly `STEM.com`
+(issue #42). The `.COM` is smaller, which matters on a crowded boot floppy
+and a little on C:
+
+| Repository | `.exe` | `.com` |
+|---|---:|---:|
+| which16 v0.03 | 4,252 | 2,530 |
+| truncate16 v0.03 | 5,728 | 3,294 |
+| crcsum16 v0.03 | 5,948 | 3,417 |
+
+The `.EXE` is still the default. It is the reference build under the
+gr-dos/hello16 conventions, and the `.COM` is tested against it
+(`make -C asm test`). Some repositories also call their assembly version
+experimental (truncate16's README). So each program's choice weighs size
+against how mature its `.COM` is, and each change shows up in review as a
+change to `dist16/lock`.
+
+To ship one repository's `.COM`:
+
+```text
+include gr-dos/which16 prefer=com
+```
+
+Or make the `.COM` the default, and keep the `.EXE` where wanted:
+
+```text
+prefer com
+include gr-dos/truncate16 prefer=exe
+```
+
+`prefer=` on an `include` overrides `prefer`. Either one falls back to the
+other kind when a release has only one. Unlike `asset=which.com`, a
+preference still works if the program is renamed, and it records the
+reason for the choice. `asset=` names the exact file, so it overrides
+`prefer`. Using `asset=` and `prefer=` on one `include` is an error, as is
+a second `prefer`. The report says which was chosen, and why:
+
+```text
+included     gr-dos/which16 v0.03 which.com as WHICH.COM, MIT, .com preferred (prefer=com) (ignored: which.exe)
+included     gr-dos/df16 v0.02 df.exe as DF.EXE, MIT, no .com, so the .exe (prefer com)
+included     gr-dos/crcsum16 v0.03 crcsum.exe as CRCSUM.EXE, MIT, .exe preferred (the default) (ignored: crcsum.com)
+```
 
 ## Tests
 
@@ -397,6 +444,10 @@ downloads and raw files. It needs no network. It covers:
 - **Asset names:** only unexpected assets, `.exe` with `.com`, `asset=`
   (and `asset=` naming nothing), an ambiguous `STEM`/`STEM16`, and a name
   that is not 8.3.
+- **Preference (issue #42):** `prefer=com` ships the `.com`, and falls back
+  to the `.exe` when there is none. A global `prefer com` is overridden by
+  `prefer=exe` and by `asset=`. Each choice is in the report. `asset=` with
+  `prefer=`, a bad value, and a second `prefer` are errors.
 - **Collisions:** GR-DOS's own names, with any extension, and two programs
   with one name.
 - **Licenses:** none at the release's commit, one not allowed, and one
