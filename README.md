@@ -22,7 +22,7 @@ and pinned in `dist16/lock` ([`docs/dist16.md`](docs/dist16.md)). Apart from the
 banner, `VER` and FDISK's menu (`patches/branding`), and the kernel's GR-DOS
 identification call (`patches/kernel`, [`docs/grver.md`](docs/grver.md)), the binaries of the
 assembly sources are byte-identical to the original MASM/LINK build; ATTRIB,
-MEM, FDISK, FC, JOIN, SUBST, BACKUP and RESTORE, which are C, are built with Open Watcom C and GR-DOS's own C
+MEM, FDISK, FC, JOIN, SUBST, BACKUP, RESTORE and FILESYS, which are C, are built with Open Watcom C and GR-DOS's own C
 runtime ([`docs/m4-utilities.md`](docs/m4-utilities.md)). See
 [`docs/00-mvp.md`](docs/00-mvp.md) for the plan and its status.
 
@@ -68,9 +68,9 @@ sudo scripts/deploy-cf update /dev/sdX      # afterwards: C: only
 
 | Format | Image | Bytes | Geometry | Free |
 |---|---|---:|---|---:|
-| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 609,280 |
-| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 365,568 |
-| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 65,536 |
+| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 608,256 |
+| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 364,544 |
+| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 64,512 |
 | 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 16,384 |
 
 `make` builds all four. Each is a boot disk for a machine with two floppy
@@ -93,7 +93,7 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `HELP.EXE` and `GRDOS.HLP`, GR-DOS's command help ([`docs/help.md`](docs/help.md)) | | ✓ | ✓ |
 | `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
 
-The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on C: only. `image/files-360k.txt` (and so on) lists each image's
+The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC, FILESYS, GRVER and LCD.CPI are on C: only. `image/files-360k.txt` (and so on) lists each image's
 files in order, and `make` checks the image against it.
 `build/linux/manifest-360k.txt` (and so on) lists them with their checksums. To
 build one image from a built tree, choose the format with `--format` (1440
@@ -133,7 +133,8 @@ tests the commands of [`docs/m5-utilities.md`](docs/m5-utilities.md)
 compares FC's output with Microsoft's FC.EXE's (`make test-fc`), and JOIN's
 and SUBST's with Microsoft's on a CF install's C: and D: (`make
 test-join-subst`), and BACKUP's and RESTORE's, onto and from floppy images,
-with Microsoft's output and backup (`make test-backup-restore`), boots
+with Microsoft's output and backup (`make test-backup-restore`), and
+FILESYS's, without IFSFUNC and with it (`make test-filesys`), boots
 with `COUNTRY=` in CONFIG.SYS (`make test-country`), types through KEYB's
 layouts (`make test-keyb`), checks what PRINTER.SYS, PRINT and GRAPHICS
 send to QEMU's parallel port (`make test-printer`), runs FDISK on disposable hard disk images against Microsoft's build of
@@ -175,8 +176,8 @@ gr-dos-VERSION/
 │   │   EXE2BIN.EXE, FASTOPEN.EXE, GRAFTABL.COM, GRAPHICS.COM,
 │   │   IFSFUNC.EXE, KEYB.COM, LABEL.COM, NLSFUNC.EXE, PRINT.COM,
 │   │   RECOVER.COM, SHARE.EXE, SORT.EXE, TREE.COM, XCOPY.EXE,
-│   │   JOIN.EXE, SUBST.EXE, BACKUP.COM, RESTORE.COM, GRAPHICS.PRO,
-│   │   COUNTRY.SYS, KEYBOARD.SYS
+│   │   JOIN.EXE, SUBST.EXE, BACKUP.COM, RESTORE.COM, FILESYS.EXE,
+│   │   GRAPHICS.PRO, COUNTRY.SYS, KEYBOARD.SYS
 │   ├── DISPLAY.SYS, EGA.CPI, LCD.CPI   code page switching for the screen
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel

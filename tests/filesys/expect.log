@@ -1,0 +1,69 @@
+GRDOS-TEST-BEGIN
+==== without IFSFUNC
+== the list
+No entries found
+errorlevel? 202
+== one drive, and one device
+No entries found
+errorlevel? 202
+No entries found
+errorlevel? 202
+== attach a drive, and a device with parameters
+Invalid function
+errorlevel? 132
+Invalid function
+errorlevel? 132
+== detach
+Invalid function
+errorlevel? 44
+Invalid function
+errorlevel? 44
+Invalid function
+errorlevel? 54
+== bad parameters
+Parameter format not correct
+errorlevel 1
+Parameter format not correct
+errorlevel 1
+Invalid switch
+errorlevel 1
+Too many parameters
+errorlevel 1
+Parameter format not correct
+errorlevel 1
+==== IFSFUNC
+Invalid configuration
+errorlevel 0
+==== with IFSFUNC
+== the list
+No entries found
+errorlevel? 202
+== one drive, and one device
+No entries found
+errorlevel? 202
+No entries found
+errorlevel? 202
+== attach a drive, and a device with parameters
+NET809: Network request not supported
+errorlevel? 132
+NET809: Network request not supported
+errorlevel? 132
+== detach
+NET809: Network request not supported
+errorlevel? 44
+NET809: Network request not supported
+errorlevel? 44
+NET809: Network request not supported
+errorlevel? 54
+== bad parameters
+Parameter format not correct
+errorlevel 1
+Parameter format not correct
+errorlevel 1
+Invalid switch
+errorlevel 1
+Too many parameters
+errorlevel 1
+Parameter format not correct
+errorlevel 1
+GRDOS-TEST-END

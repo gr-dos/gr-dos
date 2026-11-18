@@ -32,9 +32,10 @@ All but the 360 KB disk also have HELP and its file GRDOS.HLP: type HELP
 for the list of topics, HELP START to get started, or HELP and a command,
 such as HELP XCOPY.
 
-FASTOPEN, IFSFUNC, GRVER and LCD.CPI are on no floppy: FASTOPEN works on
-hard disks only, IFSFUNC needs an installable file system driver, GRVER is
-for C:\DOS and this archive, and LCD.CPI is for the IBM PC Convertible.
+FASTOPEN, IFSFUNC, FILESYS, GRVER and LCD.CPI are on no floppy: FASTOPEN
+works on hard disks only, IFSFUNC needs an installable file system driver,
+and FILESYS needs IFSFUNC, GRVER is for C:\DOS and this archive, and
+LCD.CPI is for the IBM PC Convertible.
 
 COUNTRY.SYS and KEYBOARD.SYS are MS-DOS 4.00's country and keyboard
 data. COUNTRY=049 in CONFIG.SYS gives the German date, time and number
@@ -122,6 +123,7 @@ Contents
   BIN\SUBST.EXE    makes a drive letter a name for a directory
   BIN\BACKUP.COM   backs up files to floppies or another disk
   BIN\RESTORE.COM  restores files that BACKUP backed up
+  BIN\FILESYS.EXE  lists, attaches and detaches IFSFUNC's drives and devices
   BIN\GRAPHICS.PRO GRAPHICS's printer profile
   BIN\COUNTRY.SYS  country information, for COUNTRY= in CONFIG.SYS
   BIN\KEYBOARD.SYS keyboard layouts, for KEYB
@@ -243,7 +245,7 @@ MIT-licensed work, and it relicenses none of them. GR-DOS's own work is
 MIT licensed. The MS-DOS 4.00 source it is built from keeps its own MIT
 license. MS-DOS is a trademark of Microsoft. GR-DOS is an independent
 project, not endorsed by Microsoft or IBM. ATTRIB.EXE, MEM.EXE, FDISK.EXE,
-FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM, RESTORE.COM, GRVER.EXE and HELP.EXE are compiled
+FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM, RESTORE.COM, FILESYS.EXE, GRVER.EXE and HELP.EXE are compiled
 with Open Watcom C,
 but contain no Open Watcom code: their C runtime is libc16
 (https://github.com/gr-dos/libc16), under its MIT license. TICO.EXE and the other programs from GitHub

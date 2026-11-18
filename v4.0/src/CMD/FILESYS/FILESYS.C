@@ -28,6 +28,16 @@
 #include "string.h"             /* allows use of str* calls */                                                                   /* ;an000; */
 #include "parse.h"              /* allows use of parser */                                                                       /* ;an000; */
 #include "msgret.h"             /* allows use of msg ret */                                                                      /* ;an000; */
+#ifdef __WATCOMC__
+/* GR-DOS (issue #20): the C calling convention of _MSGRET and _PARSE */
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysdispmsg
+#pragma aux (__cdecl) parse
+/* Microsoft C 5.1's other name for stricmp, which libc16 has */
+#define strcmpi stricmp
+/* FILESYS.C's own NULL, 0, below: not libc16's ((void *)0) */
+#undef NULL
+#endif
                                                                                                                                  /* ;an000; */
 #define ZERO                    0                                                                                                /* ;an002; */
 #define NULL                    0                                                                                                /* ;an000; */
@@ -284,6 +294,12 @@ char    *argv[];                /* array of pointer to arguments */             
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
        }                                     /* end FILESYS MAIN */                                                              /* ;an000; */
+#ifdef __WATCOMC__
+  /* GR-DOS (issue #20): main is void, so Microsoft C left the errorlevel
+     to whatever AL held; 0 here, as only the parse errors (exit(1)) set
+     one */
+  exit(0);
+#endif
   }                                                                                                                              /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                 /* ;an000; */
