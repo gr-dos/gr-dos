@@ -188,7 +188,7 @@ gr-dos-VERSION/
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
 │   ├── CRCSUM.EXE, DF.EXE, DIFF.EXE, LESS.EXE, MD5SUM.EXE, PATCH.EXE,
-│   │   RETROFCH.EXE, TAR.EXE, TERM16.EXE, TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
+│   │   RETROFCH.EXE, TAR.EXE, TCL.EXE, TERM16.EXE, TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
 │   ├── SOURCES.TXT   only with a *16 program under the GPL or another
 │   │                 source license: where its source is, and its license
 │   └── AUTOEXEC.BAT

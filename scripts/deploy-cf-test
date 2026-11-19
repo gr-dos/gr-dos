@@ -180,13 +180,17 @@ sub hash_outside_c ($img, $r) {
 sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
 
 # The *16 programs dist16/lock pins: each one's DOS name, the name it gives
-# itself (its file name without the extension) and version (the tag's).
+# itself (its file name without the extension) and version (the tag's),
+# and how to ask it its version (--version, the gr-dos *16 convention).
+# Tcl16 0.01 predates --version for it: TCL /? gives "Tcl16 0.01: ...".
+my %VERSION = ('TCL.EXE' => { args => '/?', stem => 'tcl16' });
 sub dist16_programs () {
   my @p;
   for (split /\n/, slurp("$root/dist16/lock")) {
     my(undef, undef, $tag, undef, undef, $name) = split ' ';
     next unless /^program /;
-    push @p, { name => $name, stem => lc($name =~ s/\..*//r), version => $tag =~ s/^v//r };
+    push @p, { name => $name, stem => lc($name =~ s/\..*//r), args => '--version', version => $tag =~ s/^v//r,
+      ($VERSION{$name} // {})->%* };
   }
   die "dist16/lock has no programs\n" unless @p;
   return @p;
@@ -293,7 +297,7 @@ sub test_size ($size, $out) {
   # convention), under CTTY AUX for its standard error too. Each must give
   # the version the lock pins.
   my @dist16 = dist16_programs();
-  push @extras, 'CTTY AUX', (map { "$_->{name} --version" } @dist16), 'CTTY CON';
+  push @extras, 'CTTY AUX', (map { "$_->{name} $_->{args}" } @dist16), 'CTTY CON';
   spew("$out/AUTOEXEC.BAT", join "\r\n", '@ECHO OFF', 'ECHO GRDOS-USER-AUTOEXEC>AUX', 'VER>AUX', 'PATH>AUX', 'BREAK>AUX',
     'TYPE C:\GRDOS.ID>AUX', @bat, @extras, 'PROMPT GR$G', '');
   must('mcopy', '-i', at($img, $r->{logical}[0][1]), "$out/AUTOEXEC.BAT", '::');
