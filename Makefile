@@ -216,6 +216,7 @@ REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.S
 # default.
 FORMATS := 1440 1200 720 360
 IMAGES  := $(foreach f,$(FORMATS),$(BUILD)/gr-dos-$(f)k.img)
+RUN_DOSBOX_FLOPPY := $(addprefix run-dosbox-,$(addsuffix k,$(FORMATS)))
 MANIFESTS := $(foreach f,$(FORMATS),$(BUILD)/manifest-$(f)k.txt)
 TESTS   := $(BUILD)/tests
 
@@ -330,7 +331,7 @@ TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
-	test-keyb test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
+	test-keyb test-help-less test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
 	test-join-subst test-backup-restore test-filesys test-replace
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
@@ -466,6 +467,24 @@ $(TESTS)/grver-version.expect: VERSION
 # image's prompt, through each layout, read back from the screen.
 test-keyb: $(BUILD)/gr-dos-1440k.img scripts/disk-test
 	scripts/disk-test $< tests/keyb $(TESTS)/keyb
+
+# HELP on the screen (tests/help-less, issue #86): with LESS.EXE (the
+# lock's) on a 1.44 MB disk, HELP shows a topic in LESS, which scrolls
+# within that topic and no further; HELP /P, and HELP with no LESS or with
+# one that fails (BADLESS.EXE, copied to LESS.EXE: a .COM that exits with
+# errorlevel 1, as a LESS without --start does), use HELP's own pager.
+HELP_LESS_FILES := $(HELP_FILES) $(DIST16)/LESS.EXE $(TESTS)/help-less-files/BADLESS.EXE $(BUILD)/image/AUTOEXEC.BAT \
+	$(call dist,$(SRC)/CMD/FIND/FIND.EXE)
+
+$(TESTS)/help-less-files/BADLESS.EXE:
+	mkdir -p $(@D)
+	printf '\270\001\114\315\041' > $@
+
+$(TESTS)/help-less.img: $(CORE) $(HELP_LESS_FILES) scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(HELP_LESS_FILES)
+
+test-help-less: $(TESTS)/help-less.img scripts/disk-test
+	scripts/disk-test $< tests/help-less $(TESTS)/help-less
 
 # The FDISK tests (tests/fdisk, issue #10). Each scenario boots the 1.44 MB
 # image, types commands at its prompt and reads the screen, with a new,
@@ -671,6 +690,9 @@ Build
   make clean               remove build/linux (build/tools is kept)
   make run-dosbox          try the tools in DOSBox-X, with C:\DOS as a CF
                            install has it (needs dosbox-x; docs/run-dosbox.md)
+  make run-dosbox-cf       boot GR-DOS in DOSBox-X from a fresh CF install,
+  make run-dosbox-FLOPPY     or from a floppy image (FLOPPY: $(addsuffix k,$(FORMATS)));
+                             the image is discarded when DOSBox-X exits
   make help                this list
 
 Tests (make test runs them all; most boot GR-DOS in QEMU)
@@ -684,6 +706,7 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-country        CONFIG.SYS's COUNTRY=, with COUNTRY.SYS; or one
   make test-country-COUNTRY  (COUNTRY: $(COUNTRY_TESTS))
   make test-keyb           KEYB's layouts, typed at the 1.44 MB image's prompt
+  make test-help-less      HELP on the screen, through LESS and its own pager
   make test-codepage       DISPLAY.SYS, MODE's code pages, KEYB and CHCP; or
   make test-codepage-SETUP   one (SETUP: $(CODEPAGE_TESTS)), or the
   make test-codepage-screen  boot messages and KEYB GR, read from the screen
@@ -733,7 +756,7 @@ Maintenance
 Variables
   LIBC16_ROOT=../libc16    build against a libc16 checkout, built with its
                            own make, not the pinned release
-  DOSBOX=, DOSBOX_ARGS=    run-dosbox's DOSBox-X, and arguments for it
+  DOSBOX=, DOSBOX_ARGS=    run-dosbox*'s DOSBox-X, and arguments for it
   FC_REFERENCE=, FDISK_REFERENCE=, JOIN_REFERENCE=, SUBST_REFERENCE=,
   BACKUP_REFERENCE=, RESTORE_REFERENCE=, FILESYS_REFERENCE=,
   REPLACE_REFERENCE=       Microsoft's programs for fc-expect, fdisk-expect,
@@ -755,13 +778,13 @@ test-help: scripts/check-help
 	$(MAKE) --no-print-directory -s help > $(TESTS)/help.txt
 	scripts/check-help $(TESTS)/help.txt 'FORMAT=$(FORMATS)' 'NAME=$(FDISK_TESTS)' \
 	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' 'COUNTRY=$(COUNTRY_TESTS)' 'SETUP=$(CODEPAGE_TESTS)' \
-	  'PRINTER=$(PRINTER_TESTS)' \
+	  'PRINTER=$(PRINTER_TESTS)' 'FLOPPY=$(addsuffix k,$(FORMATS))' \
 	  $(HELP_INTERNAL) -- \
 	  $$($(MAKE) --no-print-directory -pRrq : 2>/dev/null | sed -n 's/^\.PHONY: //p')
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb \
+	test-dist16 dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb test-help-less \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
 	test-codepage-screen test-printer $(TEST_PRINTER) test-join-subst join-subst-expect test-backup-restore \
 	backup-restore-expect test-filesys filesys-expect test-replace replace-expect
@@ -1110,6 +1133,16 @@ DOSBOX_ARGS ?=
 run-dosbox: $(CF)/manifest.txt scripts/run-dosbox
 	scripts/run-dosbox --dosbox "$(DOSBOX)" $(CF) $(BUILD)/dosbox $(DOSBOX_ARGS)
 
+# GR-DOS itself booted in DOSBox-X (scripts/run-dosbox-image): a fresh
+# 512 MB CF install in C:, or a copy of a floppy image in A: with a blank,
+# formatted disk of the same size in B:. The images are in a temporary
+# directory under $(BUILD)/dosbox, removed when DOSBox-X exits.
+run-dosbox-cf: $(CF)/manifest.txt scripts/run-dosbox-image scripts/deploy-cf
+	scripts/run-dosbox-image --dosbox "$(DOSBOX)" cf $(CF) $(BUILD)/dosbox $(DOSBOX_ARGS)
+
+$(RUN_DOSBOX_FLOPPY): run-dosbox-%: $(BUILD)/gr-dos-%.img scripts/run-dosbox-image
+	scripts/run-dosbox-image --dosbox "$(DOSBOX)" floppy $< $(BUILD)/dosbox $(DOSBOX_ARGS)
+
 $(BUILD)/image/AUTOEXEC.BAT: image/autoexec.bat
 	mkdir -p $(@D)
 	sed 's/$$/\r/' $< > $@
@@ -1171,7 +1204,9 @@ $(TESTS)/autoexec-fc/AUTOEXEC.BAT: tests/fc/fc.bat
 # The tests of issue #17's utilities (tests/extras): ALL_FILES, the test
 # AUTOEXEC.BAT and input files, and HELLOX.EXE, the smoke test program
 # linked as an .EXE for EXE2BIN, with the 512-byte header LINK writes
-# (tests/extras/pad-header).
+# (tests/extras/pad-header). Not dist16's SOURCES.TXT, which is there only
+# while the lock has a program under a source license: the tests XCOPY
+# A:\*.TXT, so it would change what they copy.
 EXTRAS_FILES := $(addprefix $(TESTS)/extras-files/,sort.txt comp.in edlin.in label.in recover.in \
 	diskcomp.in print.in same1.txt same2.txt diff.txt) \
 	$(addprefix $(TESTS)/files/,lines.txt diskcopy.in) $(TESTS)/HELLOX.EXE
@@ -1192,7 +1227,7 @@ $(TESTS)/HELLOX.EXE: $(TESTS)/HELLO.COM tests/extras/pad-header
 
 $(TESTS)/extras.img: $(CORE) $(ALL_FILES) $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES) \
 	scripts/mkimage scripts/check-image
-	scripts/mkimage $@ $(SRC) $(filter-out %/AUTOEXEC.BAT,$(ALL_FILES)) \
+	scripts/mkimage $@ $(SRC) $(filter-out %/AUTOEXEC.BAT $(DIST16)/SOURCES.TXT,$(ALL_FILES)) \
 	  $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES)
 
 # The country tests' disks: the system files, the scenario's CONFIG.SYS,

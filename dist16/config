@@ -21,9 +21,29 @@ exclude gr-dos/hello16 the template for gr-dos *16 programs, not a utility
 # so it is pinned, and a release of it is taken only by changing tag= here.
 include tico-edit/tico16 tag=v0.02 required
 
+# gr-dos/retrofetch16's program is spelled RETROFCH.EXE, since
+# retrofetch.exe is not an 8.3 name, so it is not the repository's stem
+# (retrofetch) that discovery looks for, and asset= names it.
+include gr-dos/retrofetch16 asset=retrofch.exe
+
+# gr-dos/which16 releases both the C reference build, which.exe, and an
+# assembly one, which.com: 2,545 bytes to 4,252 in v0.04, both 8086 and
+# DOS 2.0+, and compared against the C one in which16's tests. v0.04 has
+# its heap-exhaustion fix (which16 PR #9), so the .COM is shipped
+# (issue #80). Only which16's: the default stays exe.
+include gr-dos/which16 prefer=com
+
 # The licenses a shipped program may have (GitHub's SPDX identifiers):
 # permissive ones, whose notice the release ZIP's README.txt carries.
-license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD
+license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD TCL
+
+# GitHub's license detector does not recognize the Tcl license (TCL), and
+# reports NOASSERTION for gr-dos/tcl16, whose LICENSE is it (issue #83).
+# Taken as TCL only while v0.01's LICENSE, at its commit, is these exact
+# bytes; a release with another LICENSE fails until this is updated after
+# reading it. Its LICENSE names Tiny Tcl's own notice, which TCL.EXE also
+# carries, so it is shipped with it.
+license-override gr-dos/tcl16 TCL LICENSE sha256=b9ee1e757486a359ba286d22c007f054f9a97cc140c05c0e968ff4c67b918689 notice=vendor/LICENSE.tinytcl
 
 # And those that also require the program's complete corresponding source
 # to be available (issue #56): GPL-2.0-or-later for gr-dos/patch16, GNU

@@ -95,6 +95,24 @@ chosen, and why.
 The permissive licenses a program may have (GitHub's SPDX identifiers),
 which require only that their notice is kept.
 
+=item license-override OWNER/NAME SPDX PATH sha256=HEX [notice=PATH...]
+
+GitHub's license detector does not know every license: it reports
+C<NOASSERTION> for the Tcl license (C<TCL>), for one (issue #83). This
+takes SPDX, which must be one of the C<license>s, as the license of the
+one repository OWNER/NAME, and only when, at the commit of the release
+C<resolve> takes, GitHub reports C<NOASSERTION> for the file PATH, and
+that file's bytes have the SHA-256 HEX. Anything else fails, as without
+it: another file, other bytes (a changed license, or a newer release's),
+none, or another repository. A license GitHub does recognize is not
+overridden, and if GitHub reports SPDX itself, the program fails until
+the override is removed. Each C<notice=> is a further notice the license
+names, which must be at the same commit, and is shipped with the
+license. The lock has an C<override> line after the program's, and the
+report says the license is the override's, not GitHub's. A program in
+the lock under the override's SPDX must have that line, and its
+notices, or the lock is refused.
+
 =item source-license SPDX...
 
 The licenses a program may have that also require its corresponding
@@ -195,6 +213,9 @@ my @FIELDS = qw( repo tag commit asset name size sha256 spdx license license_sha
 my @SOURCE = qw( repo asset size sha256 build );
 my @NOTICE = qw( repo path sha256 );
 my @DEPEND = qw( repo dep tag commit asset size sha256 spdx license license_sha256 );
+# After a program whose license is a license-override's (issue #83): what
+# GitHub reported, and the file and SHA-256 the override pins.
+my @OVERRIDE = qw( repo github spdx license sha256 );
 
 # A program under a source license has this at its release's commit.
 my $MANIFEST = 'dist16.source';
@@ -280,7 +301,7 @@ sub api ($path) {
 }
 
 sub read_config ($path) {
-  my %c = (discover => [], exclude => {}, include => {}, license => {}, source_license => {}, order => [], prefer => 'exe');
+  my %c = (discover => [], exclude => {}, include => {}, license => {}, source_license => {}, override => {}, order => [], prefer => 'exe');
   my $prefer_line;
   my $n = 0;
   for my $line (split /\n/, slurp($path)) {
@@ -322,6 +343,21 @@ sub read_config ($path) {
     } elsif($cmd eq 'license') {
       die "$where: license SPDX...\n" unless @w;
       $c{license}{$_} = 1 for @w;
+    } elsif($cmd eq 'license-override') {
+      my $usage = "$where: license-override OWNER/NAME SPDX PATH sha256=HEX [notice=PATH...]\n";
+      die $usage unless @w >= 4 && $w[0] =~ $repo_re && $w[1] =~ /^[\w.+-]+$/;
+      my($repo, $spdx, $lpath, $sum, @more) = @w;
+      die "$where: $repo has two license-overrides\n" if $c{override}{lc $repo};
+      die "$where: $lpath is not a path in the repository\n" unless safe_path($lpath);
+      my($sha) = $sum =~ /^sha256=([0-9a-f]{64})$/ or die "$where: $sum: the license file's SHA-256 is sha256= and 64 lowercase hex digits\n";
+      die "$where: NOASSERTION is not a license to override with\n" if $spdx eq 'NOASSERTION';
+      my @notices;
+      for (@more) {
+        my($n) = /^notice=(.+)$/ or die "$where: unknown license-override option $_\n";
+        die "$where: $n is not a path in the repository\n" unless safe_path($n) && $n ne $lpath;
+        push @notices, $n;
+      }
+      $c{override}{lc $repo} = { repo => $repo, spdx => $spdx, license => $lpath, sha256 => $sha, notices => \@notices, where => $where };
     } elsif($cmd eq 'source-license') {
       die "$where: source-license SPDX...\n" unless @w;
       for (@w) {
@@ -338,6 +374,11 @@ sub read_config ($path) {
   die "$path: no license directive\n" unless %{ $c{license} };
   for my $spdx (sort keys $c{source_license}->%*) {
     die "$path: $spdx is both a license and a source-license\n" if $c{license}{$spdx} || $c{license}{spdx_base($spdx)};
+  }
+  # An override is only to a permissive license the config allows anyway,
+  # so it never decides whether source is shipped.
+  for my $o (map { $c{override}{$_} } sort keys $c{override}->%*) {
+    die "$o->{where}: $o->{spdx} is not a license dist16/config allows (license)\n" unless $c{license}{$o->{spdx}};
   }
   return \%c;
 }
@@ -422,6 +463,9 @@ sub resolve_all ($c) {
     my($d) = grep { lc $_->[0] eq lc $owner } $c->{discover}->@*;
     $repos{$key} //= { repo => $i->{repo}, how => 'included', suffix => $d ? $d->[1] : '16' };
     $repos{$key}{opt} = $i;
+  }
+  for my $key (sort keys $c->{override}->%*) {
+    push @notes, "license-override $c->{override}{$key}{repo} matches no repository" unless $repos{$key};
   }
 
   my @results;
@@ -548,10 +592,36 @@ sub resolve_one ($c, $r, $notes) {
   my $lic = api("/repos/$repo/license?ref=$res{commit}") // return $skip->('failed', "$tag: no license");
   my $spdx = $lic->{license}{spdx_id} // 'NOASSERTION';
   my $lpath = $lic->{path} // '';
+  my $ltext;
+  # A license GitHub does not recognize, which dist16/config's
+  # license-override for this repository names, by file and SHA-256, at
+  # this commit (issue #83). Anything else fails as without it.
+  if((my $o = $c->{override}{lc $repo}) && $spdx eq 'NOASSERTION') {
+    my $why = "license-override $o->{spdx} ($o->{where})";
+    return $skip->('failed', "$tag: GitHub finds an unrecognized license in $lpath, but the $why names $o->{license}")
+      unless $lpath eq $o->{license};
+    $ltext = raw($repo, $res{commit}, $lpath) // return $skip->('failed', "$tag: license file $lpath is missing, for the $why");
+    my $sha = sha256_hex($ltext);
+    return $skip->('failed', "$tag: $lpath at $res{commit} has SHA-256 $sha, but the $why pins $o->{sha256}")
+      unless $sha eq $o->{sha256};
+    $res{override} = { repo => $repo, github => $spdx, spdx => $o->{spdx}, license => $lpath, sha256 => $sha };
+    $res{notices} = [];
+    for my $path ($o->{notices}->@*) {
+      my $text = raw($repo, $res{commit}, $path) // return $skip->('failed', "$tag: the notice $path ($why) is not at the commit");
+      push $res{notices}->@*, { repo => $repo, path => $path, sha256 => sha256_hex($text) };
+    }
+    $spdx = $o->{spdx};
+  } elsif(my $o2 = $c->{override}{lc $repo}) {
+    # GitHub now recognizes the override's license itself: the override is
+    # to be removed, not silently kept (the lock would need its line).
+    return $skip->('failed', "$tag: GitHub finds $spdx itself, so the license-override ($o2->{where}) is not needed: remove it")
+      if $spdx eq $o2->{spdx};
+    push @$notes, "$repo $tag: the license-override ($o2->{where}) is not used: GitHub finds $spdx";
+  }
   return $skip->('failed', "$tag: license $spdx is not one dist16/config allows")
     unless $c->{license}{$spdx} || source_licenses($c, $spdx);
   return $skip->('failed', "$tag: malformed license path") unless safe_path($lpath);
-  my $ltext = raw($repo, $res{commit}, $lpath) // return $skip->('failed', "$tag: license file $lpath is missing");
+  $ltext //= raw($repo, $res{commit}, $lpath) // return $skip->('failed', "$tag: license file $lpath is missing");
   @res{qw( spdx license license_sha256 )} = ($spdx, $lpath, sha256_hex($ltext));
 
   my($data, $why) = download($repo, $tag, $asset);
@@ -760,16 +830,17 @@ sub lock_text ($results) {
     "# source @{[ map { uc } @SOURCE ]}",
     "# notice @{[ map { uc } @NOTICE ]}",
     "# depend @{[ map { uc } @DEPEND ]}",
+    '# and after a program under a license-override (dist16/config), before its notices:',
+    "# override @{[ map { uc } @OVERRIDE ]}",
     '# skip REPO KIND REASON',
   );
   for my $res (@$results) {
     if($res->{kind} eq 'included') {
       push @lines, join ' ', 'program', map { $res->{$_} } @FIELDS;
-      if(my $s = $res->{source}) {
-        push @lines, join ' ', 'source', map { $s->{$_} } @SOURCE;
-        for my $x ($res->{notices}->@*) { push @lines, join ' ', 'notice', map { $x->{$_} } @NOTICE }
-        for my $x ($res->{depends}->@*) { push @lines, join ' ', 'depend', map { $x->{$_} } @DEPEND }
-      }
+      if(my $o = $res->{override}) { push @lines, join ' ', 'override', map { $o->{$_} } @OVERRIDE }
+      if(my $s = $res->{source}) { push @lines, join ' ', 'source', map { $s->{$_} } @SOURCE }
+      for my $x (($res->{notices} // [])->@*) { push @lines, join ' ', 'notice', map { $x->{$_} } @NOTICE }
+      for my $x (($res->{depends} // [])->@*) { push @lines, join ' ', 'depend', map { $x->{$_} } @DEPEND }
     } else {
       push @lines, join ' ', 'skip', $res->{repo}, $res->{kind}, $res->{reason};
     }
@@ -786,6 +857,10 @@ sub report ($results, $notes) {
         $src = ", source $s->{asset}" . join '', map { ", with $_->{dep} $_->{tag} ($_->{spdx}, source $_->{asset})" } $res->{depends}->@*;
       }
       my $chosen = $res->{chosen} ? ", $res->{chosen}" : '';
+      if(my $o = $res->{override}) {
+        $src = " by license-override (GitHub finds $o->{github}; $o->{license} SHA-256 verified"
+          . join('', map { ", notice $_->{path}" } $res->{notices}->@*) . ')';
+      }
       say sprintf '%-12s %s %s %s as %s, %s%s%s%s', 'included', $res->{repo}, $res->{tag}, $res->{asset}, $res->{name}, $res->{spdx}, $src, $chosen, $ign;
     } else {
       say sprintf '%-12s %s: %s', $res->{kind}, $res->{repo}, $res->{reason};
@@ -818,11 +893,22 @@ sub read_lock () {
       $p->{notices} = [];
       $p->{depends} = [];
       push @programs, $p;
+    } elsif($kind eq 'override') {
+      my $x = $fields->($kind, \@OVERRIDE, @w);
+      my $p = $programs[-1];
+      die "$opt{lock}:$n: an override line must follow its program's\n" unless $p && $p->{repo} eq $x->{repo};
+      die "$opt{lock}:$n: an override line out of place\n" if $p->{override} || $p->{source} || $p->{notices}->@*;
+      die "$opt{lock}:$n: malformed override line\n" unless $hex->($x->{sha256}, 64) && safe_path($x->{license});
+      die "$opt{lock}:$n: the override line is not its program's license\n"
+        unless $x->{spdx} eq $p->{spdx} && $x->{license} eq $p->{license} && $x->{sha256} eq $p->{license_sha256};
+      $p->{override} = $x;
     } elsif($kind eq 'source' || $kind eq 'notice' || $kind eq 'depend') {
       my $x = $fields->($kind, { source => \@SOURCE, notice => \@NOTICE, depend => \@DEPEND }->{$kind}, @w);
       my $p = $programs[-1];
       die "$opt{lock}:$n: a $kind line must follow its program's\n" unless $p && $p->{repo} eq $x->{repo};
-      die "$opt{lock}:$n: a $kind line out of place\n" unless $kind eq 'source' xor $p->{source};
+      die "$opt{lock}:$n: a $kind line out of place\n"
+        unless $kind eq 'source' ? !$p->{source} && !$p->{override}
+          : $kind eq 'notice' ? $p->{source} || $p->{override} : $p->{source};
       die "$opt{lock}:$n: malformed $kind line\n" unless $hex->($x->{sha256}, 64) && ($kind eq 'notice'
         ? safe_path($x->{path})
         : $x->{asset} =~ /^[\w.+-]+$/ && $x->{size} =~ /^\d+$/ && ($kind eq 'source' ? safe_path($x->{build})
@@ -855,6 +941,20 @@ sub read_lock () {
         if $c->{source_license}{$p->{spdx}};
       die "$opt{lock}: $p->{name} ($p->{repo}) is under $p->{spdx}, which is not a license in $opt{config}\n"
         unless $c->{license}{$p->{spdx}};
+    }
+    # A license-override in the lock must be the config's, exactly; and a
+    # program under the license of the config's override for its
+    # repository must have it, with its notices: the lock records that
+    # GitHub did not recognize the license, and what was verified instead.
+    my $want = $c->{override}{lc $p->{repo}};
+    die "$opt{lock}: $p->{name} ($p->{repo}) is under $p->{spdx}, the license-override's ($want->{where}), but has no override line\n"
+      if $want && !$p->{override} && $p->{spdx} eq $want->{spdx};
+    if(my $x = $p->{override}) {
+      my $o = $c->{override}{lc $p->{repo}};
+      die "$opt{lock}: $p->{name} ($p->{repo}) has a license-override that $opt{config} does not have\n" unless $o;
+      die "$opt{lock}: $p->{name} ($p->{repo}) has another license-override than $opt{config}'s ($o->{where})\n"
+        unless $x->{spdx} eq $o->{spdx} && $x->{license} eq $o->{license} && $x->{sha256} eq $o->{sha256}
+          && join("\0", map { $_->{path} } $p->{notices}->@*) eq join("\0", $o->{notices}->@*);
     }
     for my $d ($p->{depends}->@*) {
       die "$opt{lock}: $p->{name} ($p->{repo}) depends on $d->{dep}, under $d->{spdx}, which $opt{config} does not allow\n"
@@ -895,13 +995,8 @@ sub cmd_fetch ($dest) {
       $p->{license_sha256}, "$what $p->{license}");
     copy($exe, "$dest/$p->{name}") or die "$dest/$p->{name}: $!\n";
     copy($lic, "$dest/licenses/$p->{name}.txt") or die "$dest/licenses/$p->{name}.txt: $!\n";
-    my $s = $p->{source} or next;
-    # The corresponding source, in source/NAME, and the further notices
-    # and the libraries' licenses, in licenses.
-    my $sdir = "$dest/source/" . base($p->{name});
-    make_path($sdir);
-    my $src = cached(release_url($p->{repo}, $p->{tag}, $s->{asset}), "$dir/$s->{asset}", $s->{sha256}, "$what $s->{asset}");
-    copy($src, "$sdir/$s->{asset}") or die "$sdir/$s->{asset}: $!\n";
+    # The further notices (a source license's, or a license-override's),
+    # in licenses.
     my $k = 0;
     for my $x ($p->{notices}->@*) {
       $k++;
@@ -909,6 +1004,13 @@ sub cmd_fetch ($dest) {
         $x->{sha256}, "$what $x->{path}");
       copy($f, "$dest/licenses/$p->{name}.notice$k.txt") or die "$dest/licenses: $!\n";
     }
+    my $s = $p->{source} or next;
+    # The corresponding source, in source/NAME, and the libraries'
+    # licenses, in licenses.
+    my $sdir = "$dest/source/" . base($p->{name});
+    make_path($sdir);
+    my $src = cached(release_url($p->{repo}, $p->{tag}, $s->{asset}), "$dir/$s->{asset}", $s->{sha256}, "$what $s->{asset}");
+    copy($src, "$sdir/$s->{asset}") or die "$sdir/$s->{asset}: $!\n";
     $k = 0;
     for my $d ($p->{depends}->@*) {
       $k++;

@@ -1,0 +1,26 @@
+XCOPY - Copies files, and directories with their subdirectories
+Command, from MS-DOS 4.00. XCOPY.EXE: in C:\DOS and the 720 KB, 1.2 MB and
+1.44 MB floppies.
+
+Syntax
+  XCOPY source [destination] [/A | /M] [/D:date] [/P] [/S [/E]] [/V] [/W]
+
+  source       The files to copy: a drive, a directory, or a file name,
+               which may have wildcards (* and ?).
+  destination  Where to copy them; the current directory if left out.
+  /A           Copies only files with the archive attribute set, and
+               leaves it set.
+  /M           As /A, but clears the attribute of each file copied, so
+               that the next XCOPY /M copies only files changed since.
+  /D:date      Copies only files changed on or after the date, in the
+               country's date format (MM-DD-YY in the US).
+  /P           Asks (Y/N) before copying each file.
+  /S           Copies the subdirectories too, but not empty ones.
+  /E           With /S, copies empty subdirectories as well.
+  /V           Reads each copy back to check it.
+  /W           Waits for a key before it starts, so that you can change
+               disks.
+
+Examples
+ XCOPY  Line 1  WRAP  Q quit
+attr 24: 70x80

@@ -20,8 +20,8 @@ Help for each
 Examples
   LESS --help
     Shows how to use LESS.
-  DIFF16 --help
-    Shows how to use DIFF16.
+  DIFF --help
+    Shows how to use DIFF.
 
 Licenses
   Each program is under its own project's license, not GR-DOS's. The

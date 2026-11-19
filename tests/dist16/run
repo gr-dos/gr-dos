@@ -31,7 +31,8 @@ archived and private repositories; a deterministic lock, reproduced
 offline from the cache; and programs under a source license (issue #56):
 GPL-2.0-or-later and GPL-1.0-or-later programs with their corresponding
 source and a linked library's, resolved, locked, fetched, staged and packaged, and each way
-its source can be missing, unverifiable or mislabeled.
+its source can be missing, unverifiable or mislabeled; and a license
+override (issue #83), verified by SHA-256, and each way it is refused.
 
 =cut
 
@@ -754,6 +755,117 @@ sub prog ($name, %r) {
   $dir = github(config => "$config" . "exclude gr-dos/libc16 the C runtime\ninclude gr-dos/libc16\n", owners => $owners);
   ($rc, $o) = dist16($dir, 'resolve');
   ok($rc == 2 && $o =~ /both included and excluded/, 'a library both included and excluded is still an error');
+}
+
+# 12. A license-override (issue #83): a license GitHub's detector does not
+# recognize (NOASSERTION), taken for one repository only when its file at
+# the release's commit has the SHA-256 the config pins; otherwise failed,
+# as without it.
+{
+  my $tcl_text = license_text('gr-dos/tcl16', 'NOASSERTION');
+  my $tcl_sha = sha256_hex($tcl_text);
+  my $tiny = "Tiny Tcl: copyrighted by the Regents of the University of California\n";
+  my $tcl = sub ($name, %r) { prog($name, license => 'NOASSERTION', files => { 'vendor/LICENSE.tinytcl' => $tiny }, %r) };
+  my $owners = { 'gr-dos' => [ $tcl->('tcl16'), prog('plain16', license => 'NOASSERTION'), prog('mit16'),
+    $tcl->('changed16'), $tcl->('path16', license_path => 'COPYING'), $tcl->('gone16'), $tcl->('nonotice16', files => {}),
+    prog('known16', license => 'TCL') ] };
+  my $ov = sub ($repo, %o) { "license-override $repo TCL @{[ $o{path} // 'LICENSE' ]} sha256=@{[ $o{sha} // sha256_hex(license_text($repo, 'NOASSERTION')) ]}"
+    . ($o{nonotice} ? '' : ' notice=vendor/LICENSE.tinytcl') . "\n" };
+  my $config = "discover gr-dos 16\nlicense MIT TCL\n" . $ov->('gr-dos/tcl16') . $ov->('gr-dos/mit16', nonotice => 1)
+    . $ov->('gr-dos/changed16', sha => 'f' x 64) . $ov->('gr-dos/path16') . $ov->('gr-dos/gone16') . $ov->('gr-dos/nonotice16')
+    . $ov->('gr-dos/known16', nonotice => 1)
+    . $ov->('other/nowhere16');
+  my $dir = github(config => $config, owners => $owners);
+  unlink "$dir/raw/gr-dos/gone16/" . substr(sha256_hex('gr-dos/gone16 v0.01'), 0, 40) . '/LICENSE';
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'license-override: resolve succeeds');
+  my($i) = grep { $lines->[$_] =~ m{^program gr-dos/tcl16 } } 0 .. $#$lines;
+  ok(defined $i && $lines->[$i] =~ m{^program gr-dos/tcl16 v0\.01 ([0-9a-f]{40}) tcl\.exe TCL\.EXE 600 [0-9a-f]{64} TCL LICENSE \Q$tcl_sha\E$}
+    && $lines->[$i + 1] eq "override gr-dos/tcl16 NOASSERTION TCL LICENSE $tcl_sha"
+    && $lines->[$i + 2] eq 'notice gr-dos/tcl16 vendor/LICENSE.tinytcl ' . sha256_hex($tiny),
+    'a verified override: the program is under TCL, with an override line and its notice');
+  ok($o =~ m{^included +gr-dos/tcl16 v0\.01 tcl\.exe as TCL\.EXE, TCL by license-override \(GitHub finds NOASSERTION; LICENSE SHA-256 verified, notice vendor/LICENSE\.tinytcl\)$}m,
+    'the report says the license is the override\'s, not GitHub\'s');
+  ok(has($lines, qr{^skip gr-dos/plain16 failed v0\.01: license NOASSERTION is not one dist16/config allows$}),
+    'NOASSERTION with no override still fails');
+  ok(has($lines, qr{^skip gr-dos/changed16 failed v0\.01: LICENSE at [0-9a-f]{40} has SHA-256 [0-9a-f]{64}, but the license-override TCL \(\S+:\d+\) pins f{64}$}),
+    'a license file with another SHA-256 fails');
+  ok(has($lines, qr{^skip gr-dos/path16 failed v0\.01: GitHub finds an unrecognized license in COPYING, but the license-override TCL \(\S+\) names LICENSE$}),
+    'a license in another file than the override names fails');
+  ok(has($lines, qr{^skip gr-dos/gone16 failed v0\.01: license file LICENSE is missing, for the license-override TCL}),
+    'a license file missing at the commit fails');
+  ok(has($lines, qr{^skip gr-dos/nonotice16 failed v0\.01: the notice vendor/LICENSE\.tinytcl \(license-override TCL \(\S+\)\) is not at the commit$}),
+    'a notice the override names, missing at the commit, fails');
+  ok(has($lines, qr{^program gr-dos/mit16 v0\.01 \S+ mit\.exe MIT\.EXE \d+ \S+ MIT LICENSE }) && !has($lines, qr{^override gr-dos/mit16 })
+    && $o =~ m{gr-dos/mit16 v0\.01: the license-override \(\S+\) is not used: GitHub finds MIT},
+    'a license GitHub recognizes is not overridden, and the unused override is reported');
+  ok($o =~ m{license-override other/nowhere16 matches no repository}, 'an override of no repository is reported');
+  ok(has($lines, qr{^skip gr-dos/known16 failed v0\.01: GitHub finds TCL itself, so the license-override \(\S+\) is not needed: remove it$}),
+    'GitHub recognizing the override\'s own license fails, so the override is removed, not kept unrecorded');
+  my $first = slurp("$dir/lock");
+  dist16($dir, 'resolve');
+  ok(slurp("$dir/lock") eq $first, 'license-override: resolving again writes the same lock');
+
+  # fetch, list and notices: the license and its notice are shipped.
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest");
+  ok($rc == 0 && slurp("$dir/dest/licenses/TCL.EXE.txt") eq $tcl_text && slurp("$dir/dest/licenses/TCL.EXE.notice1.txt") eq $tiny,
+    'fetch stages the overridden license and its notice');
+  ok(!-e "$dir/dest/SOURCES.TXT" && !-e "$dir/dest/source", 'and, a permissive license, no source');
+  my(undef, $notices) = dist16($dir, 'notices', "$dir/dest");
+  ok($notices =~ m{^TCL\.EXE: gr-dos/tcl16 v0\.01 \(commit [0-9a-f]{40}\), TCL$}m && index($notices, $tcl_text) >= 0
+    && $notices =~ m{^TCL\.EXE: vendor/LICENSE\.tinytcl$}m && index($notices, $tiny) >= 0, 'notices: the license and the notice in full');
+  my(undef, $bin) = dist16($dir, 'bin-list');
+  ok($bin =~ m{^  BIN\\TCL\.EXE +from gr-dos/tcl16 v0\.01, TCL$}m, 'bin-list: TCL');
+  remove_tree("$dir/dl", "$dir/raw");
+  ($rc) = dist16($dir, 'fetch', "$dir/dest2");
+  ok($rc == 0 && slurp("$dir/dest2/licenses/TCL.EXE.notice1.txt") eq $tiny, 'offline, fetch reproduces them from the cache');
+
+  # The lock is checked against the config's override.
+  my $lock = slurp("$dir/lock");
+  my %bad = (
+    'an override line the config does not have' =>
+      [ $lock, $config =~ s/^license-override gr-dos\/tcl16 .*\n//mr, qr{TCL\.EXE \(gr-dos/tcl16\) has a license-override that \S+ does not have} ],
+    'another SHA-256 than the config pins' =>
+      [ $lock, $config =~ s/(license-override gr-dos\/tcl16 TCL LICENSE sha256=)\S+/$1 . ('e' x 64)/er, qr{has another license-override than} ],
+    'another notice than the config names' =>
+      [ $lock, $config =~ s/(license-override gr-dos\/tcl16 .*) notice=\S+/$1/r, qr{has another license-override than} ],
+    'an override line that is not the program\'s license' =>
+      [ $lock =~ s/^(override gr-dos\/tcl16 NOASSERTION TCL LICENSE )\S+/$1 . ('d' x 64)/mer, $config, qr{the override line is not its program's license} ],
+    'a notice before the override line' =>
+      [ $lock =~ s/^(override gr-dos\/tcl16 .*\n)(notice gr-dos\/tcl16 .*\n)/$2$1/mr, $config, qr{a notice line out of place} ],
+    'no override line or notice, under the override\'s license' =>
+      [ $lock =~ s/^(override|notice) gr-dos\/tcl16 .*\n//mgr, $config,
+        qr{TCL\.EXE \(gr-dos/tcl16\) is under TCL, the license-override's \(\S+\), but has no override line} ],
+    'no override line, with its notice' =>
+      [ $lock =~ s/^override gr-dos\/tcl16 .*\n//mr, $config, qr{a notice line out of place} ],
+  );
+  for my $what (sort keys %bad) {
+    my($l, $cfg, $re) = $bad{$what}->@*;
+    spew("$dir/lock", $l);
+    spew("$dir/config", $cfg);
+    ($rc, $o) = dist16($dir, 'list');
+    ok($rc == 2 && $o =~ $re, "the lock is refused: $what") or diag($o);
+  }
+  spew("$dir/lock", $lock);
+
+  # Errors in the config: only a license the config allows, and a pinned,
+  # well-formed SHA-256.
+  my %cfg = (
+    "license-override gr-dos/tcl16 GPL-3.0 LICENSE sha256=$tcl_sha\n" => qr{GPL-3\.0 is not a license dist16/config allows},
+    "license-override gr-dos/tcl16 TCL LICENSE\n" => qr{license-override OWNER/NAME SPDX PATH sha256=HEX},
+    "license-override gr-dos/tcl16 TCL LICENSE sha256=ABC\n" => qr{sha256= and 64 lowercase hex digits},
+    "license-override gr-dos/tcl16 NOASSERTION LICENSE sha256=$tcl_sha\n" => qr{NOASSERTION is not a license to override with},
+    "license-override gr-dos/tcl16 TCL ../LICENSE sha256=$tcl_sha\n" => qr{\.\./LICENSE is not a path},
+    "license-override gr-dos/tcl16 TCL LICENSE sha256=$tcl_sha frob\n" => qr{unknown license-override option frob},
+    "license-override gr-dos/tcl16 TCL LICENSE sha256=$tcl_sha\nlicense-override gr-dos/TCL16 TCL LICENSE sha256=$tcl_sha\n"
+      => qr{has two license-overrides},
+  );
+  for my $c (sort keys %cfg) {
+    spew("$dir/config", "discover gr-dos 16\nlicense MIT TCL\n$c");
+    ($rc, $o) = dist16($dir, 'list');
+    ok($rc == 2 && $o =~ $cfg{$c}, "a config error: @{[ $c =~ s/\n/; /gr ]}") or diag($o);
+  }
 }
 
 say "1..$tests";

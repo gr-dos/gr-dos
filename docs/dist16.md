@@ -21,14 +21,19 @@ release.
 
 ## What is shipped
 
-The current lock includes CRCSUM, DF, DIFF16, LESS, MD5SUM, TAR, TRUNCATE
-and WHICH from `gr-dos`, and TICO from `tico-edit`. It leaves these out:
+The current lock includes CRCSUM, DF, DIFF, LESS, MD5SUM, PATCH, RETROFCH,
+TAR, TCL, TERM16, TRUNCATE and WHICH from `gr-dos`, and TICO from `tico-edit`.
+TCL's license is taken from a [license override](#license-overrides),
+since GitHub does not recognize it.
+`gr-dos/retrofetch16`'s program is `retrofch.exe`, not the repository's
+stem, since `retrofetch.exe` is not an 8.3 name, so its `include` in
+`dist16/config` names it with `asset=`. It leaves these out:
 
 | Repository | Why |
 |---|---|
 | `gr-dos/libc16`, `libkitchen16` | excluded: library repositories (`lib*16`), not DOS programs |
 | `gr-dos/hello16` | excluded: the template the other repositories are made from |
-| `gr-dos/patch16`, `perl16`, `term16` | unavailable: no release yet |
+| `gr-dos/perl16` | unavailable: no release yet |
 
 Each program goes in `C:\DOS` and the ZIP's `BIN`, after GR-DOS's own
 commands. The ZIP's `README.txt` lists each one with its repository,
@@ -92,7 +97,7 @@ A repository's release is shipped when it has:
 
 1. **A program asset**, named `STEM.exe` or `STEM.com`, where STEM is the
    repository name with or without `16` (`crcsum16`: `crcsum.exe`;
-   `diff16`: `diff16.exe`). If both an `.exe` and a `.com` are present, the
+   `diff16`: `diff.exe`). If both an `.exe` and a `.com` are present, the
    `.exe` is shipped, unless `prefer` chooses the `.com`
    ([Shipping the .COM](#shipping-the-com)). The gr-dos/hello16 conventions
    make the C `.EXE` the reference, and the `.COM` an assembly version of
@@ -125,13 +130,16 @@ A repository's release is shipped when it has:
    GPL-1.0-or-later, also needs
    the program's corresponding source, which the release must provide as
    [Source licenses](#source-licenses) says. A license added after a
-   release counts from the next release.
+   release counts from the next release. A license GitHub does not
+   recognize (`NOASSERTION`) fails, unless `dist16/config` has a
+   [license override](#license-overrides) for the repository that the
+   license file matches.
 
 A repository that fails is reported, and recorded in the lock as a `skip`
 line with the reason, so the lock shows why a program is missing:
 
 ```text
-included     gr-dos/which16 v0.03 which.exe as WHICH.EXE, MIT, .exe preferred (the default) (ignored: which.com)
+included     gr-dos/truncate16 v0.03 truncate.exe as TRUNCATE.EXE, MIT, .exe preferred (the default) (ignored: truncate.com)
 excluded     gr-dos/libc16: library repository (lib*16 convention), not a DOS executable
 unavailable  gr-dos/term16: no release
 failed       gr-dos/foo16: v0.01: license GPL-3.0 is not one dist16/config allows
@@ -157,10 +165,23 @@ notice REPO PATH SHA256
 depend REPO DEP TAG COMMIT ASSET SIZE SHA256 SPDX LICENSE LICENSE_SHA256
 ```
 
+A program under a [license override](#license-overrides) is followed by
+the override, then its notices:
+
+```text
+override REPO GITHUB SPDX LICENSE SHA256
+notice REPO PATH SHA256
+```
+
 The build checks the lock against `dist16/config` when it reads it: a
 program under a `source-license` with no `source` line, or a `source`
 line under a permissive license, is refused, never shipped as if it were
-permissively licensed.
+permissively licensed. An `override` line must be the config's
+`license-override` for the repository, with the same license, file,
+SHA-256 and notices, and the program's own license. A program under the
+license of its repository's `license-override` must have the line, and
+so its notices: without it, the lock would not record that GitHub did
+not recognize the license, nor what was verified instead.
 
 `fetch` downloads each asset from
 `https://github.com/REPO/releases/download/TAG/ASSET`, and each license
@@ -171,6 +192,48 @@ in `source/NAME`, and `SOURCES.TXT`). A verified file
 in the cache is not downloaded again, so a rebuild needs no network, and
 CI caches `build/tools` by the lock's hash. A file that does not match is a
 build error, and is never used.
+
+## License overrides
+
+GitHub's license detector (Licensee) knows only some licenses. For any
+other, such as the Tcl license (SPDX `TCL`), it reports `NOASSERTION`,
+even when the file is that license and nothing else. That is a limit of
+the detector, not a reason to relicense a program, so `dist16/config` can
+name the license of one repository itself (issue #83):
+
+```text
+license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD TCL
+license-override gr-dos/tcl16 TCL LICENSE sha256=b9ee1e75... notice=vendor/LICENSE.tinytcl
+```
+
+It is an exception to GitHub's detection, not to the license check, and
+it is narrow:
+
+- **One repository, one file, exact bytes.** It applies only to that
+  repository, only when GitHub reports `NOASSERTION` for that file at the
+  commit of the release `resolve` takes, and only when the file's bytes,
+  fetched from that commit (not `main`), have that SHA-256. Another file,
+  a missing one, or other bytes (a changed license, or a new release's)
+  fail, as without the override, until someone reads the new file and
+  updates the SHA-256 in a reviewed change.
+- **A license the config allows.** The SPDX identifier must also be one
+  of the `license`s, so an override is only ever to a permissive license,
+  and never decides whether a program's source is shipped. `NOASSERTION`
+  itself is never allowed.
+- **GitHub first.** A license GitHub does recognize is used as before,
+  and the report notes the override is not used. If GitHub comes to
+  recognize the override's own license, the program fails until the
+  override is removed, so a lock never holds that license for the
+  repository without its `override` line.
+- **Notices.** Each `notice=` is a further file at the same commit that
+  the license names, such as Tiny Tcl's own license for Tcl16. It is
+  pinned in the lock and shipped after the license, in the ZIP's README.
+- **Visible.** The lock's `override` line records what GitHub reported
+  and what the override verified, and the report says so:
+
+```text
+included     gr-dos/tcl16 v0.01 tcl.exe as TCL.EXE, TCL by license-override (GitHub finds NOASSERTION; LICENSE SHA-256 verified, notice vendor/LICENSE.tinytcl)
+```
 
 ## Source licenses
 
@@ -382,7 +445,7 @@ and a little on C:
 
 | Repository | `.exe` | `.com` |
 |---|---:|---:|
-| which16 v0.03 | 4,252 | 2,530 |
+| which16 v0.04 | 4,252 | 2,545 |
 | truncate16 v0.03 | 5,728 | 3,294 |
 | crcsum16 v0.03 | 5,948 | 3,417 |
 
@@ -392,6 +455,10 @@ gr-dos/hello16 conventions, and the `.COM` is tested against it
 experimental (truncate16's README). So each program's choice weighs size
 against how mature its `.COM` is, and each change shows up in review as a
 change to `dist16/lock`.
+
+WHICH is shipped as `WHICH.COM` this way (issue #80): which16 v0.04's
+`.COM` has its heap-exhaustion fix (which16 PR #9) and is compared
+against the C build in which16's tests. The others ship their `.EXE`.
 
 To ship one repository's `.COM`:
 
@@ -414,7 +481,7 @@ reason for the choice. `asset=` names the exact file, so it overrides
 a second `prefer`. The report says which was chosen, and why:
 
 ```text
-included     gr-dos/which16 v0.03 which.com as WHICH.COM, MIT, .com preferred (prefer=com) (ignored: which.exe)
+included     gr-dos/which16 v0.04 which.com as WHICH.COM, MIT, .com preferred (prefer=com) (ignored: which.exe)
 included     gr-dos/df16 v0.02 df.exe as DF.EXE, MIT, no .com, so the .exe (prefer com)
 included     gr-dos/crcsum16 v0.03 crcsum.exe as CRCSUM.EXE, MIT, .exe preferred (the default) (ignored: crcsum.com)
 ```

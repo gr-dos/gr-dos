@@ -1,0 +1,26 @@
+  PATH          Sets the directories searched for programs
+  PAUSE         Waits for a key in a batch file
+  PROMPT        Sets the command prompt
+  RD            Removes an empty directory
+  REM           Marks a comment in a batch file or CONFIG.SYS
+  REN           Renames files
+  SET           Shows, sets or removes environment variables
+  SHIFT         Moves a batch file's parameters down by one
+  TIME          Shows or sets the time
+  TRUENAME      Shows the full name DOS uses for a file or directory
+  TYPE          Shows the contents of a text file
+  VER           Shows the DOS version
+  VERIFY        Sets whether DOS checks what it writes to disk
+  VOL           Shows a disk's volume label and serial number
+
+CONFIG.SYS
+  CONFIG        CONFIG.SYS, the settings DOS reads when it starts
+  COUNTRY       COUNTRY= in CONFIG.SYS: date, time, number and currency
+                 formats
+
+Device drivers and data files
+  DISPLAY.SYS   Code page switching for an EGA, VGA or PC Convertible screen
+  PRINTER.SYS   Code page switching for IBM printers on LPT1 to LPT3
+
+ INDEX  Line 79/102  WRAP  (END)  Q quit
+attr 24: 70x80
