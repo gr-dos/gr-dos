@@ -47,10 +47,10 @@
 ^CD - Shows or changes the current directory$
 ^No help for NOSUCH\. Type HELP for the list of topics\.$
 ^HELP-ERRORLEVEL-1$
-^Usage: HELP \[topic\]$
+^Usage: HELP \[/P\] \[topic\]$
 ^HELP-ERRORLEVEL-3$
 ^== FILES$
 
 # The files of A:, the format's with COMP.IN, and the free space
-^ +49 File\(s\) +589824 bytes free$
+^ +49 File\(s\) +587776 bytes free$
 ^GRDOS-TEST-END$

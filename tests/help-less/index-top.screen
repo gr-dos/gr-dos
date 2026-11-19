@@ -1,0 +1,26 @@
+GR-DOS help: type HELP and a topic, such as HELP START or HELP XCOPY.
+Topics marked * are GR-DOS's own; the others are MS-DOS 4.00's.
+
+Guides
+  BATCH         Batch files: running a list of commands, with parameters
+  CODEPAGE      How code page switching fits together
+  DIST16      * The *16 programs in C:\DOS, from the gr-dos GitHub projects
+  FLOPPY      * Using GR-DOS from a floppy, with your data in B:
+  GRDOS       * What GR-DOS adds to MS-DOS 4.00, and its licenses
+  HARDDISK    * Installing GR-DOS on a hard disk or CF card
+  START       * Getting started with GR-DOS
+
+Commands (programs)
+  APPEND        Lets programs open data files in other directories
+  ASSIGN        Sends the requests for one drive to another drive
+  ATTRIB        Shows or changes the read-only and archive attributes of
+                 files
+  BACKUP        Backs up files to floppies or another disk, for RESTORE
+  CHKDSK        Checks a disk's directories and FAT, and shows its free space
+  COMMAND       The command interpreter, COMMAND.COM: the prompt and batch
+                 files
+  COMP          Compares files byte by byte
+  DEBUG         Tests, changes and assembles programs, and edits memory and
+                 disks
+ INDEX  Line 1  WRAP  Q quit
+attr 24: 70x80

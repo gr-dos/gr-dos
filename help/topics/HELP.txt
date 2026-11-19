@@ -5,18 +5,21 @@ Group: command
 Files: HELP.EXE
 
 Syntax
-  HELP [topic]
+  HELP [/P] [topic]
 
   topic        A command (XCOPY, DIR), a CONFIG.SYS command (FILES), or a
                guide (START). An extension is dropped when there is no
                topic with it: HELP XCOPY.EXE is HELP XCOPY. Upper or lower
                case.
+  /P           Pages the topic with HELP itself, not with LESS.
 
 Examples
   HELP
     Lists the topics, by group.
   HELP XCOPY
     Shows how to use XCOPY.
+  HELP /P COPY
+    Shows COPY's help with HELP's own pager.
   HELP DIR > PRN
     Prints the help on DIR.
 
@@ -24,11 +27,14 @@ Exit status
   0  The help was shown.
   1  There is no such topic.
   2  GRDOS.HLP was not found.
-  3  A bad parameter (more than one, or one starting with /).
+  3  A bad parameter (two topics, or a switch other than /P).
 
 Notes
-  On the screen HELP stops after each screenful: any key goes on, Q or
-  Esc stops. Its output redirected to a file, a printer or a pipe is not
-  paged. The help is in the file GRDOS.HLP, which HELP looks for in its
-  own directory, then in the current directory, then in each directory
-  of the PATH.
+  On the screen HELP shows the topic with LESS.EXE, when it is in the
+  current directory or the PATH (as on a hard disk or CF install): the
+  arrow keys, PgUp, PgDn, Home and End move within the topic, and Q
+  quits (HELP LESS). Without LESS, or with /P, HELP stops after each
+  screenful itself: any key goes on, Q or Esc stops. Its output
+  redirected to a file, a printer or a pipe is not paged. The help is in
+  the file GRDOS.HLP, which HELP looks for in its own directory, then in
+  the current directory, then in each directory of the PATH.

@@ -1,0 +1,26 @@
+  /V           Reads each copy back to check it.
+  /W           Waits for a key before it starts, so that you can change
+               disks.
+
+Examples
+  XCOPY A:\*.* B:\ /S /E
+    Copies everything on A:, with all its directories, to B:.
+  XCOPY C:\WORK D:\BACKUP\ /M
+    Copies the files of C:\WORK changed since the last XCOPY /M.
+
+Exit status
+  0  The files were copied.
+  1  No files were found to copy.
+  2  Stopped with Ctrl+C.
+  4  Not enough memory or disk space, a bad drive name or syntax.
+  5  A disk write error.
+
+Notes
+  When the destination does not exist and does not end in \, XCOPY asks
+  whether it is a file (F) or a directory (D). End it with \ to say it is
+  a directory. XCOPY reads as many files as fit in memory before writing
+  them, so it is faster than COPY, but cannot copy between two disks in
+  one drive: use DISKCOPY or COPY for that. Hidden and system files are
+  not copied.
+ XCOPY  Line 20/43  WRAP  (END)  Q quit
+attr 24: 70x80

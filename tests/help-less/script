@@ -1,0 +1,115 @@
+# HELP on the screen (issue #86), from the 1.44 MB test disk with LESS.EXE
+# (gr-dos/less16 0.02, the lock's) in A:\, the current directory. Each
+# topic is shown in LESS, limited to the topic's bytes of GRDOS.HLP: its
+# first and last screens, reached with Home and End, PgUp and Up, hold the
+# topic and nothing of the topics around it (no @@ line, no other topic's
+# title), for the first topic (INDEX), one between two others (COPY,
+# between CONFIG and COUNTRY) and the last (XCOPY, to the end of the
+# file). Redirected, HELP does not run LESS. Then HELP's own pager: with
+# /P; with no LESS; and with a LESS that fails (BADLESS.EXE exits with
+# errorlevel 1, as a LESS without --start does), shown once, by HELP. CLS
+# first, so that each screen has none of the earlier ones. A floppy boot:
+# the hard disk is not used.
+disk 1M
+unchanged
+wait A:\\>
+
+# INDEX, the first topic: LESS shows it from its own first line.
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type HELP
+key ret
+wait INDEX  Line 1 
+screen index-top
+key end
+wait INDEX  Line .*\(END\)
+screen index-end
+key q
+wait A:\\>\s*\z
+
+# COPY, between two topics: Home, End, PgUp and Up stay inside it.
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type HELP COPY
+key ret
+wait COPY  Line 1 
+screen copy-top
+key up pgup
+wait COPY  Line 1 
+screen copy-up
+key end
+wait COPY  Line .*\(END\)
+screen copy-end
+key pgdn down
+wait COPY  Line .*\(END\)
+screen copy-down
+key home
+wait COPY  Line 1/
+screen copy-home
+key q
+wait A:\\>\s*\z
+
+# An alias and an extension: XCOPY.EXE is XCOPY, the last topic, which
+# runs to the end of the file.
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type HELP XCOPY.EXE
+key ret
+wait XCOPY  Line 1 
+screen xcopy-top
+key end
+wait XCOPY  Line .*\(END\)
+screen xcopy-end
+key q
+wait A:\\>\s*\z
+
+# Redirected: no LESS, and no pager.
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type HELP COPY | FIND "COPY -"
+key ret
+wait COPY - Copies
+screen copy-find
+
+# /P: HELP's own pager, with LESS there.
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type HELP /P COPY
+key ret
+wait -- More
+screen copy-own
+key q
+wait A:\\>\s*\z
+
+# No LESS: HELP's own pager.
+type REN LESS.EXE LESS.OLD
+key ret
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type HELP COPY
+key ret
+wait -- More
+screen copy-noless
+key q
+wait A:\\>\s*\z
+
+# A LESS that fails: HELP's own pager, the topic shown once.
+type COPY BADLESS.EXE LESS.EXE
+key ret
+wait copied
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type HELP COPY
+key ret
+wait -- More
+screen copy-badless
+key q
+wait A:\\>\s*\z
+quit

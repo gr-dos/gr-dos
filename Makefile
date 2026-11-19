@@ -331,7 +331,7 @@ TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
-	test-keyb test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
+	test-keyb test-help-less test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
 	test-join-subst test-backup-restore test-filesys test-replace
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
@@ -467,6 +467,24 @@ $(TESTS)/grver-version.expect: VERSION
 # image's prompt, through each layout, read back from the screen.
 test-keyb: $(BUILD)/gr-dos-1440k.img scripts/disk-test
 	scripts/disk-test $< tests/keyb $(TESTS)/keyb
+
+# HELP on the screen (tests/help-less, issue #86): with LESS.EXE (the
+# lock's) on a 1.44 MB disk, HELP shows a topic in LESS, which scrolls
+# within that topic and no further; HELP /P, and HELP with no LESS or with
+# one that fails (BADLESS.EXE, copied to LESS.EXE: a .COM that exits with
+# errorlevel 1, as a LESS without --start does), use HELP's own pager.
+HELP_LESS_FILES := $(HELP_FILES) $(DIST16)/LESS.EXE $(TESTS)/help-less-files/BADLESS.EXE $(BUILD)/image/AUTOEXEC.BAT \
+	$(call dist,$(SRC)/CMD/FIND/FIND.EXE)
+
+$(TESTS)/help-less-files/BADLESS.EXE:
+	mkdir -p $(@D)
+	printf '\270\001\114\315\041' > $@
+
+$(TESTS)/help-less.img: $(CORE) $(HELP_LESS_FILES) scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(HELP_LESS_FILES)
+
+test-help-less: $(TESTS)/help-less.img scripts/disk-test
+	scripts/disk-test $< tests/help-less $(TESTS)/help-less
 
 # The FDISK tests (tests/fdisk, issue #10). Each scenario boots the 1.44 MB
 # image, types commands at its prompt and reads the screen, with a new,
@@ -688,6 +706,7 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-country        CONFIG.SYS's COUNTRY=, with COUNTRY.SYS; or one
   make test-country-COUNTRY  (COUNTRY: $(COUNTRY_TESTS))
   make test-keyb           KEYB's layouts, typed at the 1.44 MB image's prompt
+  make test-help-less      HELP on the screen, through LESS and its own pager
   make test-codepage       DISPLAY.SYS, MODE's code pages, KEYB and CHCP; or
   make test-codepage-SETUP   one (SETUP: $(CODEPAGE_TESTS)), or the
   make test-codepage-screen  boot messages and KEYB GR, read from the screen
@@ -765,7 +784,7 @@ test-help: scripts/check-help
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb \
+	test-dist16 dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb test-help-less \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
 	test-codepage-screen test-printer $(TEST_PRINTER) test-join-subst join-subst-expect test-backup-restore \
 	backup-restore-expect test-filesys filesys-expect test-replace replace-expect

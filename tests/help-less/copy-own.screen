@@ -1,0 +1,25 @@
+COPY - Copies files, or joins several into one
+Command built into COMMAND.COM, from MS-DOS 4.00.
+
+Syntax
+  COPY [/A | /B] source [/A | /B] [destination [/A | /B]] [/V]
+  COPY [/A | /B] source1 + source2 [+ ...] [destination [/A | /B]] [/V]
+
+  source       The files to copy, which may have wildcards (* and ?), or
+               a device such as CON or COM1.
+  destination  A file, directory, drive or device. If left out, the files
+               are copied to the current directory under the same names.
+  /A           Treats the file as text (ASCII). For a source, copies up to
+               the first Ctrl+Z (end of file mark); for the destination,
+               adds a Ctrl+Z at the end.
+  /B           Treats the file as binary: copies all of it, by its size,
+               and adds nothing. The default, except when joining files.
+  /V           Reads each copy back to check it.
+  +            Joins the sources into one destination file (by default,
+               the first source).
+
+Examples
+  COPY A:*.* B:
+    Copies all the files of A: to B:.
+  COPY REPORT.TXT C:\BACKUP\REPORT.OLD
+-- More: any key, Q or Esc to stop --
