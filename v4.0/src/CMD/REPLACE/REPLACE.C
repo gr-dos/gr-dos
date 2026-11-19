@@ -103,6 +103,28 @@
 #include "comsub.h"                                                            /* ;AN000;P DBCS functions */
 #include "dos.h"                                                               /* ;AN000;M Used for the REGS union */
 #include "replacep.h"                                                          /* ;AN000;P Parser structures */
+#ifdef __WATCOMC__
+/* GR-DOS (issue #21, docs/replace.md): Open Watcom C and libc16.
+   The C calling convention of _PARSE, _MSGRET and _REPLACE, which call or
+   are called by these */
+#pragma aux (__cdecl) parse
+#pragma aux (__cdecl) sysloadmsg
+#pragma aux (__cdecl) sysdispmsg
+#pragma aux (__cdecl) crit_err_handler
+#pragma aux (__cdecl) ctl_brk_handler
+#pragma aux (__cdecl) restore
+/* libc16's declarations, __cdecl, of the C library functions REPLACE
+   calls without them */
+#include <string.h>
+#include <stdlib.h>
+/* REPLACE.C's own NULL, 0, below: not libc16's ((void *)0) */
+#undef NULL
+/* The calls for messages that substitute nothing give no outline, which
+   Watcom C allows only of a function with a variable argument list; it
+   reads the outline only for the messages that substitute something */
+#include <stdarg.h>
+void display_msg(int msg_num, ...) ;
+#endif
 
 /* ------------- ERRORLEVEL CODES ---------------*/
 #define ERRLEVELNEG1      -1                                                   /* ;AC000; */
@@ -268,7 +290,9 @@ unsigned segment ;
 unsigned update     = FALSE ;                                                  /* ;AN000;U /U switch */
 unsigned wait       = FALSE ;                                                  /* /W switch */
 unsigned x_status   = 0 ;                                                      /* ;AN000;A Original append/x state */
+#ifndef __WATCOMC__  /* libc16's, in dos.h */
 unsigned _psp ;
+#endif
 
 long oldint24 ;                                                                /* ;AN000; Rcv cntrl from, then ret to */
 
@@ -445,6 +469,14 @@ char *argv[] ;
             cmdln_switch[index] = *(char *)inregs.x.si ;                       /* ;AN006; */
             index++ ;                                                          /* ;AN006; */
           }                                                                    /* ;AN006; */
+#ifdef __WATCOMC__
+          /* GR-DOS: for a switch with a value (/R:X) the parser fills in
+             no result, and REPLACE.C copied the switch from a null pointer,
+             or the last switch's: an invalid switch, as with Microsoft's */
+          if (rslt2.P_SYNONYM_Ptr == 0)
+            switch_buffer[1] = NULL ;
+          else
+#endif
           strcpy(switch_buffer,rslt2.P_SYNONYM_Ptr) ;                          /* ;AN000;P Else copy switch into buf */
           switch (switch_buffer[1])                                            /* ;AN000;P Verify which switch */
           {                                                                    /* ;AN000;P */
@@ -933,6 +965,12 @@ unsigned date ;
   strcat(target,file->name) ;
 
   status = strcmp(source,target) ;
+#ifdef __WATCOMC__
+  /* GR-DOS: without /P, the result is taken below for the answer to the
+     question, 2 for no. C promises only its sign, which Microsoft's
+     REPLACE took; libc16's strcmp returns the difference of the bytes */
+  status = ((int)status > 0) - ((int)status < 0) ;
+#endif
   if (status == NOERROR)
   {
     display_msg(MSG_WARNSAME,source) ;                                         /* ;AC000; File cannot be copied... */
@@ -1010,7 +1048,11 @@ unsigned date ;
   }
 
   if (ea_flag)                                                                 /* ;AN000;EA If extd attrs exist */
+#ifdef __WATCOMC__
+    status = dcreate(target,(unsigned)&eaparm_list) ;
+#else
     status = dcreate(target,&eaparm_list) ;                                    /* ;AN000;EA   open trgt w/extd attrs */
+#endif
   else                                                                         /* ;AN000;EA */
     status = dcreate(target,-1) ;                                              /* ;AC000;EA Create the target file */
 
@@ -1536,10 +1578,18 @@ unsigned dcompare()                                                            /
 /*                                                                        */
 /**************************************************************************/
 
+#ifdef __WATCOMC__
+void display_msg(int msg_num, ...)
+#else
 void display_msg(msg_num,outline)                                              /* ;AN000;M */
 int  msg_num ;                                                                 /* ;AN000;M Message number #define'd */
 char *outline ;                                                                /* ;AN000;M String for replacemnt parm */
+#endif
 {                                                                              /* ;AN000;M */
+#ifdef __WATCOMC__
+  char    *outline ;
+  va_list ap ;
+#endif
   unsigned status ;                                                            /* ;AN000;M Receives carry flag if set */
   unsigned char function ;                                                     /* ;AN000;M Y/N response or press key? */
   unsigned int message,                                                        /* ;AN000;M Message number to display */
@@ -1559,6 +1609,23 @@ char *outline ;                                                                /
     unsigned char pad_char ;                                                   /* ;AN000;M char to pad field */
   } sublist ;                                                                  /* ;AN000;M */
 
+#ifdef __WATCOMC__
+  /* Only the messages that substitute something are given an outline */
+  outline = NULL ;
+  switch (msg_num)
+  {
+    case MSG_NOMEM    :
+    case MSG_INCOMPAT :
+    case MSG_NOSOURCE :
+    case MSG_NONEREPL :
+    case MSG_NONEADDE :
+    case MSG_START    :  break ;
+    default           :  va_start(ap,msg_num) ;
+                         outline = va_arg(ap,char *) ;
+                         va_end(ap) ;
+                         break ;
+  }
+#endif
   switch (msg_num)                                                             /* ;AN000;M Which msg to display? */
   {                                                                            /* ;AN000;M */
     case MSG_NOMEM    :  function  = NO_INPUT ;                                /* ;AN000;M Y/N response or press key? */
@@ -2045,3 +2112,82 @@ void restore()                                                                 /
     set_appendx(x_status) ;                                                    /* ;AN000;A Reset append/x status */
   return ;                                                                     /* ;AN000; */
 }                                                                              /* ;AN000; */
+
+#ifdef __WATCOMC__
+/* GR-DOS (issue #21, docs/replace.md): what REPLACE takes from COMSUBS.LIB,
+ * which is Microsoft C object code only, written for Open Watcom C and
+ * libc16, as BACKUP.C has them (docs/backup-restore.md, "COMSUBS"). */
+
+/* rp_dbcs_lead: whether c is a DBCS lead byte, in a range of DOS's DBCS
+ * vector (INT 21h 6300h), as COMSUBS.LIB's check_dbcs: at most five
+ * ranges, ending at a pair of zero bytes */
+static int rp_dbcs_lead(c)
+unsigned char c;
+{
+  static unsigned char far *vec;
+  static char got_vec = FALSE;
+  union REGS r;
+  struct SREGS sr;
+  int i;
+
+  if (!got_vec)
+  {
+    segread(&sr);
+    r.x.ax = 0x6300;
+    r.x.si = 0;
+    intdosx(&r,&r,&sr);
+    vec = (unsigned char far *)(((unsigned long)sr.ds << 16) | r.x.si);
+    got_vec = TRUE;
+  }
+
+  if (vec == (unsigned char far *)0)
+    return(FALSE);
+
+  for (i = 0; i < 10; i += 2)
+  {
+    if (vec[i] == 0 && vec[i+1] == 0)
+      return(FALSE);
+    if (c >= vec[i] && c <= vec[i+1])
+      return(TRUE);
+  }
+  return(FALSE);
+}
+
+/* com_strchr: the first c in s, or NULL; the second byte of a double byte
+ * character is never a match. With c 0, the end of s. */
+char *com_strchr(s,c)
+unsigned char *s;
+unsigned char c;
+{
+  for (; *s != NULL; s++)
+    if (rp_dbcs_lead(*s))
+    {
+      if (s[1] == NULL)   /* a lead byte last: COMSUBS.LIB read on */
+        break;
+      s++;
+    }
+    else
+      if (*s == c)
+        return((char *)s);
+
+  return(c == NULL ? (char *)s + strlen((char *)s) : (char *)NULL);
+}
+
+/* com_strrchr: the last c in s whose previous byte is not a DBCS lead
+ * byte, or NULL. With c 0, the end of s. */
+unsigned char *com_strrchr(s,c)
+unsigned char *s;
+unsigned char c;
+{
+  int i;
+
+  if (c == NULL)
+    return(s + strlen((char *)s));
+
+  for (i = strlen((char *)s) - 1; i >= 0; i--)
+    if (s[i] == c && (i == 0 || !rp_dbcs_lead(s[i-1])))
+      return(s + i);
+
+  return((unsigned char *)NULL);
+}
+#endif

@@ -1,0 +1,43 @@
+Topic: REPLACE
+Summary: Replaces files in a directory with newer copies, or adds new ones
+Origin: MS-DOS 4.00
+Group: command
+Files: REPLACE.EXE
+
+Syntax
+  REPLACE source [target] [/A] [/P] [/R] [/W]
+  REPLACE source [target] [/P] [/R] [/S] [/U] [/W]
+
+  source       The files to copy: a drive, path and file name, which may
+               have wildcards (A:\*.EXE).
+  target       The directory to replace files in, or add them to; by
+               default the current directory.
+  /A           Adds the source files that are not in the target, and
+               replaces none.
+  /P           Asks before replacing or adding each file.
+  /R           Replaces read-only files too.
+  /S           Replaces the files in the target's subdirectories too.
+  /U           Replaces only files older than the source's.
+  /W           Waits for a key before it starts, to change disks.
+
+Examples
+  REPLACE A:\*.* C:\DOS /U
+    Replaces the files in C:\DOS that A: has a newer copy of.
+  REPLACE A:\*.* C:\DOS /A
+    Copies the files of A: that C:\DOS does not have.
+
+Exit status
+  0  Done, even when nothing was replaced or added.
+  1  A critical error answered abort or fail, or another DOS error.
+  2  No source files.
+  3  A path or drive not found, or Ctrl-C.
+  5  Access denied: a read-only file without /R, or a hidden one with /A.
+  8  Out of memory, or the target disk is full.
+  11 A parameter error.
+
+Notes
+  The files keep their date and time, and get the archive attribute; a
+  replaced file keeps the target's other attributes. Hidden and system
+  files in the target are not seen. REPLACE stops at the first error but
+  a full disk, which it deletes the part copied of. /A cannot be used
+  with /S or /U.

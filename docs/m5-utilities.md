@@ -36,7 +36,7 @@ DEBUG, MEM and MODE). Of the other 25:
 | NLSFUNC | assembly | built, `NLSFUNC.EXE` |
 | PRINT | assembly | built, `PRINT.COM` |
 | RECOVER | assembly | built, `RECOVER.COM` |
-| REPLACE | C (`REPLACE.C`), with assembly helpers | deferred: C |
+| REPLACE | C (`REPLACE.C`), with assembly helpers | built, `REPLACE.EXE`, issue #21 ([replace.md](replace.md)) |
 | RESTORE | C (14 files), with assembly helpers | built, `RESTORE.COM`, issue #19 ([backup-restore.md](backup-restore.md)) |
 | SHARE | assembly, with the kernel's objects | built, `SHARE.EXE` |
 | SORT | assembly | built, `SORT.EXE` |
@@ -49,9 +49,9 @@ logic in C, compiled by Microsoft C 5.1, with only the message retriever
 and parser in assembly. Issue #17 is about the assembly sources; porting
 these is C work, like that of [M4](m4-utilities.md) and [FC](fc.md). JOIN
 and SUBST are ported (issue #18, [join-subst.md](join-subst.md)), and BACKUP
-and RESTORE (issue #19, [backup-restore.md](backup-restore.md)), and
-FILESYS (issue #20, [filesys.md](filesys.md)); REPLACE is left for a later
-issue.
+and RESTORE (issue #19, [backup-restore.md](backup-restore.md)), FILESYS
+(issue #20, [filesys.md](filesys.md)) and REPLACE (issue #21,
+[replace.md](replace.md)).
 
 Two built commands need data files from `v4.0/src/DEV`: KEYB needs
 `KEYBOARD.SYS` (`DEV/KEYBOARD`), and NLSFUNC's code page switching
@@ -177,9 +177,10 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 - **720 KB:** those, and the everyday file and disk commands: XCOPY, COMP,
   DISKCOMP, LABEL, TREE, SORT, EDLIN, PRINT, ASSIGN and RECOVER; and KEYB
   with COUNTRY.SYS and KEYBOARD.SYS (issue #23,
-  [country-keyboard.md](country-keyboard.md)); and BACKUP and RESTORE
+  [country-keyboard.md](country-keyboard.md)); BACKUP and RESTORE
   (issue #19, [backup-restore.md](backup-restore.md)), for backing a hard
-  disk up to floppies.
+  disk up to floppies; and REPLACE (issue #21, [replace.md](replace.md)),
+  which, like XCOPY, updates and adds files.
 - **1.2 MB and 1.44 MB:** those, and the rest that work from a floppy:
   APPEND, SHARE, EXE2BIN, GRAFTABL, GRAPHICS and its GRAPHICS.PRO, and
   NLSFUNC; JOIN and SUBST (issue #18, [join-subst.md](join-subst.md)),
@@ -196,9 +197,9 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 | Image | Files | Bytes free |
 |---|---:|---:|
 | 360 KB | 17 | 16,384 |
-| 720 KB | 34 | 64,512 |
-| 1.2 MB | 49 | 364,544 |
-| 1.44 MB | 49 | 608,256 |
+| 720 KB | 35 | 47,104 |
+| 1.2 MB | 50 | 347,648 |
+| 1.44 MB | 50 | 591,360 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's

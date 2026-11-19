@@ -42,7 +42,7 @@ Upstream history is a single squashed commit, so there is no earlier published s
   - `MAPPER/GETMSG.ASM`
   - `DEV/DISPLAY/INT10COM.INC`
 
-**MVP impact:** none of the damaged files are on the path to the boot sector, `IO.SYS`, `MSDOS.SYS` or `COMMAND.COM`. `MAPPER` is linked only by C utilities (FDISK, BACKUP, RESTORE, REPLACE, JOIN, SUBST; JOIN and SUBST, built since issue #18, call none of its routines, and BACKUP and RESTORE, built since issue #19, none of `GETMSG`); `SELECT` and `DISPLAY.SYS` are outside MVP. DISPLAY.SYS, built since issue #24 ([codepage.md](codepage.md)), uses the restored `INT10COM.INC` below, and is byte-identical to Microsoft's build of it.
+**MVP impact:** none of the damaged files are on the path to the boot sector, `IO.SYS`, `MSDOS.SYS` or `COMMAND.COM`. `MAPPER` is linked only by C utilities (FDISK, BACKUP, RESTORE, REPLACE, JOIN, SUBST; JOIN and SUBST, built since issue #18, call none of its routines, BACKUP and RESTORE, built since issue #19, none of `GETMSG`, and REPLACE, built since issue #21, none of its routines); `SELECT` and `DISPLAY.SYS` are outside MVP. DISPLAY.SYS, built since issue #24 ([codepage.md](codepage.md)), uses the restored `INT10COM.INC` below, and is byte-identical to Microsoft's build of it.
 
 ## Build system
 
