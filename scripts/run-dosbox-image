@@ -1,0 +1,91 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use Cwd qw( realpath );
+use File::Basename qw( dirname );
+use File::Copy qw( copy );
+use File::Path qw( make_path );
+use File::Temp qw( tempdir );
+use POSIX ();
+
+# ABSTRACT: Boot GR-DOS in DOSBox-X from a throwaway copy of an image
+
+=head1 SYNOPSIS
+
+ scripts/run-dosbox-image [--dosbox DOSBOX] cf CFDIR WORKDIR [DOSBOX-ARGS...]
+ scripts/run-dosbox-image [--dosbox DOSBOX] floppy IMAGE WORKDIR [DOSBOX-ARGS...]
+
+ make run-dosbox-cf    [DOSBOX=dosbox-x] [DOSBOX_ARGS=...]
+ make run-dosbox-1440k (and -1200k, -720k, -360k)
+
+=head1 DESCRIPTION
+
+Boots GR-DOS itself, its IO.SYS, MSDOS.SYS and COMMAND.COM, in DOSBox-X
+with DOSBox-X's C<BOOT>, unlike F<scripts/run-dosbox>, which runs the
+tools on DOSBox-X's own DOS kernel.
+
+C<cf> provisions a fresh 512 MB CF image (993 cylinders, 16 heads, 63
+sectors) from F<CFDIR> (F<build/linux/cf>) with F<scripts/deploy-cf>, and
+boots it as the first hard disk, C:. C<floppy> boots a copy of F<IMAGE>
+(F<build/linux/gr-dos-1440k.img> and the others) in A:.
+
+The image and DOSBox-X's configuration are in a temporary directory under
+F<WORKDIR> (F<build/linux/dosbox>), removed when DOSBox-X exits, so
+nothing done in DOSBox-X is kept, and the build's images are never
+written. The configuration is passed with C<-conf>, so the user's own
+DOSBox-X configuration is not loaded. DOSBOX-ARGS go to DOSBox-X after it.
+
+=cut
+
+my $dosbox = 'dosbox-x';
+while(@ARGV && $ARGV[0] =~ /^--/) {
+  my $o = shift @ARGV;
+  if($o eq '--dosbox') { $dosbox = shift(@ARGV) // die "--dosbox needs a value\n" }
+  else { die "run-dosbox-image: unknown option $o\n" }
+}
+die "usage: scripts/run-dosbox-image [--dosbox DOSBOX] cf|floppy CFDIR|IMAGE WORKDIR [DOSBOX-ARGS...]\n"
+  unless @ARGV >= 3 && $ARGV[0] =~ /^(cf|floppy)$/;
+my($kind, $src, $work, @args) = @ARGV;
+
+make_path($work);
+my $tmp = realpath(tempdir('run-XXXXXX', DIR => $work, CLEANUP => 1));
+die "WORKDIR must not have a double quote in its path\n" if $tmp =~ /"/;
+my $img = "$tmp/disk.img";
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "$path: $!\n";
+  print $fh $data;
+  close $fh or die "$path: $!\n";
+}
+
+my @boot;
+if($kind eq 'cf') {
+  -f "$src/manifest.txt" or die "$src: no distribution (run make)\n";
+  my($c, $h, $s) = (993, 16, 63);
+  open my $fh, '>', $img or die "$img: $!\n";
+  truncate $fh, $c * $h * $s * 512 or die "truncate: $!\n";
+  close $fh;
+  my $tool = realpath(dirname(__FILE__)) . '/deploy-cf';
+  system($tool, 'provision', '--dist', $src, '--confirm', 'disk.img', $img) == 0
+    or die "deploy-cf provision failed\n";
+  @boot = (qq{Z:\\SYSTEM\\IMGMOUNT 2 "$img" -t hdd -fs none -size 512,$s,$h,$c}, 'Z:\\SYSTEM\\BOOT C:');
+} else {
+  copy($src, $img) or die "$src: $!\n";
+  @boot = (qq{Z:\\SYSTEM\\IMGMOUNT 0 "$img" -t floppy -fs none}, 'Z:\\SYSTEM\\BOOT A:');
+}
+
+spew("$tmp/dosbox-x.conf", join "\n", '[autoexec]', '@ECHO OFF', @boot, '');
+
+# Not exec: the temporary directory is removed (File::Temp's CLEANUP) after
+# DOSBox-X exits. A signal to this script goes on to DOSBox-X, whose exit
+# is then waited for, so the directory is removed then too.
+my $pid = fork // die "fork: $!\n";
+if($pid == 0) {
+  exec $dosbox, '-conf', "$tmp/dosbox-x.conf", '-fastlaunch', @args;
+  warn "$dosbox: $!\n";
+  POSIX::_exit(127);
+}
+for my $sig (qw( INT TERM HUP )) { $SIG{$sig} = sub { kill $sig, $pid } }
+1 while waitpid($pid, 0) == -1 && $!{EINTR};
+exit($? & 127 ? 128 + ($? & 127) : $? >> 8);

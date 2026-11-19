@@ -21,6 +21,11 @@ exclude gr-dos/hello16 the template for gr-dos *16 programs, not a utility
 # so it is pinned, and a release of it is taken only by changing tag= here.
 include tico-edit/tico16 tag=v0.02 required
 
+# gr-dos/retrofetch16's program is spelled RETROFCH.EXE, since
+# retrofetch.exe is not an 8.3 name, so it is not the repository's stem
+# (retrofetch) that discovery looks for, and asset= names it.
+include gr-dos/retrofetch16 asset=retrofch.exe
+
 # The licenses a shipped program may have (GitHub's SPDX identifiers):
 # permissive ones, whose notice the release ZIP's README.txt carries.
 license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD

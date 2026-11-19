@@ -216,6 +216,7 @@ REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.S
 # default.
 FORMATS := 1440 1200 720 360
 IMAGES  := $(foreach f,$(FORMATS),$(BUILD)/gr-dos-$(f)k.img)
+RUN_DOSBOX_FLOPPY := $(addprefix run-dosbox-,$(addsuffix k,$(FORMATS)))
 MANIFESTS := $(foreach f,$(FORMATS),$(BUILD)/manifest-$(f)k.txt)
 TESTS   := $(BUILD)/tests
 
@@ -671,6 +672,9 @@ Build
   make clean               remove build/linux (build/tools is kept)
   make run-dosbox          try the tools in DOSBox-X, with C:\DOS as a CF
                            install has it (needs dosbox-x; docs/run-dosbox.md)
+  make run-dosbox-cf       boot GR-DOS in DOSBox-X from a fresh CF install,
+  make run-dosbox-FLOPPY     or from a floppy image (FLOPPY: $(addsuffix k,$(FORMATS)));
+                             the image is discarded when DOSBox-X exits
   make help                this list
 
 Tests (make test runs them all; most boot GR-DOS in QEMU)
@@ -733,7 +737,7 @@ Maintenance
 Variables
   LIBC16_ROOT=../libc16    build against a libc16 checkout, built with its
                            own make, not the pinned release
-  DOSBOX=, DOSBOX_ARGS=    run-dosbox's DOSBox-X, and arguments for it
+  DOSBOX=, DOSBOX_ARGS=    run-dosbox*'s DOSBox-X, and arguments for it
   FC_REFERENCE=, FDISK_REFERENCE=, JOIN_REFERENCE=, SUBST_REFERENCE=,
   BACKUP_REFERENCE=, RESTORE_REFERENCE=, FILESYS_REFERENCE=,
   REPLACE_REFERENCE=       Microsoft's programs for fc-expect, fdisk-expect,
@@ -755,13 +759,13 @@ test-help: scripts/check-help
 	$(MAKE) --no-print-directory -s help > $(TESTS)/help.txt
 	scripts/check-help $(TESTS)/help.txt 'FORMAT=$(FORMATS)' 'NAME=$(FDISK_TESTS)' \
 	  'SIZE=$(INSTALL_TESTS)' 'CASE=$(DEPLOY_CF_TESTS)' 'COUNTRY=$(COUNTRY_TESTS)' 'SETUP=$(CODEPAGE_TESTS)' \
-	  'PRINTER=$(PRINTER_TESTS)' \
+	  'PRINTER=$(PRINTER_TESTS)' 'FLOPPY=$(addsuffix k,$(FORMATS))' \
 	  $(HELP_INTERNAL) -- \
 	  $$($(MAKE) --no-print-directory -pRrq : 2>/dev/null | sed -n 's/^\.PHONY: //p')
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb \
+	test-dist16 dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
 	test-codepage-screen test-printer $(TEST_PRINTER) test-join-subst join-subst-expect test-backup-restore \
 	backup-restore-expect test-filesys filesys-expect test-replace replace-expect
@@ -1109,6 +1113,16 @@ DOSBOX      ?= dosbox-x
 DOSBOX_ARGS ?=
 run-dosbox: $(CF)/manifest.txt scripts/run-dosbox
 	scripts/run-dosbox --dosbox "$(DOSBOX)" $(CF) $(BUILD)/dosbox $(DOSBOX_ARGS)
+
+# GR-DOS itself booted in DOSBox-X (scripts/run-dosbox-image): a fresh
+# 512 MB CF install in C:, or a copy of a floppy image in A:. The image is
+# in a temporary directory under $(BUILD)/dosbox, removed when DOSBox-X
+# exits.
+run-dosbox-cf: $(CF)/manifest.txt scripts/run-dosbox-image scripts/deploy-cf
+	scripts/run-dosbox-image --dosbox "$(DOSBOX)" cf $(CF) $(BUILD)/dosbox $(DOSBOX_ARGS)
+
+$(RUN_DOSBOX_FLOPPY): run-dosbox-%: $(BUILD)/gr-dos-%.img scripts/run-dosbox-image
+	scripts/run-dosbox-image --dosbox "$(DOSBOX)" floppy $< $(BUILD)/dosbox $(DOSBOX_ARGS)
 
 $(BUILD)/image/AUTOEXEC.BAT: image/autoexec.bat
 	mkdir -p $(@D)

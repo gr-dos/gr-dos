@@ -17,7 +17,7 @@ FORMAT and SYS, GR-DOS installs on a hard disk and boots from it
 Linux on a CF card or disk image, then updates C: without touching the data
 drives ([`docs/deploy-cf.md`](docs/deploy-cf.md)). That install, and the release ZIP, also
 carry the DOS programs of the [gr-dos](https://github.com/gr-dos) organization's
-`*16` repositories, such as LESS, DIFF16 and TAR. They are found on GitHub
+`*16` repositories, such as LESS, DIFF and TAR. They are found on GitHub
 and pinned in `dist16/lock` ([`docs/dist16.md`](docs/dist16.md)). Apart from the GR-DOS branding of the
 banner, `VER` and FDISK's menu (`patches/branding`), and the kernel's GR-DOS
 identification call (`patches/kernel`, [`docs/grver.md`](docs/grver.md)), the binaries of the
@@ -41,12 +41,15 @@ make check    # build without the branding and compare with the MS-DOS 4.00 refe
 make test     # boot each image in QEMU, and test the utilities on disposable disks
 make dist     # package the release assets in build/linux/release
 make run-dosbox  # try the tools in DOSBox-X, with C:\DOS as a CF install has it
+make run-dosbox-cf  # boot GR-DOS in DOSBox-X from a throwaway CF install (or run-dosbox-1440k, ...)
 make help     # list every target, including each single test, and the variables
 ```
 
 `make run-dosbox` needs `dosbox-x`. It runs the tools on DOSBox-X's own DOS
-kernel and shell, not GR-DOS's, and DOSBox-X runs its own ATTRIB and MORE
-([`docs/run-dosbox.md`](docs/run-dosbox.md)).
+kernel and shell, not GR-DOS's, and DOSBox-X runs its own ATTRIB and MORE.
+`make run-dosbox-cf`, `make run-dosbox-1440k` and the other floppy formats
+boot GR-DOS itself, from a copy of the image that is discarded when DOSBox-X
+exits ([`docs/run-dosbox.md`](docs/run-dosbox.md)).
 
 ## CF cards
 
@@ -184,8 +187,8 @@ gr-dos-VERSION/
 │   ├── DISPLAY.SYS, EGA.CPI, LCD.CPI   code page switching for the screen
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
-│   ├── CRCSUM.EXE, DF.EXE, DIFF16.EXE, LESS.EXE, MD5SUM.EXE, TAR.EXE,
-│   │   TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
+│   ├── CRCSUM.EXE, DF.EXE, DIFF.EXE, LESS.EXE, MD5SUM.EXE, PATCH.EXE,
+│   │   RETROFCH.EXE, TAR.EXE, TERM16.EXE, TRUNCATE.EXE, WHICH.EXE (the *16 programs dist16/lock pins)
 │   ├── SOURCES.TXT   only with a *16 program under the GPL or another
 │   │                 source license: where its source is, and its license
 │   └── AUTOEXEC.BAT
@@ -253,7 +256,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   found, pinned and checked, how to add or exclude one, and how a program
   under the GPL ships with its source.
 - [`docs/run-dosbox.md`](docs/run-dosbox.md): `make run-dosbox`, the
-  commands DOSBox-X runs itself, and what works there.
+  commands DOSBox-X runs itself, and what works there; and `make
+  run-dosbox-cf` and the floppy targets, which boot GR-DOS.
 
 ## License
 

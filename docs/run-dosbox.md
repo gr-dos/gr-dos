@@ -9,8 +9,9 @@ utilities, TICO and the other `*16` programs ([dist16.md](dist16.md)).
 The DOS underneath is DOSBox-X's, not GR-DOS's. DOSBox-X emulates a DOS
 kernel and runs its own shell. GR-DOS's IO.SYS, MSDOS.SYS and COMMAND.COM
 are not loaded, so a program can behave differently here than on GR-DOS.
-For GR-DOS itself, boot an image (`make test` does, in QEMU), or a CF
-card.
+For GR-DOS itself, boot an image: `make run-dosbox-cf` and the others do
+it in DOSBox-X ([Booting GR-DOS](#booting-gr-dos-make-run-dosbox-cf)),
+`make test` in QEMU; or boot a CF card.
 
 ```sh
 make run-dosbox                     # dosbox-x, with its window
@@ -73,7 +74,7 @@ distribution, a `.COM` that prints its own name. It runs each one as
 
 As checked with DOSBox-X 2026.01.02:
 
-- **Work:** the `*16` programs (CRCSUM, DF, DIFF16, LESS, MD5SUM, TAR,
+- **Work:** the `*16` programs (CRCSUM, DF, DIFF, LESS, MD5SUM, TAR,
   TRUNCATE and WHICH) and TICO; FIND, SORT, FC, COMP, TREE, XCOPY, MEM,
   GRAFTABL, and ATTRIB and MORE by their full paths.
 - **Refuse the drives, safely:** the disk tools work on sectors, which a
@@ -101,3 +102,31 @@ As checked with DOSBox-X 2026.01.02:
   has its own keyboard layouts (`[dos] keyboardlayout`).
 - **Report DOSBox-X's devices:** `MODE CON` shows the status DOSBox-X's
   CON device gives (`COLUMNS=40`, `LINES=136`), not the screen's.
+
+## Booting GR-DOS (`make run-dosbox-cf`)
+
+These boot GR-DOS itself, its IO.SYS, MSDOS.SYS and COMMAND.COM, with
+DOSBox-X's `BOOT`, so DOSBox-X's DOS kernel and shell, and everything
+above about them, are not involved:
+
+```sh
+make run-dosbox-cf      # a fresh 512 MB CF install, as C:
+make run-dosbox-1440k   # a copy of build/linux/gr-dos-1440k.img, as A:
+make run-dosbox-1200k
+make run-dosbox-720k
+make run-dosbox-360k
+```
+
+`run-dosbox-cf` provisions a 512 MB image (993 cylinders, 16 heads, 63
+sectors) from `build/linux/cf` with `scripts/deploy-cf`, as a CF card is
+([deploy-cf.md](deploy-cf.md)), and boots it as the first hard disk. The
+floppy targets boot a copy of the build's image.
+
+The image is in a temporary directory under `build/linux/dosbox`
+(`run-XXXXXX`), with the configuration, and the directory is removed when
+DOSBox-X exits, also when it is ended with Ctrl-C or a signal. Nothing done
+in the session is kept, and the build's images are never written. `DOSBOX`
+and `DOSBOX_ARGS` work as for `run-dosbox`. `scripts/run-dosbox-image`
+does the work.
+
+Checked with DOSBox-X 2026.01.02: each boots to GR-DOS's prompt.

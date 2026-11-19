@@ -21,14 +21,17 @@ release.
 
 ## What is shipped
 
-The current lock includes CRCSUM, DF, DIFF16, LESS, MD5SUM, TAR, TRUNCATE
-and WHICH from `gr-dos`, and TICO from `tico-edit`. It leaves these out:
+The current lock includes CRCSUM, DF, DIFF, LESS, MD5SUM, PATCH, RETROFCH,
+TAR, TERM16, TRUNCATE and WHICH from `gr-dos`, and TICO from `tico-edit`.
+`gr-dos/retrofetch16`'s program is `retrofch.exe`, not the repository's
+stem, since `retrofetch.exe` is not an 8.3 name, so its `include` in
+`dist16/config` names it with `asset=`. It leaves these out:
 
 | Repository | Why |
 |---|---|
 | `gr-dos/libc16`, `libkitchen16` | excluded: library repositories (`lib*16`), not DOS programs |
 | `gr-dos/hello16` | excluded: the template the other repositories are made from |
-| `gr-dos/patch16`, `perl16`, `term16` | unavailable: no release yet |
+| `gr-dos/perl16`, `tcl16` | unavailable: no release yet |
 
 Each program goes in `C:\DOS` and the ZIP's `BIN`, after GR-DOS's own
 commands. The ZIP's `README.txt` lists each one with its repository,
@@ -92,7 +95,7 @@ A repository's release is shipped when it has:
 
 1. **A program asset**, named `STEM.exe` or `STEM.com`, where STEM is the
    repository name with or without `16` (`crcsum16`: `crcsum.exe`;
-   `diff16`: `diff16.exe`). If both an `.exe` and a `.com` are present, the
+   `diff16`: `diff.exe`). If both an `.exe` and a `.com` are present, the
    `.exe` is shipped, unless `prefer` chooses the `.com`
    ([Shipping the .COM](#shipping-the-com)). The gr-dos/hello16 conventions
    make the C `.EXE` the reference, and the `.COM` an assembly version of

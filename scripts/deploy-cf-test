@@ -291,11 +291,9 @@ sub test_size ($size, $out) {
   my @extras = ('FASTOPEN C:>AUX', 'TREE C:\>AUX', 'GRAPHICS>AUX', 'MEM /PROGRAM>AUX');
   # And each *16 program (dist16/lock) with --version (the gr-dos *16
   # convention), under CTTY AUX for its standard error too. Each must give
-  # the version the lock pins. diff16 0.01 has no --version, and gives its
-  # version in its --help.
+  # the version the lock pins.
   my @dist16 = dist16_programs();
-  my %version_option = ('DIFF16.EXE' => '--help');
-  push @extras, 'CTTY AUX', (map { "$_->{name} " . ($version_option{$_->{name}} // '--version') } @dist16), 'CTTY CON';
+  push @extras, 'CTTY AUX', (map { "$_->{name} --version" } @dist16), 'CTTY CON';
   spew("$out/AUTOEXEC.BAT", join "\r\n", '@ECHO OFF', 'ECHO GRDOS-USER-AUTOEXEC>AUX', 'VER>AUX', 'PATH>AUX', 'BREAK>AUX',
     'TYPE C:\GRDOS.ID>AUX', @bat, @extras, 'PROMPT GR$G', '');
   must('mcopy', '-i', at($img, $r->{logical}[0][1]), "$out/AUTOEXEC.BAT", '::');
