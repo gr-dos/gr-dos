@@ -1185,7 +1185,9 @@ $(TESTS)/autoexec-fc/AUTOEXEC.BAT: tests/fc/fc.bat
 # The tests of issue #17's utilities (tests/extras): ALL_FILES, the test
 # AUTOEXEC.BAT and input files, and HELLOX.EXE, the smoke test program
 # linked as an .EXE for EXE2BIN, with the 512-byte header LINK writes
-# (tests/extras/pad-header).
+# (tests/extras/pad-header). Not dist16's SOURCES.TXT, which is there only
+# while the lock has a program under a source license: the tests XCOPY
+# A:\*.TXT, so it would change what they copy.
 EXTRAS_FILES := $(addprefix $(TESTS)/extras-files/,sort.txt comp.in edlin.in label.in recover.in \
 	diskcomp.in print.in same1.txt same2.txt diff.txt) \
 	$(addprefix $(TESTS)/files/,lines.txt diskcopy.in) $(TESTS)/HELLOX.EXE
@@ -1206,7 +1208,7 @@ $(TESTS)/HELLOX.EXE: $(TESTS)/HELLO.COM tests/extras/pad-header
 
 $(TESTS)/extras.img: $(CORE) $(ALL_FILES) $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES) \
 	scripts/mkimage scripts/check-image
-	scripts/mkimage $@ $(SRC) $(filter-out %/AUTOEXEC.BAT,$(ALL_FILES)) \
+	scripts/mkimage $@ $(SRC) $(filter-out %/AUTOEXEC.BAT $(DIST16)/SOURCES.TXT,$(ALL_FILES)) \
 	  $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES)
 
 # The country tests' disks: the system files, the scenario's CONFIG.SYS,
