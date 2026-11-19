@@ -26,6 +26,13 @@ include tico-edit/tico16 tag=v0.02 required
 # (retrofetch) that discovery looks for, and asset= names it.
 include gr-dos/retrofetch16 asset=retrofch.exe
 
+# gr-dos/which16 releases both the C reference build, which.exe, and an
+# assembly one, which.com: 2,545 bytes to 4,252 in v0.04, both 8086 and
+# DOS 2.0+, and compared against the C one in which16's tests. v0.04 has
+# its heap-exhaustion fix (which16 PR #9), so the .COM is shipped
+# (issue #80). Only which16's: the default stays exe.
+include gr-dos/which16 prefer=com
+
 # The licenses a shipped program may have (GitHub's SPDX identifiers):
 # permissive ones, whose notice the release ZIP's README.txt carries.
 license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD TCL

@@ -139,7 +139,7 @@ A repository that fails is reported, and recorded in the lock as a `skip`
 line with the reason, so the lock shows why a program is missing:
 
 ```text
-included     gr-dos/which16 v0.03 which.exe as WHICH.EXE, MIT, .exe preferred (the default) (ignored: which.com)
+included     gr-dos/truncate16 v0.03 truncate.exe as TRUNCATE.EXE, MIT, .exe preferred (the default) (ignored: truncate.com)
 excluded     gr-dos/libc16: library repository (lib*16 convention), not a DOS executable
 unavailable  gr-dos/term16: no release
 failed       gr-dos/foo16: v0.01: license GPL-3.0 is not one dist16/config allows
@@ -439,7 +439,7 @@ and a little on C:
 
 | Repository | `.exe` | `.com` |
 |---|---:|---:|
-| which16 v0.03 | 4,252 | 2,530 |
+| which16 v0.04 | 4,252 | 2,545 |
 | truncate16 v0.03 | 5,728 | 3,294 |
 | crcsum16 v0.03 | 5,948 | 3,417 |
 
@@ -449,6 +449,10 @@ gr-dos/hello16 conventions, and the `.COM` is tested against it
 experimental (truncate16's README). So each program's choice weighs size
 against how mature its `.COM` is, and each change shows up in review as a
 change to `dist16/lock`.
+
+WHICH is shipped as `WHICH.COM` this way (issue #80): which16 v0.04's
+`.COM` has its heap-exhaustion fix (which16 PR #9) and is compared
+against the C build in which16's tests. The others ship their `.EXE`.
 
 To ship one repository's `.COM`:
 
@@ -471,7 +475,7 @@ reason for the choice. `asset=` names the exact file, so it overrides
 a second `prefer`. The report says which was chosen, and why:
 
 ```text
-included     gr-dos/which16 v0.03 which.com as WHICH.COM, MIT, .com preferred (prefer=com) (ignored: which.exe)
+included     gr-dos/which16 v0.04 which.com as WHICH.COM, MIT, .com preferred (prefer=com) (ignored: which.exe)
 included     gr-dos/df16 v0.02 df.exe as DF.EXE, MIT, no .com, so the .exe (prefer com)
 included     gr-dos/crcsum16 v0.03 crcsum.exe as CRCSUM.EXE, MIT, .exe preferred (the default) (ignored: crcsum.com)
 ```
