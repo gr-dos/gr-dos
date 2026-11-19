@@ -767,11 +767,13 @@ sub prog ($name, %r) {
   my $tiny = "Tiny Tcl: copyrighted by the Regents of the University of California\n";
   my $tcl = sub ($name, %r) { prog($name, license => 'NOASSERTION', files => { 'vendor/LICENSE.tinytcl' => $tiny }, %r) };
   my $owners = { 'gr-dos' => [ $tcl->('tcl16'), prog('plain16', license => 'NOASSERTION'), prog('mit16'),
-    $tcl->('changed16'), $tcl->('path16', license_path => 'COPYING'), $tcl->('gone16'), $tcl->('nonotice16', files => {}) ] };
+    $tcl->('changed16'), $tcl->('path16', license_path => 'COPYING'), $tcl->('gone16'), $tcl->('nonotice16', files => {}),
+    prog('known16', license => 'TCL') ] };
   my $ov = sub ($repo, %o) { "license-override $repo TCL @{[ $o{path} // 'LICENSE' ]} sha256=@{[ $o{sha} // sha256_hex(license_text($repo, 'NOASSERTION')) ]}"
     . ($o{nonotice} ? '' : ' notice=vendor/LICENSE.tinytcl') . "\n" };
   my $config = "discover gr-dos 16\nlicense MIT TCL\n" . $ov->('gr-dos/tcl16') . $ov->('gr-dos/mit16', nonotice => 1)
     . $ov->('gr-dos/changed16', sha => 'f' x 64) . $ov->('gr-dos/path16') . $ov->('gr-dos/gone16') . $ov->('gr-dos/nonotice16')
+    . $ov->('gr-dos/known16', nonotice => 1)
     . $ov->('other/nowhere16');
   my $dir = github(config => $config, owners => $owners);
   unlink "$dir/raw/gr-dos/gone16/" . substr(sha256_hex('gr-dos/gone16 v0.01'), 0, 40) . '/LICENSE';
@@ -799,6 +801,8 @@ sub prog ($name, %r) {
     && $o =~ m{gr-dos/mit16 v0\.01: the license-override \(\S+\) is not used: GitHub finds MIT},
     'a license GitHub recognizes is not overridden, and the unused override is reported');
   ok($o =~ m{license-override other/nowhere16 matches no repository}, 'an override of no repository is reported');
+  ok(has($lines, qr{^skip gr-dos/known16 failed v0\.01: GitHub finds TCL itself, so the license-override \(\S+\) is not needed: remove it$}),
+    'GitHub recognizing the override\'s own license fails, so the override is removed, not kept unrecorded');
   my $first = slurp("$dir/lock");
   dist16($dir, 'resolve');
   ok(slurp("$dir/lock") eq $first, 'license-override: resolving again writes the same lock');
@@ -830,6 +834,11 @@ sub prog ($name, %r) {
       [ $lock =~ s/^(override gr-dos\/tcl16 NOASSERTION TCL LICENSE )\S+/$1 . ('d' x 64)/mer, $config, qr{the override line is not its program's license} ],
     'a notice before the override line' =>
       [ $lock =~ s/^(override gr-dos\/tcl16 .*\n)(notice gr-dos\/tcl16 .*\n)/$2$1/mr, $config, qr{a notice line out of place} ],
+    'no override line or notice, under the override\'s license' =>
+      [ $lock =~ s/^(override|notice) gr-dos\/tcl16 .*\n//mgr, $config,
+        qr{TCL\.EXE \(gr-dos/tcl16\) is under TCL, the license-override's \(\S+\), but has no override line} ],
+    'no override line, with its notice' =>
+      [ $lock =~ s/^override gr-dos\/tcl16 .*\n//mr, $config, qr{a notice line out of place} ],
   );
   for my $what (sort keys %bad) {
     my($l, $cfg, $re) = $bad{$what}->@*;

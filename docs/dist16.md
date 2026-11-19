@@ -178,7 +178,10 @@ program under a `source-license` with no `source` line, or a `source`
 line under a permissive license, is refused, never shipped as if it were
 permissively licensed. An `override` line must be the config's
 `license-override` for the repository, with the same license, file,
-SHA-256 and notices, and the program's own license.
+SHA-256 and notices, and the program's own license. A program under the
+license of its repository's `license-override` must have the line, and
+so its notices: without it, the lock would not record that GitHub did
+not recognize the license, nor what was verified instead.
 
 `fetch` downloads each asset from
 `https://github.com/REPO/releases/download/TAG/ASSET`, and each license
@@ -218,7 +221,10 @@ it is narrow:
   and never decides whether a program's source is shipped. `NOASSERTION`
   itself is never allowed.
 - **GitHub first.** A license GitHub does recognize is used as before,
-  and the report notes the override is not used.
+  and the report notes the override is not used. If GitHub comes to
+  recognize the override's own license, the program fails until the
+  override is removed, so a lock never holds that license for the
+  repository without its `override` line.
 - **Notices.** Each `notice=` is a further file at the same commit that
   the license names, such as Tiny Tcl's own license for Tcl16. It is
   pinned in the lock and shipped after the license, in the ZIP's README.

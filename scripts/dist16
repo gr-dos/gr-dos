@@ -105,10 +105,13 @@ C<resolve> takes, GitHub reports C<NOASSERTION> for the file PATH, and
 that file's bytes have the SHA-256 HEX. Anything else fails, as without
 it: another file, other bytes (a changed license, or a newer release's),
 none, or another repository. A license GitHub does recognize is not
-overridden. Each C<notice=> is a further notice the license names, which
-must be at the same commit, and is shipped with the license. The lock
-has an C<override> line after the program's, and the report says the
-license is the override's, not GitHub's.
+overridden, and if GitHub reports SPDX itself, the program fails until
+the override is removed. Each C<notice=> is a further notice the license
+names, which must be at the same commit, and is shipped with the
+license. The lock has an C<override> line after the program's, and the
+report says the license is the override's, not GitHub's. A program in
+the lock under the override's SPDX must have that line, and its
+notices, or the lock is refused.
 
 =item source-license SPDX...
 
@@ -609,6 +612,10 @@ sub resolve_one ($c, $r, $notes) {
     }
     $spdx = $o->{spdx};
   } elsif(my $o2 = $c->{override}{lc $repo}) {
+    # GitHub now recognizes the override's license itself: the override is
+    # to be removed, not silently kept (the lock would need its line).
+    return $skip->('failed', "$tag: GitHub finds $spdx itself, so the license-override ($o2->{where}) is not needed: remove it")
+      if $spdx eq $o2->{spdx};
     push @$notes, "$repo $tag: the license-override ($o2->{where}) is not used: GitHub finds $spdx";
   }
   return $skip->('failed', "$tag: license $spdx is not one dist16/config allows")
@@ -935,7 +942,13 @@ sub read_lock () {
       die "$opt{lock}: $p->{name} ($p->{repo}) is under $p->{spdx}, which is not a license in $opt{config}\n"
         unless $c->{license}{$p->{spdx}};
     }
-    # A license-override in the lock must be the config's, exactly.
+    # A license-override in the lock must be the config's, exactly; and a
+    # program under the license of the config's override for its
+    # repository must have it, with its notices: the lock records that
+    # GitHub did not recognize the license, and what was verified instead.
+    my $want = $c->{override}{lc $p->{repo}};
+    die "$opt{lock}: $p->{name} ($p->{repo}) is under $p->{spdx}, the license-override's ($want->{where}), but has no override line\n"
+      if $want && !$p->{override} && $p->{spdx} eq $want->{spdx};
     if(my $x = $p->{override}) {
       my $o = $c->{override}{lc $p->{repo}};
       die "$opt{lock}: $p->{name} ($p->{repo}) has a license-override that $opt{config} does not have\n" unless $o;
