@@ -22,7 +22,9 @@ release.
 ## What is shipped
 
 The current lock includes CRCSUM, DF, DIFF, LESS, MD5SUM, PATCH, RETROFCH,
-TAR, TERM16, TRUNCATE and WHICH from `gr-dos`, and TICO from `tico-edit`.
+TAR, TCL, TERM16, TRUNCATE and WHICH from `gr-dos`, and TICO from `tico-edit`.
+TCL's license is taken from a [license override](#license-overrides),
+since GitHub does not recognize it.
 `gr-dos/retrofetch16`'s program is `retrofch.exe`, not the repository's
 stem, since `retrofetch.exe` is not an 8.3 name, so its `include` in
 `dist16/config` names it with `asset=`. It leaves these out:
@@ -32,7 +34,6 @@ stem, since `retrofetch.exe` is not an 8.3 name, so its `include` in
 | `gr-dos/libc16`, `libkitchen16` | excluded: library repositories (`lib*16`), not DOS programs |
 | `gr-dos/hello16` | excluded: the template the other repositories are made from |
 | `gr-dos/perl16` | unavailable: no release yet |
-| `gr-dos/tcl16` | failed: GitHub gives its license as NOASSERTION, which `dist16/config` does not allow |
 
 Each program goes in `C:\DOS` and the ZIP's `BIN`, after GR-DOS's own
 commands. The ZIP's `README.txt` lists each one with its repository,
@@ -129,7 +130,10 @@ A repository's release is shipped when it has:
    GPL-1.0-or-later, also needs
    the program's corresponding source, which the release must provide as
    [Source licenses](#source-licenses) says. A license added after a
-   release counts from the next release.
+   release counts from the next release. A license GitHub does not
+   recognize (`NOASSERTION`) fails, unless `dist16/config` has a
+   [license override](#license-overrides) for the repository that the
+   license file matches.
 
 A repository that fails is reported, and recorded in the lock as a `skip`
 line with the reason, so the lock shows why a program is missing:
@@ -161,10 +165,20 @@ notice REPO PATH SHA256
 depend REPO DEP TAG COMMIT ASSET SIZE SHA256 SPDX LICENSE LICENSE_SHA256
 ```
 
+A program under a [license override](#license-overrides) is followed by
+the override, then its notices:
+
+```text
+override REPO GITHUB SPDX LICENSE SHA256
+notice REPO PATH SHA256
+```
+
 The build checks the lock against `dist16/config` when it reads it: a
 program under a `source-license` with no `source` line, or a `source`
 line under a permissive license, is refused, never shipped as if it were
-permissively licensed.
+permissively licensed. An `override` line must be the config's
+`license-override` for the repository, with the same license, file,
+SHA-256 and notices, and the program's own license.
 
 `fetch` downloads each asset from
 `https://github.com/REPO/releases/download/TAG/ASSET`, and each license
@@ -175,6 +189,45 @@ in `source/NAME`, and `SOURCES.TXT`). A verified file
 in the cache is not downloaded again, so a rebuild needs no network, and
 CI caches `build/tools` by the lock's hash. A file that does not match is a
 build error, and is never used.
+
+## License overrides
+
+GitHub's license detector (Licensee) knows only some licenses. For any
+other, such as the Tcl license (SPDX `TCL`), it reports `NOASSERTION`,
+even when the file is that license and nothing else. That is a limit of
+the detector, not a reason to relicense a program, so `dist16/config` can
+name the license of one repository itself (issue #83):
+
+```text
+license MIT BSD-2-Clause BSD-3-Clause ISC Zlib 0BSD TCL
+license-override gr-dos/tcl16 TCL LICENSE sha256=b9ee1e75... notice=vendor/LICENSE.tinytcl
+```
+
+It is an exception to GitHub's detection, not to the license check, and
+it is narrow:
+
+- **One repository, one file, exact bytes.** It applies only to that
+  repository, only when GitHub reports `NOASSERTION` for that file at the
+  commit of the release `resolve` takes, and only when the file's bytes,
+  fetched from that commit (not `main`), have that SHA-256. Another file,
+  a missing one, or other bytes (a changed license, or a new release's)
+  fail, as without the override, until someone reads the new file and
+  updates the SHA-256 in a reviewed change.
+- **A license the config allows.** The SPDX identifier must also be one
+  of the `license`s, so an override is only ever to a permissive license,
+  and never decides whether a program's source is shipped. `NOASSERTION`
+  itself is never allowed.
+- **GitHub first.** A license GitHub does recognize is used as before,
+  and the report notes the override is not used.
+- **Notices.** Each `notice=` is a further file at the same commit that
+  the license names, such as Tiny Tcl's own license for Tcl16. It is
+  pinned in the lock and shipped after the license, in the ZIP's README.
+- **Visible.** The lock's `override` line records what GitHub reported
+  and what the override verified, and the report says so:
+
+```text
+included     gr-dos/tcl16 v0.01 tcl.exe as TCL.EXE, TCL by license-override (GitHub finds NOASSERTION; LICENSE SHA-256 verified, notice vendor/LICENSE.tinytcl)
+```
 
 ## Source licenses
 
