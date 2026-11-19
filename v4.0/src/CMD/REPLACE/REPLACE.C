@@ -120,7 +120,8 @@
 /* REPLACE.C's own NULL, 0, below: not libc16's ((void *)0) */
 #undef NULL
 /* The calls for messages that substitute nothing give no outline, which
-   Watcom C allows only of a function with a variable argument list */
+   Watcom C allows only of a function with a variable argument list; it
+   reads the outline only for the messages that substitute something */
 #include <stdarg.h>
 void display_msg(int msg_num, ...) ;
 #endif
@@ -1609,9 +1610,21 @@ char *outline ;                                                                /
   } sublist ;                                                                  /* ;AN000;M */
 
 #ifdef __WATCOMC__
-  va_start(ap,msg_num) ;
-  outline = va_arg(ap,char *) ;
-  va_end(ap) ;
+  /* Only the messages that substitute something are given an outline */
+  outline = NULL ;
+  switch (msg_num)
+  {
+    case MSG_NOMEM    :
+    case MSG_INCOMPAT :
+    case MSG_NOSOURCE :
+    case MSG_NONEREPL :
+    case MSG_NONEADDE :
+    case MSG_START    :  break ;
+    default           :  va_start(ap,msg_num) ;
+                         outline = va_arg(ap,char *) ;
+                         va_end(ap) ;
+                         break ;
+  }
 #endif
   switch (msg_num)                                                             /* ;AN000;M Which msg to display? */
   {                                                                            /* ;AN000;M */

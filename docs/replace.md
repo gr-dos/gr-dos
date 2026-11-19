@@ -104,8 +104,10 @@ assembly, so the Microsoft build is unchanged:
   Watcom, libc16's (`dos.h`) is it.
 - **`display_msg`.** Its calls for messages that substitute nothing give
   no second argument, which Watcom C allows only of a function with a
-  variable argument list, so for Watcom it has one. One `dcreate` call
-  passes a pointer for an `unsigned`, and is cast.
+  variable argument list, so for Watcom it has one, and reads the second
+  argument only for the messages that substitute something (the six that
+  substitute nothing are the only ones called without it). One `dcreate`
+  call passes a pointer for an `unsigned`, and is cast.
 - **`ES`.** Microsoft C kept `ES` equal to `DS`, and the parser and message
   retriever read their parameters through it; `_PARSE.ASM` and
   `_MSGRET.ASM` set it themselves, as BACKUP's do. (REPLACE.C's own
