@@ -12,7 +12,7 @@
 ^ +655360 bytes total memory$
 ^ +1457664 bytes total disk space$
 
-# SORT, XCOPY, TREE, COMP and LABEL, on the data disk
+# SORT, XCOPY, TREE, COMP, REPLACE and LABEL, on the data disk
 ^== FLOPPY-720$
 ^alpha$
 ^beta$
@@ -24,6 +24,8 @@
 ^        DATA\.TXT$
 ^B:DATA\.TXT and B:SUB\\DATA\.TXT$
 ^Files compare OK$
+^Replacing B:\\SUB\\DATA\.TXT$
+^1 file\(s\) replaced$
 ^ Volume in drive B is GRDATA2 +$
 
 # KEYB GR installs the German layout, which KEYB then reports; with no
@@ -50,5 +52,5 @@
 ^== FILES$
 
 # The files of A:, the format's with COMP.IN, and the free space
-^ +48 File\(s\) +363008 bytes free$
+^ +49 File\(s\) +346112 bytes free$
 ^GRDOS-TEST-END$

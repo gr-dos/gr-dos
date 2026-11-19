@@ -1,0 +1,577 @@
+GRDOS-TEST-BEGIN
+== the source, and a target
+ Directory of  D:\R\SRC
+A        TXT        11 01-02-26  10:00a
+B        TXT        11 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+NEW      TXT        13 01-03-26   9:00a
+RO       TXT        12 01-04-26   8:00a
+H        TXT        11 01-05-26   7:00a
+  A          D:\R\SRC\A.TXT
+  A          D:\R\SRC\B.TXT
+  A          D:\R\SRC\C.TXT
+  A          D:\R\SRC\E.TXT
+  A          D:\R\SRC\NEW.TXT
+  A          D:\R\SRC\RO.TXT
+  A          D:\R\SRC\H.TXT
+new A.TXT
+new B.TXT
+new C.TXT
+new E.TXT
+new NEW.TXT
+new RO.TXT
+new H.TXT
+ Directory of  D:\R\T1
+A        TXT        11 06-01-25   6:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 02-01-26  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-01-25  12:00p
+             D:\R\T1\A.TXT
+             D:\R\T1\B.TXT
+             D:\R\T1\C.TXT
+             D:\R\T1\E.TXT
+       R     D:\R\T1\RO.TXT
+old A.TXT
+old B.TXT, longer
+old C.TXT
+old E.TXT
+old RO.TXT
+ Directory of  D:\R\T1\SUB
+A        TXT        15 01-01-25  12:00p
+             D:\R\T1\SUB\A.TXT
+old SUB\A.TXT
+ Directory of  D:\R\T1\SUB\DEEP
+B        TXT        20 01-01-25  12:00p
+             D:\R\T1\SUB\DEEP\B.TXT
+old SUB\DEEP\B.TXT
+== replace: up to RO.TXT, which is read-only
+
+Replacing D:\R\T1\A.TXT
+
+Replacing D:\R\T1\B.TXT
+
+Replacing D:\R\T1\C.TXT
+
+Replacing D:\R\T1\E.TXT
+
+Replacing D:\R\T1\RO.TXT
+Access denied  - D:\R\T1\RO.TXT
+
+4 file(s) replaced
+errorlevel 5
+ Directory of  D:\R\T1
+A        TXT        11 01-02-26  10:00a
+B        TXT        11 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-01-25  12:00p
+  A          D:\R\T1\A.TXT
+  A          D:\R\T1\B.TXT
+  A          D:\R\T1\C.TXT
+  A          D:\R\T1\E.TXT
+       R     D:\R\T1\RO.TXT
+new A.TXT
+new B.TXT
+new C.TXT
+new E.TXT
+old RO.TXT
+== /R: read-only files too
+
+Replacing D:\R\T2\A.TXT
+
+Replacing D:\R\T2\B.TXT
+
+Replacing D:\R\T2\C.TXT
+
+Replacing D:\R\T2\E.TXT
+
+Replacing D:\R\T2\RO.TXT
+
+5 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\T2
+A        TXT        11 01-02-26  10:00a
+B        TXT        11 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-04-26   8:00a
+  A          D:\R\T2\A.TXT
+  A          D:\R\T2\B.TXT
+  A          D:\R\T2\C.TXT
+  A          D:\R\T2\E.TXT
+  A    R     D:\R\T2\RO.TXT
+new A.TXT
+new B.TXT
+new C.TXT
+new E.TXT
+new RO.TXT
+== /U /R: only those older than the source
+
+Replacing D:\R\T3\A.TXT
+
+Replacing D:\R\T3\E.TXT
+
+Replacing D:\R\T3\RO.TXT
+
+3 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\T3
+A        TXT        11 01-02-26  10:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 02-01-26  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-04-26   8:00a
+  A          D:\R\T3\A.TXT
+             D:\R\T3\B.TXT
+             D:\R\T3\C.TXT
+  A          D:\R\T3\E.TXT
+  A    R     D:\R\T3\RO.TXT
+new A.TXT
+old B.TXT, longer
+old C.TXT
+new E.TXT
+new RO.TXT
+== /S /R: in the subdirectories too
+
+Replacing D:\R\T4\A.TXT
+
+Replacing D:\R\T4\B.TXT
+
+Replacing D:\R\T4\C.TXT
+
+Replacing D:\R\T4\E.TXT
+
+Replacing D:\R\T4\RO.TXT
+
+Replacing D:\R\T4\SUB\A.TXT
+
+Replacing D:\R\T4\SUB\DEEP\B.TXT
+
+7 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\T4
+A        TXT        11 01-02-26  10:00a
+B        TXT        11 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-04-26   8:00a
+  A          D:\R\T4\A.TXT
+  A          D:\R\T4\B.TXT
+  A          D:\R\T4\C.TXT
+  A          D:\R\T4\E.TXT
+  A    R     D:\R\T4\RO.TXT
+new A.TXT
+new B.TXT
+new C.TXT
+new E.TXT
+new RO.TXT
+ Directory of  D:\R\T4\SUB
+A        TXT        11 01-02-26  10:00a
+  A          D:\R\T4\SUB\A.TXT
+new A.TXT
+ Directory of  D:\R\T4\SUB\DEEP
+B        TXT        11 01-01-26  12:00p
+  A          D:\R\T4\SUB\DEEP\B.TXT
+new B.TXT
+== /S /U: newer only, in the subdirectories too
+
+Replacing D:\R\T9\A.TXT
+
+Replacing D:\R\T9\E.TXT
+
+Replacing D:\R\T9\RO.TXT
+Access denied  - D:\R\T9\RO.TXT
+
+2 file(s) replaced
+errorlevel 5
+ Directory of  D:\R\T9
+A        TXT        11 01-02-26  10:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 02-01-26  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-01-25  12:00p
+  A          D:\R\T9\A.TXT
+             D:\R\T9\B.TXT
+             D:\R\T9\C.TXT
+  A          D:\R\T9\E.TXT
+       R     D:\R\T9\RO.TXT
+new A.TXT
+old B.TXT, longer
+old C.TXT
+new E.TXT
+old RO.TXT
+ Directory of  D:\R\T9\SUB
+A        TXT        15 01-01-25  12:00p
+             D:\R\T9\SUB\A.TXT
+old SUB\A.TXT
+ Directory of  D:\R\T9\SUB\DEEP
+B        TXT        20 01-01-25  12:00p
+             D:\R\T9\SUB\DEEP\B.TXT
+old SUB\DEEP\B.TXT
+== /A: those not in the target, up to H.TXT, which is hidden there
+
+Adding D:\R\T5\NEW.TXT
+
+Adding D:\R\T5\H.TXT
+Access denied  - D:\R\T5\H.TXT
+
+1 file(s) added
+errorlevel 5
+ Directory of  D:\R\T5
+A        TXT        11 06-01-25   6:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 02-01-26  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-01-25  12:00p
+NEW      TXT        13 01-03-26   9:00a
+             D:\R\T5\A.TXT
+             D:\R\T5\B.TXT
+             D:\R\T5\C.TXT
+             D:\R\T5\E.TXT
+       R     D:\R\T5\RO.TXT
+  A          D:\R\T5\NEW.TXT
+old A.TXT
+old B.TXT, longer
+old C.TXT
+old E.TXT
+old RO.TXT
+new NEW.TXT
+== /P /R: yes, no, a wrong key and yes, no, yes
+== keys YNXYNY
+
+Replace D:\R\T6\A.TXT? (Y/N)
+Replacing D:\R\T6\A.TXT
+
+Replace D:\R\T6\B.TXT? (Y/N)
+Replace D:\R\T6\C.TXT? (Y/N)
+Replace D:\R\T6\C.TXT? (Y/N)
+Replacing D:\R\T6\C.TXT
+
+Replace D:\R\T6\E.TXT? (Y/N)
+Replace D:\R\T6\RO.TXT? (Y/N)
+Replacing D:\R\T6\RO.TXT
+
+3 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\T6
+A        TXT        11 01-02-26  10:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-04-26   8:00a
+  A          D:\R\T6\A.TXT
+             D:\R\T6\B.TXT
+  A          D:\R\T6\C.TXT
+             D:\R\T6\E.TXT
+  A    R     D:\R\T6\RO.TXT
+new A.TXT
+old B.TXT, longer
+new C.TXT
+old E.TXT
+new RO.TXT
+== /A /P: no
+== keys N
+
+Add D:\R\T6\NEW.TXT? (Y/N)
+No files added
+errorlevel 0
+== /A /P: yes
+== keys Y
+
+Add D:\R\T6\NEW.TXT? (Y/N)
+Adding D:\R\T6\NEW.TXT
+
+1 file(s) added
+errorlevel 0
+ Directory of  D:\R\T6
+A        TXT        11 01-02-26  10:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-04-26   8:00a
+NEW      TXT        13 01-03-26   9:00a
+  A          D:\R\T6\A.TXT
+             D:\R\T6\B.TXT
+  A          D:\R\T6\C.TXT
+             D:\R\T6\E.TXT
+  A    R     D:\R\T6\RO.TXT
+  A          D:\R\T6\NEW.TXT
+new A.TXT
+old B.TXT, longer
+new C.TXT
+old E.TXT
+new RO.TXT
+new NEW.TXT
+== /W: a key first
+Press any key to continue . . .
+
+Replacing D:\R\T7\A.TXT
+
+1 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\T7
+A        TXT        11 01-02-26  10:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 02-01-26  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-01-25  12:00p
+  A          D:\R\T7\A.TXT
+             D:\R\T7\B.TXT
+             D:\R\T7\C.TXT
+             D:\R\T7\E.TXT
+       R     D:\R\T7\RO.TXT
+new A.TXT
+old B.TXT, longer
+old C.TXT
+old E.TXT
+old RO.TXT
+== the target, the current directory
+
+Replacing D:\R\T8\A.TXT
+
+1 file(s) replaced
+errorlevel 0
+== the target, ..
+
+Replacing D:\R\T8\B.TXT
+
+1 file(s) replaced
+errorlevel 0
+== the target, the current directory of D:
+
+Replacing D:\R\T8\SUB\A.TXT
+
+1 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\T8
+A        TXT        11 01-02-26  10:00a
+B        TXT        11 01-01-26  12:00p
+C        TXT        11 02-01-26  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-01-25  12:00p
+  A          D:\R\T8\A.TXT
+  A          D:\R\T8\B.TXT
+             D:\R\T8\C.TXT
+             D:\R\T8\E.TXT
+       R     D:\R\T8\RO.TXT
+new A.TXT
+new B.TXT
+old C.TXT
+old E.TXT
+old RO.TXT
+ Directory of  D:\R\T8\SUB
+A        TXT        11 01-02-26  10:00a
+  A          D:\R\T8\SUB\A.TXT
+new A.TXT
+== a source and target in other directories than the current
+
+Replacing D:\R\T7\E.TXT
+
+1 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\T7
+A        TXT        11 01-02-26  10:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 02-01-26  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-01-25  12:00p
+  A          D:\R\T7\A.TXT
+             D:\R\T7\B.TXT
+             D:\R\T7\C.TXT
+  A          D:\R\T7\E.TXT
+       R     D:\R\T7\RO.TXT
+new A.TXT
+old B.TXT, longer
+old C.TXT
+new E.TXT
+old RO.TXT
+== from another drive
+
+Replacing D:\R\T7\C.TXT
+
+1 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\T7
+A        TXT        11 01-02-26  10:00a
+B        TXT        19 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+RO       TXT        12 01-01-25  12:00p
+  A          D:\R\T7\A.TXT
+             D:\R\T7\B.TXT
+  A          D:\R\T7\C.TXT
+  A          D:\R\T7\E.TXT
+       R     D:\R\T7\RO.TXT
+new A.TXT
+old B.TXT, longer
+new C.TXT
+new E.TXT
+old RO.TXT
+== names that differ first in C and A
+
+Replacing D:\R\A\A.TXT
+
+1 file(s) replaced
+errorlevel 0
+ Directory of  D:\R\A
+A        TXT        13 01-02-26  10:00a
+  A          D:\R\A\A.TXT
+new C\A.TXT
+== a file onto itself
+File cannot be copied onto itself - D:\R\T1\A.TXT
+
+No files replaced
+errorlevel 0
+
+No files added
+errorlevel 0
+== FAT12: add to A:, then replace
+
+Adding A:\A.TXT
+
+Adding A:\B.TXT
+
+Adding A:\C.TXT
+
+Adding A:\E.TXT
+
+Adding A:\NEW.TXT
+
+Adding A:\RO.TXT
+
+Adding A:\H.TXT
+
+7 file(s) added
+errorlevel 0
+
+Replacing A:\A.TXT
+
+Replacing A:\B.TXT
+
+Replacing A:\C.TXT
+
+Replacing A:\E.TXT
+
+Replacing A:\RO.TXT
+
+5 file(s) replaced
+errorlevel 0
+ Directory of  A:\
+A        TXT        11 01-02-26  10:00a
+B        TXT        11 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+NEW      TXT        13 01-03-26   9:00a
+RO       TXT        12 01-04-26   8:00a
+H        TXT        11 01-05-26   7:00a
+  A          A:\A.TXT
+  A          A:\B.TXT
+  A          A:\C.TXT
+  A          A:\E.TXT
+  A          A:\NEW.TXT
+  A          A:\RO.TXT
+  A          A:\H.TXT
+new A.TXT
+new B.TXT
+new C.TXT
+new E.TXT
+new NEW.TXT
+new RO.TXT
+new H.TXT
+== A: full
+
+Adding A:\BIG.BIN
+Insufficient disk space - A:\BIG.BIN
+
+No files added
+errorlevel 8
+ Directory of  A:\
+A        TXT        11 01-02-26  10:00a
+B        TXT        11 01-01-26  12:00p
+C        TXT        11 01-01-25  12:00p
+E        TXT        11 01-01-26  12:00p
+NEW      TXT        13 01-03-26   9:00a
+RO       TXT        12 01-04-26   8:00a
+H        TXT        11 01-05-26   7:00a
+  A          A:\A.TXT
+  A          A:\B.TXT
+  A          A:\C.TXT
+  A          A:\E.TXT
+  A          A:\NEW.TXT
+  A          A:\RO.TXT
+  A          A:\H.TXT
+new A.TXT
+new B.TXT
+new C.TXT
+new E.TXT
+new NEW.TXT
+new RO.TXT
+new H.TXT
+== B:, write-protected: DOS's question, answered abort, then fail
+== keys AF
+
+Replacing B:\RO.TXT
+
+Write protect error writing drive B
+Abort, Retry, Fail?A
+errorlevel 1
+
+Replacing B:\RO.TXT
+
+Write protect error writing drive B
+Abort, Retry, Fail?F
+errorlevel 1
+== Ctrl-C at the question
+== keys ^C
+
+Replace D:\R\T7\A.TXT? (Y/N)^C
+errorlevel 3
+== nothing to do
+
+No files found - D:\R\SRC\*.XYZ
+errorlevel 2
+
+No files replaced
+errorlevel 0
+
+No files added
+errorlevel 0
+== bad paths
+Path not found - D:\R\NOSUCH
+
+No files replaced
+errorlevel 3
+Path not found - D:\R\NOSUCH\*.TXT
+
+No files replaced
+errorlevel 3
+Path not found - Q:\*.TXT
+
+No files replaced
+errorlevel 3
+Path not found - Q:\
+
+No files replaced
+errorlevel 3
+== bad parameters
+Source path required
+errorlevel 11
+Invalid parameter combination
+errorlevel 11
+Invalid parameter combination
+errorlevel 11
+Invalid switch - /X  
+errorlevel 11
+Invalid switch - /R  
+errorlevel 11
+Too many parameters - EXTRA  
+errorlevel 11
+Invalid switch - /R:X  
+errorlevel 11
+Invalid switch - /R:X  
+errorlevel 11
+Invalid parameter combination
+errorlevel 11
+GRDOS-TEST-END

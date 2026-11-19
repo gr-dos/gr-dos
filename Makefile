@@ -112,6 +112,14 @@ BACKUP_RESTORE_C_OBJS := $(filter-out %/_PARSE.OBJ %/_MSGRET.OBJ,\
 FILESYS      := CMD/FILESYS/FILESYS.EXE
 FILESYS_OBJS := $(addprefix $(SRC)/CMD/FILESYS/,FILESYS.OBJ _PARSE.OBJ _MSGRET.OBJ)
 
+# REPLACE (issue #21, docs/replace.md), C like FILESYS, with its own _PARSE,
+# _MSGRET and _REPLACE (its control break and critical error handlers), as
+# REPLACE.LNK links them. Of COMSUBS.LIB it calls com_strchr and
+# com_strrchr, which REPLACE.C has for Open Watcom C, as BACKUP.C does; it
+# calls nothing of MAPPER.LIB.
+REPLACE      := CMD/REPLACE/REPLACE.EXE
+REPLACE_OBJS := $(addprefix $(SRC)/,$(shell scripts/lnk-objects v4.0/src CMD/REPLACE/REPLACE.LNK))
+
 # The rest of MS-DOS 4.00's assembly utilities (issue #17, docs/m5-utilities.md),
 # in CMD's order. Each CMD/X directory has its X.SKL but LABEL (LABL.SKL),
 # and its X.LNK but APPEND, ASSIGN and NLSFUNC, whose makefiles name the
@@ -160,7 +168,7 @@ PRT_FILES    := DEV/PRINTER/PRINTER.SYS DEV/PRINTER/5202/5202.CPI
 PRT_COPIED   := DEV/PRINTER/4201/4201.CPI DEV/PRINTER/4208/4208.CPI
 
 OUTPUTS := BOOT/MSBOOT.BIN INC/BOOT.INC BIOS/IO.SYS DOS/MSDOS.SYS CMD/COMMAND/COMMAND.COM \
-	$(UTILITIES) $(EXTRA_UTILITIES) $(JOIN_SUBST) $(BACKUP_RESTORE) $(FILESYS) $(NLS_FILES) $(CP_FILES) $(PRT_FILES) \
+	$(UTILITIES) $(EXTRA_UTILITIES) $(JOIN_SUBST) $(BACKUP_RESTORE) $(FILESYS) $(REPLACE) $(NLS_FILES) $(CP_FILES) $(PRT_FILES) \
 	$(PRT_COPIED)
 
 # The message files of utility $(1): X.CL$(c) for each c of $(2), and X.CTL.
@@ -190,12 +198,13 @@ MESSAGES := BOOT/BOOT.CL1 \
 	$(call utility_messages,XCOPY,1 2 A) \
 	$(call utility_messages,JOIN,1 2 A) $(call utility_messages,SUBST,1 2 A) \
 	$(call utility_messages,BACKUP,1 2 A) $(call utility_messages,RESTORE,1 2 A) \
-	$(call utility_messages,FILESYS,1 2 A) \
+	$(call utility_messages,FILESYS,1 2 A) $(call utility_messages,REPLACE,1 2 A) \
 	$(foreach c,1 2 A,DEV/DISPLAY/DISPLAY.CL$(c)) DEV/DISPLAY/DISPLAY.CTL \
 	$(foreach c,1 2 A,DEV/PRINTER/PRINTER.CL$(c)) DEV/PRINTER/PRINTER.CTL
 
 # ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM,
-# RESTORE.COM and FILESYS.EXE are built with Open Watcom C, not Microsoft C 5.1, so they are not compared. CONVERT makes CHKDSK.EXE
+# RESTORE.COM, FILESYS.EXE and REPLACE.EXE are built with Open Watcom C, not
+# Microsoft C 5.1, so they are not compared. CONVERT makes CHKDSK.EXE
 # into CHKDSK.COM, and RECOVER.EXE into RECOVER.COM.
 REFERENCE := $(MESSAGES) BOOT/MSBOOT.BIN BIOS/MSLOAD.COM BIOS/IO.SYS DOS/MSDOS.SYS \
 	CMD/COMMAND/COMMAND.COM $(filter-out %/ATTRIB.EXE %/MEM.EXE %/FDISK.EXE %/FC.EXE,$(UTILITIES)) \
@@ -251,10 +260,13 @@ FILES    := $(PROGRAMS) $(BUILD)/image/AUTOEXEC.BAT
 # JOIN and SUBST (issue #18) are on 1.2 MB and 1.44 MB too, after NLSFUNC:
 # they map drives to directories, which matters most with a hard disk, so
 # the 720 KB disk keeps its room. BACKUP and RESTORE (issue #19) are on 720 KB
-# and up, after KEYB: restoring a hard disk starts from a floppy.
+# and up, after KEYB: restoring a hard disk starts from a floppy. REPLACE
+# (issue #21) is on 720 KB and up, after them: like XCOPY, it updates and
+# adds files, from a disk to another or to a hard disk.
 extra = $(call dist,$(foreach u,$(1),$(filter $(SRC)/CMD/$(u)/%,\
-	$(addprefix $(SRC)/,$(EXTRA_UTILITIES) $(JOIN_SUBST) $(BACKUP_RESTORE)))))
-FLOPPY_720  := XCOPY COMP DISKCOMP LABEL TREE SORT EDLIN PRINT ASSIGN RECOVER KEYB BACKUP RESTORE
+	$(addprefix $(SRC)/,$(EXTRA_UTILITIES) $(JOIN_SUBST) $(BACKUP_RESTORE) $(REPLACE)))))
+FLOPPY_720  := XCOPY COMP DISKCOMP LABEL TREE SORT EDLIN PRINT ASSIGN RECOVER KEYB BACKUP RESTORE \
+	REPLACE
 FLOPPY_1200 := $(FLOPPY_720) APPEND SHARE EXE2BIN GRAFTABL GRAPHICS NLSFUNC JOIN SUBST DISPLAY PRINTER
 FLOPPY_1440 := $(FLOPPY_1200)
 # GRAPHICS reads its printer profile, GRAPHICS.PRO, from its own directory.
@@ -287,11 +299,11 @@ GRVER := $(BUILD)/grver/GRVER.EXE
 
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
 # programs, then all of issue #17's in CMD's order, JOIN and SUBST, BACKUP and
-# RESTORE, FILESYS, GRAPHICS.PRO, COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI
+# RESTORE, FILESYS, REPLACE, GRAPHICS.PRO, COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI
 # and LCD.CPI, PRINTER.SYS, 4201.CPI, 4208.CPI and 5202.CPI, GRVER, HELP and
 # GRDOS.HLP, and the other *16 programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(addprefix $(SRC)/,$(JOIN_SUBST)) \
-	$(addprefix $(SRC)/,$(BACKUP_RESTORE) $(FILESYS)) $(GRAPHICS_PRO) \
+	$(addprefix $(SRC)/,$(BACKUP_RESTORE) $(FILESYS) $(REPLACE)) $(GRAPHICS_PRO) \
 	$(NLS_DATA) $(CP_DATA) $(PRT_DATA) $(GRVER) $(HELP_FILES) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
 
 # GR-DOS's own file names, which no *16 program may have, even with
@@ -319,7 +331,7 @@ TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
 	test-keyb test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
-	test-join-subst test-backup-restore test-filesys
+	test-join-subst test-backup-restore test-filesys test-replace
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
 test-dist16: scripts/dist16 tests/dist16/run
@@ -538,6 +550,22 @@ test-filesys: $(FILESYS_TEST)
 filesys-expect: $(FILESYS_TEST) $(FILESYS_REFERENCE)
 	scripts/filesys-test --update --filesys $(FILESYS_REFERENCE) $(TESTS)/filesys-reference
 
+# REPLACE (scripts/replace-test, issue #21): tests/replace/rp.bat on a
+# 512 MB CF install with a 1.44 MB A:, REPLACE's questions answered, whose
+# output on COM1 must be Microsoft's (tests/replace/expect.log), CRs too,
+# and after which D: and A: must pass fsck.fat; written by make
+# replace-expect with the M1 reference build's REPLACE.EXE
+# (REPLACE_REFERENCE) in place of the install's.
+REPLACE_REFERENCE ?= build/m1/SRC/CMD/REPLACE/REPLACE.EXE
+REPLACE_TEST := $(CF)/manifest.txt scripts/replace-test scripts/deploy-cf \
+	tests/replace/rp.bat tests/replace/show.bat tests/join-subst/el.bat
+
+test-replace: $(REPLACE_TEST)
+	scripts/replace-test $(TESTS)/replace
+
+replace-expect: $(REPLACE_TEST) $(REPLACE_REFERENCE)
+	scripts/replace-test --update --replace $(REPLACE_REFERENCE) $(TESTS)/replace-reference
+
 # BACKUP and RESTORE (scripts/backup-restore-test, issue #19):
 # tests/backup-restore/br.bat on a 512 MB CF install with a 1.44 MB A: of
 # disposable floppy images, whose output on COM1 must be exactly, CRs too,
@@ -600,7 +628,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
 	  scripts/dist16 notices $(DIST16); \
-	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM, RESTORE.COM, FILESYS.EXE,\nGRVER.EXE and HELP.EXE)\n-------------------------------------------------------------------------------------------------------------\n\n'; \
+	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM, RESTORE.COM, FILESYS.EXE,\nREPLACE.EXE, GRVER.EXE and HELP.EXE)\n-------------------------------------------------------------------------------------------------------------\n\n'; \
 	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	scripts/dist16 check-dist $(DIST)/$(NAME) $(DIST16)
@@ -678,6 +706,8 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
                            images, against Microsoft's output and backup
   make test-filesys        FILESYS on a CF install, without IFSFUNC and with
                            it, against Microsoft's FILESYS's output
+  make test-replace        REPLACE on a CF install and a floppy image,
+                           against Microsoft's output
   make test-dist16         scripts/dist16 against a fake GitHub (offline)
   make test-help           check this list against the Makefile's targets
 
@@ -697,16 +727,18 @@ Maintenance
                            RESTORE.COM (BACKUP_REFERENCE, RESTORE_REFERENCE)
   make filesys-expect      rewrite tests/filesys's expected output with
                            Microsoft's FILESYS.EXE (FILESYS_REFERENCE)
+  make replace-expect      rewrite tests/replace's expected output with
+                           Microsoft's REPLACE.EXE (REPLACE_REFERENCE)
 
 Variables
   LIBC16_ROOT=../libc16    build against a libc16 checkout, built with its
                            own make, not the pinned release
   DOSBOX=, DOSBOX_ARGS=    run-dosbox's DOSBox-X, and arguments for it
   FC_REFERENCE=, FDISK_REFERENCE=, JOIN_REFERENCE=, SUBST_REFERENCE=,
-  BACKUP_REFERENCE=, RESTORE_REFERENCE=, FILESYS_REFERENCE=
-                           Microsoft's programs for fc-expect, fdisk-expect,
-                           join-subst-expect, backup-restore-expect and
-                           filesys-expect
+  BACKUP_REFERENCE=, RESTORE_REFERENCE=, FILESYS_REFERENCE=,
+  REPLACE_REFERENCE=       Microsoft's programs for fc-expect, fdisk-expect,
+                           join-subst-expect, backup-restore-expect,
+                           filesys-expect and replace-expect
                            (default: the M1 reference build, in build/m1)
 endef
 
@@ -732,7 +764,7 @@ test-help: scripts/check-help
 	test-dist16 dist16-resolve dist16-check run-dosbox help test-help test-country $(TEST_COUNTRY) test-keyb \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
 	test-codepage-screen test-printer $(TEST_PRINTER) test-join-subst join-subst-expect test-backup-restore \
-	backup-restore-expect test-filesys filesys-expect
+	backup-restore-expect test-filesys filesys-expect test-replace replace-expect
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -766,7 +798,7 @@ $(BUILD)/messages.stamp: $(BUILD)/tree.stamp scripts/buildmsg scripts/menubld sc
 	scripts/buildmsg --nosrvbld $(MSG) $(SRC)/DOS/MSDOS.SKL
 	scripts/buildmsg $(MSG) $(SRC)/CMD/COMMAND/COMMAND.SKL
 	for u in $(filter-out FC,$(UTILITY_DIRS)) $(filter-out LABEL,$(EXTRA_DIRS)) $(JOIN_SUBST_DIRS) \
-	    $(BACKUP_RESTORE_DIRS) FILESYS; do \
+	    $(BACKUP_RESTORE_DIRS) FILESYS REPLACE; do \
 	  scripts/buildmsg $(MSG) $(SRC)/CMD/$$u/$$u.SKL || exit 1; \
 	done
 	scripts/buildmsg $(MSG) $(SRC)/CMD/LABEL/LABL.SKL
@@ -803,7 +835,8 @@ $(SRC)/DOS/MSDISP.OBJ: $(SRC)/DOS/GRDOSVER.INC
 $(SRC)/CMD/FDISK/BOOTREC.OBJ: $(SRC)/CMD/FDISK/FDBOOT.INC
 
 C_OBJS := $(SRC)/CMD/ATTRIB/ATTRIB.OBJ $(SRC)/CMD/MEM/MEM.OBJ $(FDISK_C_OBJS) $(FC_C_OBJS) \
-	$(JOIN_SUBST_C_OBJS) $(BACKUP_RESTORE_C_OBJS) $(SRC)/CMD/FILESYS/FILESYS.OBJ
+	$(JOIN_SUBST_C_OBJS) $(BACKUP_RESTORE_C_OBJS) $(SRC)/CMD/FILESYS/FILESYS.OBJ \
+	$(SRC)/CMD/REPLACE/REPLACE.OBJ
 
 $(C_OBJS): %.OBJ: $(BUILD)/messages.stamp $(TOOLS) $(BUILD)/libc16.stamp
 	. ./$(TOOLS) && cd $(@D) && PATH=$$WATCOM/binl64:$$PATH \
@@ -877,14 +910,17 @@ $(SRC)/CMD/SUBST/SUBST.EXE:   $(SUBST_OBJS)
 $(SRC)/CMD/BACKUP/BACKUP.EXE: $(BACKUP_OBJS)
 $(SRC)/CMD/RESTORE/RESTORE.EXE: $(RESTORE_OBJS)
 $(SRC)/CMD/FILESYS/FILESYS.EXE: $(FILESYS_OBJS)
+$(SRC)/CMD/REPLACE/REPLACE.EXE: $(REPLACE_OBJS)
 # RESTORE.LNK's /STACK:50000; BACKUP's makefile gives none, and Microsoft
 # C's default stack was 2,048 bytes, as libc16's is.
 $(SRC)/CMD/RESTORE/RESTORE.EXE: WLINK_STACK := option stack=50000
+# REPLACE.LNK's /STACK:31620: main keeps 500 directory entries on the stack.
+$(SRC)/CMD/REPLACE/REPLACE.EXE: WLINK_STACK := option stack=31620
 
 # No default libraries: the map, X.MAP, must show only the objects and
 # LIBC16.LIB (scripts/check-runtime).
 $(SRC)/CMD/ATTRIB/ATTRIB.EXE $(SRC)/CMD/MEM/MEM.EXE $(SRC)/CMD/FDISK/FDISK.EXE $(SRC)/CMD/FC/FC.EXE \
-	$(addprefix $(SRC)/,$(JOIN_SUBST)) $(addprefix $(SRC)/,$(BACKUP_RESTORE:.COM=.EXE) $(FILESYS)): \
+	$(addprefix $(SRC)/,$(JOIN_SUBST)) $(addprefix $(SRC)/,$(BACKUP_RESTORE:.COM=.EXE) $(FILESYS) $(REPLACE)): \
 	$(TOOLS) $(BUILD)/libc16.stamp scripts/check-runtime
 	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos \
 	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) $(WLINK_STACK) \

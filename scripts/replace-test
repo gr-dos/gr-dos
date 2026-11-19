@@ -1,0 +1,360 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Basename qw( dirname );
+use File::Temp qw( tempdir );
+use IO::Socket::UNIX;
+use IO::Select;
+use Time::HiRes qw( sleep time );
+use Digest::SHA qw( sha256_hex );
+use File::Find qw( find );
+
+# ABSTRACT: Test REPLACE on a CF install and a floppy, against Microsoft's
+
+=head1 SYNOPSIS
+
+ scripts/replace-test [--update --replace REPLACE.EXE] OUTDIR
+
+=head1 DESCRIPTION
+
+Tests REPLACE (issue #21, F<docs/replace.md>) on a 512 MB CF install made
+by F<scripts/deploy-cf> in C<OUTDIR>, with a 1.44 MB floppy in drive A:
+and a write-protected one in B:, never on a block device.  F<tests/replace/rp.bat> runs from C:'s root,
+started by F<D:\AUTOEXEC.BAT>, with F<EL.BAT> (that of F<tests/join-subst>)
+in F<C:\DOS> and F<tests/replace/show.bat> as F<C:\SHOW.BAT>, and works on
+D:\R (FAT16) and A: (FAT12).  D:\R's files, with fixed contents, dates,
+times and attributes, are put there with mtools; A: is formatted by
+mtools, empty, and B: has an A.TXT and a read-only RO.TXT.
+
+QEMU is run here, not by F<scripts/hd-boot-test>: COM1, which the batch file
+makes the console (CTTY AUX), is a socket, and REPLACE's questions are
+answered.  A line C<== keys KEYS> of the batch file gives the answers, one
+character each (C<^C> for Ctrl-C), to the "Replace NAME? (Y/N)" and "Add
+NAME? (Y/N)", and DOS's "Abort, Retry, Fail?", that follow; REPLACE /W's
+"Press any key to continue . . ." is answered with a carriage return.  The clock starts at 2026-01-01 12:00.
+
+What COM1 shows from C<GRDOS-TEST-BEGIN> to C<GRDOS-TEST-END>, carriage
+returns included, must be F<tests/replace/expect.log>, byte for byte.  Then
+the FAT file systems of D: and A: must be sound (C<fsck.fat -n>), and
+their files, D:\R's, A:'s and B:'s, must be those of F<tests/replace/files.txt>:
+each one's attributes (C<mattrib>), date and time to the second, size and
+SHA-256, hidden files too, which DOS's DIR and ATTRIB do not show.
+
+With C<--update>, F<C:\DOS\REPLACE.EXE> is replaced by the program given,
+Microsoft's (the M1 reference build's), and its output is written to
+F<expect.log> and F<files.txt> instead: C<make replace-expect>.
+
+=cut
+
+my $root = dirname(dirname(__FILE__));
+my $tool = "$root/scripts/deploy-cf";
+my $tests = "$root/tests/replace";
+my $begin = 'GRDOS-TEST-BEGIN';
+my $end = 'GRDOS-TEST-END';
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "unable to write $path: $!";
+  print $fh $data;
+  close $fh or die "unable to write $path: $!";
+}
+
+sub must (@cmd) {
+  say '+ ', join ' ', @cmd;
+  system(@cmd) == 0 or die "failed: @cmd\n";
+}
+
+sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
+
+# CRLF text, as DOS reads it.
+sub dos_text ($path) { slurp($path) =~ s/\r?\n/\r\n/gr }
+
+sub pattern ($seed, $n) {
+  my($x, $s) = ($seed, '');
+  for(1 .. $n / 4) {
+    $x = ($x * 1103515245 + 12345) % 2**31;
+    $s .= pack 'V', $x;
+  }
+  return $s;
+}
+
+# D:\R's files: name, contents, date and time (UTC, as mtools reads it with
+# TZ=UTC), attributes for mattrib.  In each directory, in this order, which
+# is the directory's.  SRC is the source; T1 to T9 are the same targets,
+# one for each case.  B.TXT is as old as the source's, C.TXT newer, E.TXT
+# two seconds older, A.TXT and RO.TXT older; H.TXT is hidden, and so not
+# seen in the target.  REPLACE C\A.TXT A, whose full names differ first in
+# C and A, two apart, and BIG\BIG.BIN, larger than a 1.44 MB floppy.
+my @source = (
+  [ 'A.TXT',   "new A.TXT\r\n",   '2026-01-02 10:00:00', '' ],
+  [ 'B.TXT',   "new B.TXT\r\n",   '2026-01-01 12:00:04', '' ],
+  [ 'C.TXT',   "new C.TXT\r\n",   '2025-01-01 12:00:00', '' ],
+  [ 'E.TXT',   "new E.TXT\r\n",   '2026-01-01 12:00:06', '' ],
+  [ 'NEW.TXT', "new NEW.TXT\r\n", '2026-01-03 09:00:00', '' ],
+  [ 'RO.TXT',  "new RO.TXT\r\n",  '2026-01-04 08:00:00', '' ],
+  [ 'H.TXT',   "new H.TXT\r\n",   '2026-01-05 07:00:00', '' ],
+);
+my @target = (
+  [ 'A.TXT',          "old A.TXT\r\n",                  '2025-06-01 06:00:00', '-a' ],
+  [ 'B.TXT',          "old B.TXT, longer\r\n",          '2026-01-01 12:00:04', '-a' ],
+  [ 'C.TXT',          "old C.TXT\r\n",                  '2026-02-01 12:00:00', '-a' ],
+  [ 'E.TXT',          "old E.TXT\r\n",                  '2026-01-01 12:00:04', '-a' ],
+  [ 'H.TXT',          "old H.TXT\r\n",                  '2025-01-01 12:00:00', '+h' ],
+  [ 'RO.TXT',         "old RO.TXT\r\n",                 '2025-01-01 12:00:00', '+r -a' ],
+  [ 'SUB/A.TXT',      "old SUB\\A.TXT\r\n",             '2025-01-01 12:00:00', '-a' ],
+  [ 'SUB/DEEP/B.TXT', "old SUB\\DEEP\\B.TXT\r\n",       '2025-01-01 12:00:00', '-a' ],
+);
+my @files = (
+  (map { [ "SRC/$_->[0]", @$_[1 .. 3] ] } @source),
+  (map { my $t = $_; map { [ "$t/$_->[0]", @$_[1 .. 3] ] } @target } map { "T$_" } 1 .. 9),
+  [ 'C/A.TXT',     "new C\\A.TXT\r\n", '2026-01-02 10:00:00', '' ],
+  [ 'A/A.TXT',     "old A\\A.TXT\r\n", '2025-06-01 06:00:00', '-a' ],
+  [ 'BIG/BIG.BIN', pattern(1, 1600000), '2026-01-01 12:00:00', '' ],
+);
+
+# The files of DIR (::R on D:, :: on A:) of the FAT image IMG, a line each:
+# attributes, date and time (UTC), size, SHA-256 and name.
+sub listing ($img, $dir, $tmp) {
+  local $ENV{TZ} = 'UTC';
+  my %attr;
+  for(`mattrib -i '$img' -/ '$dir'`) {
+    chomp;
+    my($a, $name) = /^(.*?)::\/?(.*)$/ or die "replace-test: mattrib: $_\n";
+    $attr{uc $name} = join('', $a =~ /[A-Z]/g) || '-';
+  }
+  system('rm', '-rf', $tmp) == 0 && system('mkdir', '-p', $tmp) == 0 or die "unable to create $tmp\n";
+  must('mcopy', '-s', '-m', '-n', '-i', $img, $dir eq '::' ? '::*' : $dir, $tmp);
+  my %lines;
+  find({ no_chdir => 1, wanted => sub {
+    return unless -f $_;
+    my $name = substr($_, length($tmp) + 1);
+    my $key = uc $name;
+    my @t = gmtime((stat $_)[9]);
+    $lines{$key} = sprintf "%-4s %04d-%02d-%02d %02d:%02d:%02d %8d %s %s\n", $attr{$key} // '?',
+      $t[5] + 1900, $t[4] + 1, @t[3, 2, 1, 0], -s $_, sha256_hex(slurp($_)), $key;
+  } }, $tmp);
+  system('rm', '-rf', $tmp) == 0 or die "unable to remove $tmp\n";
+  return map { $lines{$_} } sort keys %lines;
+}
+
+sub main (@args) {
+  my %opt;
+  while(@args && $args[0] =~ /^--/) {
+    my $o = shift @args;
+    if($o eq '--update') { $opt{update} = 1 }
+    elsif($o eq '--replace') { $opt{replace} = shift @args }
+    else { die "unknown option $o\n" }
+  }
+  my($out) = @args;
+  die "usage: $0 [--update --replace REPLACE.EXE] OUTDIR\n" unless defined $out && @args == 1;
+  die "--update needs --replace\n" if $opt{update} && !$opt{replace};
+  die "--replace is for --update\n" if !$opt{update} && $opt{replace};
+  my $dist = "$root/build/linux/cf";
+  -f "$dist/manifest.txt" or die "$dist: no distribution (run make)\n";
+  system('rm', '-rf', $out) == 0 && system('mkdir', '-p', $out) == 0 or die "unable to create $out\n";
+
+  my $img = "$out/disk.img";
+  open my $fh, '>', $img or die "unable to create $img: $!";
+  truncate $fh, 993 * 16 * 63 * 512 or die "truncate: $!";
+  close $fh;
+  must($tool, 'provision', '--confirm', 'disk.img', $img);
+  # The layout record, sector 1.
+  open my $rfh, '<:raw', $img or die "unable to read $img: $!";
+  sysseek $rfh, 512, 0;
+  sysread $rfh, my $rec, 512;
+  close $rfh;
+  my($sys_start) = $rec =~ /^system (\d+) \d+$/m;
+  my($d_start, $d_len) = $rec =~ /^logical \d+ (\d+) (\d+)$/m;
+  die "no layout record\n" unless $sys_start && $d_start && $d_len;
+  my $c = at($img, $sys_start);
+  my $d = at($img, $d_start);
+
+  spew("$out/RP.BAT", dos_text("$tests/rp.bat"));
+  spew("$out/SHOW.BAT", dos_text("$tests/show.bat"));
+  spew("$out/EL.BAT", dos_text("$root/tests/join-subst/el.bat"));
+  spew("$out/AUTOEXEC.BAT", "C:\\RP\r\n");
+  must('mcopy', '-o', '-i', $c, "$out/RP.BAT", '::RP.BAT');
+  must('mcopy', '-o', '-i', $c, "$out/SHOW.BAT", '::SHOW.BAT');
+  must('mcopy', '-o', '-i', $c, "$out/EL.BAT", '::DOS/EL.BAT');
+  must('mcopy', '-o', '-i', $d, "$out/AUTOEXEC.BAT", '::AUTOEXEC.BAT');
+  if($opt{update}) {
+    must('mcopy', '-o', '-i', $c, $opt{replace}, '::DOS/REPLACE.EXE');
+  }
+  # D:\R, its files' times as UTC, which mtools then writes unchanged.
+  {
+    local $ENV{TZ} = 'UTC';
+    my $files = "$out/files";
+    my %dirs;
+    for my $f (@files) {
+      my($name, $data, $when, $attr) = @$f;
+      my $path = "$files/$name";
+      system('mkdir', '-p', dirname($path)) == 0 or die "unable to create $path\n";
+      spew($path, $data);
+      must('touch', '-d', "$when UTC", $path);
+      my @parts = split m{/}, "R/$name";
+      for my $i (1 .. $#parts) {
+        my $dir = join '/', @parts[0 .. $i - 1];
+        next if $dirs{$dir}++;
+        must('mmd', '-i', $d, "::$dir");
+      }
+      must('mcopy', '-m', '-i', $d, $path, "::R/$name");
+      must('mattrib', '-i', $d, (split ' ', $attr), "::R/$name") if $attr;
+    }
+    system('rm', '-rf', $files) == 0 or die "unable to remove $files\n";
+  }
+  my $a_img = "$out/a.img";
+  open my $afh, '>', $a_img or die "unable to create $a_img: $!";
+  truncate $afh, 1474560 or die "truncate: $!";
+  close $afh;
+  must('mformat', '-i', $a_img, '-f', 1440, '-N', '21212121', '::');
+  my $b_img = "$out/b.img";
+  open my $bfh, '>', $b_img or die "unable to create $b_img: $!";
+  truncate $bfh, 1474560 or die "truncate: $!";
+  close $bfh;
+  must('mformat', '-i', $b_img, '-f', 1440, '-N', '21212122', '::');
+  {
+    local $ENV{TZ} = 'UTC';
+    for my $f ([ 'A.TXT', '' ], [ 'RO.TXT', '+r' ]) {
+      my($name, $attr) = @$f;
+      spew("$out/$name", "B:'s $name\r\n");
+      must('touch', '-d', '2025-01-01 12:00:00 UTC', "$out/$name");
+      must('mcopy', '-m', '-i', $b_img, "$out/$name", "::$name");
+      must('mattrib', '-i', $b_img, $attr, "::$name") if $attr;
+      unlink "$out/$name";
+    }
+  }
+
+  my $tmp = tempdir('replace-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+  my $serial_sock = "$tmp/serial";
+  my @cmd = (
+    'qemu-system-i386',
+    -display => 'none',
+    -m       => 4,
+    '-no-reboot',
+    -drive   => "file=$img,if=none,id=hd0,format=raw",
+    -device  => 'ide-hd,drive=hd0,bus=ide.0,unit=0,cyls=993,heads=16,secs=63,bios-chs-trans=none',
+    -drive   => "file=$a_img,if=floppy,index=0,format=raw",
+    -drive   => "file=$b_img,if=floppy,index=1,format=raw,readonly=on",
+    -boot    => 'c',
+    -rtc     => 'base=2026-01-01T12:00:00',
+    -serial  => "unix:$serial_sock,server=on,wait=on",
+    -monitor => 'none',
+  );
+  my $pid = fork // die "fork: $!";
+  if($pid == 0) {
+    open STDOUT, '>', "$out/qemu.log" or die "unable to write $out/qemu.log: $!";
+    open STDERR, '>&', \*STDOUT or die "dup: $!";
+    exec @cmd or die "exec qemu-system-i386: $!";
+  }
+  my $serial;
+  for(1 .. 100) {
+    $serial = IO::Socket::UNIX->new(Peer => $serial_sock);
+    last if $serial;
+    sleep 0.1;
+  }
+  die "replace-test: no QEMU socket $serial_sock\n" unless $serial;
+
+  # COM1: what the batch file shows, and REPLACE's questions answered.
+  my $question = qr/\? \(Y\/N\)|Abort, Retry, Fail\?|Press any key to continue \. \. \./;
+  my($log, $done, @keys, $last) = ('', 0);
+  my($scanned, $quiet) = (0, time);
+  my $sel = IO::Select->new($serial);
+  my $deadline = time + 600;
+  open my $raw, '>:raw', "$out/serial.log" or die "unable to write $out/serial.log: $!";
+  $raw->autoflush(1);
+  STDOUT->autoflush(1);
+  while(time < $deadline) {
+    if($sel->can_read(0.25)) {
+      my $n = sysread $serial, my $chunk, 65536;
+      last unless $n;
+      print $raw $chunk;
+      $log .= $chunk;
+      $quiet = time;
+    }
+    # A key sent before REPLACE flushed DOS's input (INT 21h 0Ch) is lost:
+    # while nothing comes after the question, it is sent again.
+    elsif(defined $last && $log =~ /(?:$question)\z/ && time - $quiet > 3) {
+      say 'replace-test: the key again';
+      syswrite $serial, $last;
+      $quiet = time;
+    }
+    last if waitpid($pid, 1) == $pid;
+    # Complete lines, and a question waiting for its answer at the end.
+    while(substr($log, $scanned) =~ /\A(.*?)(\r?\n|$question)/s) {
+      my($line, $eol) = ($1, $2);
+      $scanned += length($1) + length($2);
+      if($line =~ /^== keys (\S+)/) { @keys = map { /^\^(.)$/ ? chr(ord($1) & 0x1f) : $_ } $1 =~ /\^.|./g }
+      elsif($line =~ /^\Q$end\E\r?$/) { $done = 1 }
+      # BIOS INT 14h gives up on COM1 when QEMU is slow to take its output,
+      # as on a busy host: the output is incomplete, and DOS asks forever.
+      elsif($line =~ /error writing device AUX/) {
+        kill 'TERM', $pid;
+        waitpid $pid, 0;
+        die "replace-test: DOS could not write to COM1 (a busy host?); see $out/serial.log\n";
+      }
+      if($eol =~ /^Press/) { $last = "\r" }
+      elsif($eol =~ /Y\/N|Fail/) {
+        die "replace-test: no key left for the question: $line$eol\n" unless @keys;
+        $last = shift @keys;
+      }
+      else { next }
+      sleep 0.5;
+      syswrite $serial, $last;
+    }
+    last if $done;
+  }
+  kill 'TERM', $pid;
+  waitpid $pid, 0;
+  close $raw;
+
+  my($got) = $log =~ /^(\Q$begin\E\r\n.*?^\Q$end\E\r\n)/ms;
+  die "replace-test: no $begin to $end on COM1\n" unless defined $got;
+  spew("$out/output.log", $got);
+
+  # The file systems REPLACE wrote, as DOS left them.
+  my $ok = 1;
+  must('dd', "if=$img", "of=$out/d.img", 'bs=512', "skip=$d_start", "count=$d_len", 'status=none');
+  for my $fs ([ 'D:', "$out/d.img" ], [ 'A:', $a_img ]) {
+    my($name, $path) = @$fs;
+    next if system('fsck.fat', '-n', $path) == 0;
+    say "replace-test: FAILED, $name is not sound (fsck.fat -n $path)";
+    $ok = 0;
+  }
+
+  my $files = join '', (map { "D: $_" } listing("$out/d.img", '::R', "$out/list")),
+    (map { "A: $_" } listing($a_img, '::', "$out/list")), (map { "B: $_" } listing($b_img, '::', "$out/list"));
+  spew("$out/files.txt", $files);
+
+  if($opt{update}) {
+    die "replace-test: the file systems are not sound\n" unless $ok;
+    spew("$tests/expect.log", $got);
+    spew("$tests/files.txt", $files);
+    say "replace-test: wrote $tests/expect.log and $tests/files.txt";
+    unlink $img, "$out/d.img";
+    return 0;
+  }
+  if($got ne slurp("$tests/expect.log")) {
+    system("diff -u $tests/expect.log $out/output.log | tr -d '\\r'");
+    say 'replace-test: FAILED, not the output of expect.log';
+    $ok = 0;
+  }
+  if($files ne slurp("$tests/files.txt")) {
+    system('diff', '-u', "$tests/files.txt", "$out/files.txt");
+    say 'replace-test: FAILED, not the files of files.txt';
+    $ok = 0;
+  }
+  if($ok) {
+    say 'replace-test: passed, the same output as expect.log, the same files as files.txt, and sound file systems';
+    unlink $img, "$out/d.img";
+    return 0;
+  }
+  return 1;
+}
+
+exit main(@ARGV);
