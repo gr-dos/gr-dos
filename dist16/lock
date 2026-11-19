@@ -14,7 +14,7 @@ program gr-dos/crcsum16 v0.03 87ccbadf42e14f23a8ca44b9efd394008d8e3f07 crcsum.ex
 program gr-dos/df16 v0.03 bf4bcd965326506943c0281e19b96c4395fdceb9 df.exe DF.EXE 4860 c205b902e9e5439d72f3b6d28414ef9bb510bc94d043b3154b348c6d0a066e81 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 program gr-dos/diff16 v0.02 1655e11d2cca5d62c8558b078692e96b471da943 diff.exe DIFF.EXE 16448 f033d572f37e1b8ac6a41ce3c9708f3644f57d45ba310fca0fd9c68cfcd88847 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 skip gr-dos/hello16 excluded the template for gr-dos *16 programs, not a utility
-program gr-dos/less16 v0.01 7a73e763d05f6f74a92ac43268e30de3d3a11725 less.exe LESS.EXE 41962 23efcfaa671a9dbc874c79ed210effa27b8d213f12652900a24d41ced098a4c0 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
+program gr-dos/less16 v0.02 2917a058abdbd8d19cab62bf3cd7b1e5dedbec68 less.exe LESS.EXE 44696 8954b9d0af5c8252f5672e626cfd032626b421b9b551be3409deafc40581a2dc MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 skip gr-dos/libc16 excluded library repository (lib*16 convention), not a DOS executable
 skip gr-dos/libkitchen16 excluded library repository (lib*16 convention), not a DOS executable
 program gr-dos/md5sum16 v0.03 bf1cb20a4c240c1e8108e1ade4ebb5fb97279c64 md5sum.exe MD5SUM.EXE 14302 c0bf6ea467837acd22e27108ca2b55bdf824eda2ed091d97ec8db7793f5137d2 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
