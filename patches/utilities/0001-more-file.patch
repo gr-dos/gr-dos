@@ -24,7 +24,7 @@ PATCHES). `make check` builds without it.
  ;******************************************************************************
  
  FALSE	EQU	0
-@@ -115,6 +118,59 @@
+@@ -115,6 +118,62 @@
  	MOV	BX,2			; DUP STD ERR TO STANDARD IN
  	MOV	AH,XDUP
  	INT	21H
@@ -80,11 +80,14 @@ PATCHES). `make check` builds without it.
 +	MOV	AH,EXIT
 +	INT	21H
 +ARG_OPENED:
-+	MOV	BP,AX			; the file, in place of standard input
++	XCHG	AX,BP			; the file, in place of standard input;
++	MOV	BX,AX			; the duplicate of standard input is
++	MOV	AH,CLOSE		; not used, so closed
++	INT	21H
  cp_check:				;AN001;
  	mov	ax,GetCPSW		;AN001;
  	int	21h			;AN001; ;DL =0 (Not supported)
-@@ -249,6 +305,47 @@
+@@ -249,6 +308,47 @@
  	JMP	TLOOP
  GOBIG:	JMP	ALOOP
  
@@ -132,7 +135,7 @@ PATCHES). `make check` builds without it.
  MAXROW	DB	25
  MAXCOL	DB	80
  CURROW	DB	1
-@@ -258,7 +355,7 @@
+@@ -258,7 +358,7 @@
  
  .XLIST					;AN000;
  MSG_SERVICES <MSGDATA>			;AN000; ;message retriever code

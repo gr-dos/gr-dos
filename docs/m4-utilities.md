@@ -287,7 +287,7 @@ builds without them, still gives Microsoft's MORE.COM.
   between files would be new messages. One file covers `MORE FILE` in
   place of `MORE <FILE`.
 - **Paging** is unchanged: the same loop, the same `-- More --`.
-- **Size.** MORE.COM is 2,330 bytes, from 2,134: still three 1 KB
+- **Size.** MORE.COM is 2,335 bytes, from 2,134: still three 1 KB
   clusters on the 360 KB floppy, which keeps its 17 files and its
   16,384 bytes free ([M5](m5-utilities.md#floppies)). Its contents change,
   as the kernel's do with each GR-DOS change, and
