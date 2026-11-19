@@ -1,0 +1,138 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Basename qw( dirname );
+
+# ABSTRACT: Test FILESYS on a CF install's disk image, against Microsoft's
+
+=head1 SYNOPSIS
+
+ scripts/filesys-test [--update --filesys FILESYS.EXE] OUTDIR
+
+=head1 DESCRIPTION
+
+Tests FILESYS (issue #20, F<docs/filesys.md>) on a 512 MB CF install made
+by F<scripts/deploy-cf> in C<OUTDIR>, never on a block device.
+F<tests/filesys/fs.bat> runs from C:'s root, started by
+F<D:\AUTOEXEC.BAT>, with F<EL.BAT> (F<tests/join-subst/el.bat>) in
+F<C:\DOS>; both are copied to the image with mtools.  The image is booted
+in QEMU (F<scripts/hd-boot-test>), and what COM1 shows from
+C<GRDOS-TEST-BEGIN> to C<GRDOS-TEST-END>, carriage returns included, must
+be F<tests/filesys/expect.log>, byte for byte, but for the errorlevels
+F<ELU.BAT> reports, as C<errorlevel? N>: those Microsoft's FILESYS leaves
+undefined (its C<main> is C<void>), and GR-DOS's must be 0.  F<ELU.BAT> is
+F<EL.BAT> with that one change.
+
+With C<--update>, F<C:\DOS\FILESYS.EXE> is replaced by the program
+given, Microsoft's (the M1 reference build's), and its output is written
+to F<expect.log> instead: C<make filesys-expect>.
+
+=cut
+
+my $root = dirname(dirname(__FILE__));
+my $tool = "$root/scripts/deploy-cf";
+my $tests = "$root/tests/filesys";
+my $begin = 'GRDOS-TEST-BEGIN';
+my $end = 'GRDOS-TEST-END';
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "unable to write $path: $!";
+  print $fh $data;
+  close $fh or die "unable to write $path: $!";
+}
+
+sub must (@cmd) {
+  say '+ ', join ' ', @cmd;
+  system(@cmd) == 0 or die "failed: @cmd\n";
+}
+
+sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
+
+# CRLF text, as DOS reads it.
+sub dos_text ($path) { slurp($path) =~ s/\r?\n/\r\n/gr }
+
+sub main (@args) {
+  my %opt;
+  while(@args && $args[0] =~ /^--/) {
+    my $o = shift @args;
+    if($o eq '--update') { $opt{update} = 1 }
+    elsif($o eq '--filesys') { $opt{filesys} = shift @args }
+    else { die "unknown option $o\n" }
+  }
+  my($out) = @args;
+  die "usage: $0 [--update --filesys FILESYS.EXE] OUTDIR\n" unless defined $out && @args == 1;
+  die "--update needs --filesys\n" if $opt{update} && !$opt{filesys};
+  die "--filesys is for --update\n" if !$opt{update} && $opt{filesys};
+  my $dist = "$root/build/linux/cf";
+  -f "$dist/manifest.txt" or die "$dist: no distribution (run make)\n";
+  system('rm', '-rf', $out) == 0 && system('mkdir', '-p', $out) == 0 or die "unable to create $out\n";
+
+  my $img = "$out/disk.img";
+  open my $fh, '>', $img or die "unable to create $img: $!";
+  truncate $fh, 993 * 16 * 63 * 512 or die "truncate: $!";
+  close $fh;
+  must($tool, 'provision', '--confirm', 'disk.img', $img);
+  # The layout record, sector 1.
+  open my $rfh, '<:raw', $img or die "unable to read $img: $!";
+  sysseek $rfh, 512, 0;
+  sysread $rfh, my $rec, 512;
+  close $rfh;
+  my($sys_start) = $rec =~ /^system (\d+) \d+$/m;
+  my($d_start) = $rec =~ /^logical \d+ (\d+) \d+$/m;
+  die "no layout record\n" unless $sys_start && $d_start;
+  my $c = at($img, $sys_start);
+  my $d = at($img, $d_start);
+
+  spew("$out/FS.BAT", dos_text("$tests/fs.bat"));
+  my $el = dos_text("$root/tests/join-subst/el.bat");
+  spew("$out/EL.BAT", $el);
+  $el =~ s/^ECHO errorlevel %EL%\r$/ECHO errorlevel? %EL%\r/m or die "no errorlevel line in el.bat\n";
+  spew("$out/ELU.BAT", $el);
+  spew("$out/AUTOEXEC.BAT", "C:\\FS\r\n");
+  must('mcopy', '-o', '-i', $c, "$out/FS.BAT", '::FS.BAT');
+  must('mcopy', '-o', '-i', $c, "$out/EL.BAT", '::DOS/EL.BAT');
+  must('mcopy', '-o', '-i', $c, "$out/ELU.BAT", '::DOS/ELU.BAT');
+  must('mcopy', '-o', '-i', $d, "$out/AUTOEXEC.BAT", '::AUTOEXEC.BAT');
+  if($opt{update}) {
+    must('mcopy', '-o', '-i', $c, $opt{filesys}, '::DOS/FILESYS.EXE');
+  }
+
+  spew("$out/expect", "^$begin\$\n^$end\$\n");
+  my $rc = system("$root/scripts/hd-boot-test", '--chs', '993/16/63', '--timeout', 300, $img,
+    "$out/expect", "$out/boot");
+  my $serial = -f "$out/boot/serial.log" ? slurp("$out/boot/serial.log") : '';
+  my($log) = $serial =~ /^(\Q$begin\E\r\n.*?^\Q$end\E\r\n)/ms;
+  die "filesys-test: no $begin to $end on COM1 (hd-boot-test: $rc)\n" unless defined $log;
+  spew("$out/output.log", $log);
+
+  if($opt{update}) {
+    spew("$tests/expect.log", $log);
+    say "filesys-test: wrote $tests/expect.log";
+    unlink $img;
+    return 0;
+  }
+  my $mask = sub ($text) { $text =~ s/^errorlevel\? \d+\r$/errorlevel? -\r/mgr };
+  my @undefined = $log =~ /^errorlevel\? (\d+)\r$/mg;
+  my @nonzero = grep { $_ != 0 } @undefined;
+  if(@nonzero) {
+    say "filesys-test: FAILED, errorlevel @nonzero where it must be 0";
+    return 1;
+  }
+  if($mask->($log) eq $mask->(slurp("$tests/expect.log"))) {
+    say 'filesys-test: passed, the same output as expect.log, and errorlevel 0 where Microsoft\'s is undefined';
+    unlink $img;
+    return 0;
+  }
+  system("diff -u $tests/expect.log $out/output.log | tr -d '\\r'");
+  say 'filesys-test: FAILED, not the output of expect.log';
+  return 1;
+}
+
+exit main(@ARGV);

@@ -26,7 +26,7 @@ DEBUG, MEM and MODE). Of the other 25:
 | EDLIN | assembly | built, `EDLIN.COM` |
 | EXE2BIN | assembly | built, `EXE2BIN.EXE` |
 | FASTOPEN | assembly | built, `FASTOPEN.EXE` |
-| FILESYS | C (`FILESYS.C`), with assembly helpers | deferred: C |
+| FILESYS | C (`FILESYS.C`), with assembly helpers | built, `FILESYS.EXE`, issue #20 ([filesys.md](filesys.md)) |
 | GRAFTABL | assembly | built, `GRAFTABL.COM` |
 | GRAPHICS | assembly, and the profile `GRAPHICS.PRO` | built, `GRAPHICS.COM` |
 | IFSFUNC | assembly, with the kernel's objects | built, `IFSFUNC.EXE` |
@@ -49,8 +49,9 @@ logic in C, compiled by Microsoft C 5.1, with only the message retriever
 and parser in assembly. Issue #17 is about the assembly sources; porting
 these is C work, like that of [M4](m4-utilities.md) and [FC](fc.md). JOIN
 and SUBST are ported (issue #18, [join-subst.md](join-subst.md)), and BACKUP
-and RESTORE (issue #19, [backup-restore.md](backup-restore.md)); FILESYS and
-REPLACE are left for later issues.
+and RESTORE (issue #19, [backup-restore.md](backup-restore.md)), and
+FILESYS (issue #20, [filesys.md](filesys.md)); REPLACE is left for a later
+issue.
 
 Two built commands need data files from `v4.0/src/DEV`: KEYB needs
 `KEYBOARD.SYS` (`DEV/KEYBOARD`), and NLSFUNC's code page switching
@@ -188,15 +189,16 @@ drive. What a floppy carries is chosen for that use, not to fill it:
   and 5202.CPI (issue #25, [printer.md](printer.md)). Everything that is
   useful on a floppy fits on 1.2 MB, so the two have the same files.
 - **No floppy:** GRVER ([grver.md](grver.md)), FASTOPEN, which works on hard disks only, IFSFUNC,
-  which needs an installable file system driver, and there is none, and
+  which needs an installable file system driver, and there is none,
+  FILESYS, which needs IFSFUNC (issue #20, [filesys.md](filesys.md)), and
   LCD.CPI, for the PC Convertible alone.
 
 | Image | Files | Bytes free |
 |---|---:|---:|
 | 360 KB | 17 | 16,384 |
-| 720 KB | 34 | 65,536 |
-| 1.2 MB | 49 | 365,568 |
-| 1.44 MB | 49 | 609,280 |
+| 720 KB | 34 | 64,512 |
+| 1.2 MB | 49 | 364,544 |
+| 1.44 MB | 49 | 608,256 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's

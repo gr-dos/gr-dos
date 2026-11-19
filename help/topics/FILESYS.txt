@@ -1,0 +1,28 @@
+Topic: FILESYS
+Summary: Lists, attaches and detaches installable file system drives
+Origin: MS-DOS 4.00
+Group: command
+Files: FILESYS.EXE
+
+Syntax
+  FILESYS [name]
+  FILESYS name fsname [parameters]
+  FILESYS name /D
+
+  name         A drive, such as E:, or a device, such as LPT1.
+  fsname       The installable file system (IFS) to attach it to.
+  parameters   Up to two more words, for the file system.
+  /D           Detaches the drive or device.
+  (none)       FILESYS alone lists what is attached; with a name alone,
+               it shows that one.
+
+Exit status
+  0  Done, or the list was shown, or the attach or detach failed.
+  1  A parameter error, such as "Too many parameters".
+
+Notes
+  FILESYS is IFSFUNC's command line: it needs IFSFUNC and an IFS driver,
+  loaded with IFS= in CONFIG.SYS. GR-DOS has no IFS driver, so the list
+  says "No entries found", and attaching or detaching says "Invalid
+  function" without IFSFUNC, or "NET809: Network request not supported"
+  with it. /D must follow the name.
