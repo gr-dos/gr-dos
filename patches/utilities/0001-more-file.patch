@@ -1,0 +1,143 @@
+GR-DOS: MORE [d:][path]filename pages that file (issue #34, HELP MORE).
+
+With no parameter MORE pages its standard input, as before. One file:
+a second parameter is "Too many parameters" and one starting with /
+"Invalid switch" (errorlevel 2); a file that cannot be opened gives
+DOS's message, such as "File not found" (errorlevel 1). Each message
+names the parameter, as the other commands' do, through the message
+retriever's character substitution (CHARmsg). Paging is unchanged. The
+program stays within the three 1 KB clusters MORE.COM takes on the
+360 KB floppy.
+
+Applied to a copy of v4.0/src before it is converted to CRLF (Makefile,
+PATCHES). `make check` builds without it.
+
+--- a/CMD/MORE/MORE.ASM
++++ b/CMD/MORE/MORE.ASM
+@@ -11,6 +11,9 @@
+ ;  V4.0       Bill L	      9/17/87	   ;AN001; DCR 201 - extended attr. enhancement
+ ;					   ;AN002; DCR 191
+ ;					   ;AN003; PTM 3860 - add CR-LF to make DOS3.3 compat.
++;
++;  GR-DOS: MORE [d:][path]filename pages that file, not standard input
++;  (issue #34); with no parameter, standard input as before.
+ ;******************************************************************************
+ 
+ FALSE	EQU	0
+@@ -115,6 +118,59 @@
+ 	MOV	BX,2			; DUP STD ERR TO STANDARD IN
+ 	MOV	AH,XDUP
+ 	INT	21H
++
++; GR-DOS: a file named on the command line is paged in place of standard
++; input (issue #34). One file: a second parameter is "Too many
++; parameters", and one starting with / "Invalid switch" (errorlevel 2); a
++; file that cannot be opened gives DOS's message, such as "File not found"
++; (errorlevel 1). Each message ends with the parameter, as the other
++; commands' do.
++	MOV	SI,81H			; the command tail
++	CALL	SKIPBL
++	CMP	AL,CR			; no parameter: standard input
++	JE	cp_check
++	MOV	BL,3			; parse error 3, Invalid switch
++	CMP	AL,'/'
++	JE	ARG_BAD
++	CALL	TOKEN			; DX = the name, now ASCIIZ
++	MOV	SUB_PTR,DX
++	CMP	AL,CR
++	JE	ARG_OPEN
++	INC	SI
++	CALL	SKIPBL
++	CMP	AL,CR
++	JE	ARG_OPEN
++	MOV	BL,1			; parse error 1, Too many parameters
++	CMP	AL,'/'
++	JNE	ARG_BAD
++	MOV	BL,3
++ARG_BAD:
++	CALL	TOKEN			; the parameter, for the message
++	MOV	SUB_PTR,DX
++	MOV	AL,BL
++	CBW
++	MOV	DH,PARSE_ERR_CLASS
++	MOV	BL,2			; errorlevel 2
++	JMP	SHORT ARG_ERROR
++ARG_OPEN:
++	MOV	AX,(OPEN SHL 8)		; open for reading
++	INT	21H
++	JNC	ARG_OPENED
++	MOV	DH,EXT_ERR_CLASS	; AX, DOS's error
++	MOV	BL,1			; errorlevel 1
++ARG_ERROR:
++	PUSH	BX
++	MOV	SUB_SEG,CS
++	MOV	SI,OFFSET SUBLIST
++	MOV	BX,STDERR
++	MOV	CX,1
++	MOV	DL,NO_INPUT
++	CALL	SYSDISPMSG
++	POP	AX
++	MOV	AH,EXIT
++	INT	21H
++ARG_OPENED:
++	MOV	BP,AX			; the file, in place of standard input
+ cp_check:				;AN001;
+ 	mov	ax,GetCPSW		;AN001;
+ 	int	21h			;AN001; ;DL =0 (Not supported)
+@@ -249,6 +305,47 @@
+ 	JMP	TLOOP
+ GOBIG:	JMP	ALOOP
+ 
++; GR-DOS: SI past the blanks (spaces and tabs) at SI; AL, the byte there.
++SKIPBL:
++	MOV	AL,[SI]
++	CMP	AL,' '
++	JE	SKIPBL1
++	CMP	AL,9
++	JNE	SKIPBL2
++SKIPBL1:
++	INC	SI
++	JMP	SKIPBL
++SKIPBL2:
++	RET
++
++; GR-DOS: the parameter at SI, ended with a 0 in place of the blank or
++; CR after it: DX, its start; SI, the 0; AL, the byte it replaced.
++TOKEN:
++	MOV	DX,SI
++TOKEN1:
++	INC	SI
++	MOV	AL,[SI]
++	CMP	AL,' '
++	JE	TOKEN2
++	CMP	AL,9
++	JE	TOKEN2
++	CMP	AL,CR
++	JNE	TOKEN1
++TOKEN2:
++	MOV	BYTE PTR [SI],0
++	RET
++
++; GR-DOS: the parameter in a message ("File not found - X.TXT")
++SUBLIST DB	11			; its size
++	DB	0
++SUB_PTR DW	?			; the ASCIIZ parameter
++SUB_SEG DW	?
++	DB	0			; %0
++	DB	LEFT_ALIGN+CHAR_FIELD_ASCIIZ
++	DB	0			; any width
++	DB	1
++	DB	" "
++
+ MAXROW	DB	25
+ MAXCOL	DB	80
+ CURROW	DB	1
+@@ -258,7 +355,7 @@
+ 
+ .XLIST					;AN000;
+ MSG_SERVICES <MSGDATA>			;AN000; ;message retriever code
+-MSG_SERVICES <LOADmsg,DISPLAYmsg,NOCHECKSTDIN>	;AN002;
++MSG_SERVICES <LOADmsg,DISPLAYmsg,NOCHECKSTDIN,CHARmsg>	;AN002; GR-DOS: CHARmsg, the parameter in a message
+ MSG_SERVICES <MORE.CL1> 		;AN000;
+ MSG_SERVICES <MORE.CL2> 		;AN000;
+ MSG_SERVICES <MORE.CLA> 		;AN000;

@@ -24,8 +24,10 @@ CF    := $(BUILD)/cf
 
 # Patches to v4.0/src, applied in order with patch -p1 (no fuzz): the
 # branding (decision 7), then the kernel's GR-DOS identification call
-# (patches/kernel, issue #46).
-PATCHES := $(sort $(wildcard patches/branding/*.patch)) $(sort $(wildcard patches/kernel/*.patch))
+# (patches/kernel, issue #46), then GR-DOS's changes to the assembly
+# utilities, such as MORE with a file name (patches/utilities, issue #34).
+PATCHES := $(sort $(wildcard patches/branding/*.patch)) $(sort $(wildcard patches/kernel/*.patch)) \
+	$(sort $(wildcard patches/utilities/*.patch))
 
 JWFLAGS := -q -Zj -Zm -Zg -Cx -I. -I$(CURDIR)/$(SRC)/INC -I$(CURDIR)/$(SRC)/DOS
 
@@ -331,7 +333,7 @@ TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
-	test-keyb test-help-less test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
+	test-keyb test-help-less test-more test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
 	test-join-subst test-backup-restore test-filesys test-replace
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
@@ -485,6 +487,21 @@ $(TESTS)/help-less.img: $(CORE) $(HELP_LESS_FILES) scripts/mkimage scripts/check
 
 test-help-less: $(TESTS)/help-less.img scripts/disk-test
 	scripts/disk-test $< tests/help-less $(TESTS)/help-less
+
+# MORE on the screen (tests/more, issue #34): a 60-line file paged with
+# MORE LONG.TXT, and as TYPE LONG.TXT | MORE and MORE <LONG.TXT page it,
+# a key for each screenful, read from the screen.
+MORE_FILES := $(SRC)/CMD/MORE/MORE.COM $(TESTS)/more-files/LONG.TXT $(BUILD)/image/AUTOEXEC.BAT
+
+$(TESTS)/more-files/LONG.TXT:
+	mkdir -p $(@D)
+	for i in $$(seq 1 60); do printf 'line %02d\r\n' $$i; done > $@
+
+$(TESTS)/more.img: $(CORE) $(MORE_FILES) scripts/mkimage scripts/check-image
+	scripts/mkimage $@ $(SRC) $(MORE_FILES)
+
+test-more: $(TESTS)/more.img scripts/disk-test
+	scripts/disk-test $< tests/more $(TESTS)/more
 
 # The FDISK tests (tests/fdisk, issue #10). Each scenario boots the 1.44 MB
 # image, types commands at its prompt and reads the screen, with a new,
@@ -707,6 +724,7 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-country-COUNTRY  (COUNTRY: $(COUNTRY_TESTS))
   make test-keyb           KEYB's layouts, typed at the 1.44 MB image's prompt
   make test-help-less      HELP on the screen, through LESS and its own pager
+  make test-more           MORE paging a file, a pipe and a redirection
   make test-codepage       DISPLAY.SYS, MODE's code pages, KEYB and CHCP; or
   make test-codepage-SETUP   one (SETUP: $(CODEPAGE_TESTS)), or the
   make test-codepage-screen  boot messages and KEYB GR, read from the screen
@@ -784,7 +802,7 @@ test-help: scripts/check-help
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb test-help-less \
+	test-dist16 dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb test-help-less test-more \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
 	test-codepage-screen test-printer $(TEST_PRINTER) test-join-subst join-subst-expect test-backup-restore \
 	backup-restore-expect test-filesys filesys-expect test-replace replace-expect
