@@ -28,9 +28,10 @@ tools on DOSBox-X's own DOS kernel.
 C<cf> provisions a fresh 512 MB CF image (993 cylinders, 16 heads, 63
 sectors) from F<CFDIR> (F<build/linux/cf>) with F<scripts/deploy-cf>, and
 boots it as the first hard disk, C:. C<floppy> boots a copy of F<IMAGE>
-(F<build/linux/gr-dos-1440k.img> and the others) in A:.
+(F<build/linux/gr-dos-1440k.img> and the others) in A:, with a blank disk
+of the same size, formatted with C<mformat>, in B:.
 
-The image and DOSBox-X's configuration are in a temporary directory under
+The images and DOSBox-X's configuration are in a temporary directory under
 F<WORKDIR> (F<build/linux/dosbox>), removed when DOSBox-X exits, so
 nothing done in DOSBox-X is kept, and the build's images are never
 written. The configuration is passed with C<-conf>, so the user's own
@@ -72,7 +73,22 @@ if($kind eq 'cf') {
   @boot = (qq{Z:\\SYSTEM\\IMGMOUNT 2 "$img" -t hdd -fs none -size 512,$s,$h,$c}, 'Z:\\SYSTEM\\BOOT C:');
 } else {
   copy($src, $img) or die "$src: $!\n";
-  @boot = (qq{Z:\\SYSTEM\\IMGMOUNT 0 "$img" -t floppy -fs none}, 'Z:\\SYSTEM\\BOOT A:');
+  # B:, blank, of the same size. Zero-filled first and formatted in place,
+  # as scripts/mkimage does: mformat -C leaves uninitialised memory in the
+  # last sector.
+  my $size = -s $img;
+  my %format = map { $_ * 1024 => $_ } 1440, 1200, 720, 360;
+  my $format = $format{$size} // die "$src: $size bytes is not a floppy size\n";
+  my $b = "$tmp/b.img";
+  open my $fh, '>', $b or die "$b: $!\n";
+  truncate $fh, $size or die "truncate: $!\n";
+  close $fh;
+  system('mformat', '-i', $b, '-f', $format, '::') == 0 or die "mformat failed\n";
+  @boot = (
+    qq{Z:\\SYSTEM\\IMGMOUNT 0 "$img" -t floppy -fs none},
+    qq{Z:\\SYSTEM\\IMGMOUNT 1 "$b" -t floppy -fs none},
+    'Z:\\SYSTEM\\BOOT A:',
+  );
 }
 
 spew("$tmp/dosbox-x.conf", join "\n", '[autoexec]', '@ECHO OFF', @boot, '');

@@ -120,9 +120,10 @@ make run-dosbox-360k
 `run-dosbox-cf` provisions a 512 MB image (993 cylinders, 16 heads, 63
 sectors) from `build/linux/cf` with `scripts/deploy-cf`, as a CF card is
 ([deploy-cf.md](deploy-cf.md)), and boots it as the first hard disk. The
-floppy targets boot a copy of the build's image.
+floppy targets boot a copy of the build's image, with a blank disk of
+the same size, formatted with `mformat`, in B:.
 
-The image is in a temporary directory under `build/linux/dosbox`
+The images are in a temporary directory under `build/linux/dosbox`
 (`run-XXXXXX`), with the configuration, and the directory is removed when
 DOSBox-X exits, also when it is ended with Ctrl-C or a signal. Nothing done
 in the session is kept, and the build's images are never written. `DOSBOX`

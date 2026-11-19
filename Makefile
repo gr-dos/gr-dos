@@ -1115,9 +1115,9 @@ run-dosbox: $(CF)/manifest.txt scripts/run-dosbox
 	scripts/run-dosbox --dosbox "$(DOSBOX)" $(CF) $(BUILD)/dosbox $(DOSBOX_ARGS)
 
 # GR-DOS itself booted in DOSBox-X (scripts/run-dosbox-image): a fresh
-# 512 MB CF install in C:, or a copy of a floppy image in A:. The image is
-# in a temporary directory under $(BUILD)/dosbox, removed when DOSBox-X
-# exits.
+# 512 MB CF install in C:, or a copy of a floppy image in A: with a blank,
+# formatted disk of the same size in B:. The images are in a temporary
+# directory under $(BUILD)/dosbox, removed when DOSBox-X exits.
 run-dosbox-cf: $(CF)/manifest.txt scripts/run-dosbox-image scripts/deploy-cf
 	scripts/run-dosbox-image --dosbox "$(DOSBOX)" cf $(CF) $(BUILD)/dosbox $(DOSBOX_ARGS)
 
