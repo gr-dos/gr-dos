@@ -31,7 +31,8 @@ stem, since `retrofetch.exe` is not an 8.3 name, so its `include` in
 |---|---|
 | `gr-dos/libc16`, `libkitchen16` | excluded: library repositories (`lib*16`), not DOS programs |
 | `gr-dos/hello16` | excluded: the template the other repositories are made from |
-| `gr-dos/perl16`, `tcl16` | unavailable: no release yet |
+| `gr-dos/perl16` | unavailable: no release yet |
+| `gr-dos/tcl16` | failed: GitHub gives its license as NOASSERTION, which `dist16/config` does not allow |
 
 Each program goes in `C:\DOS` and the ZIP's `BIN`, after GR-DOS's own
 commands. The ZIP's `README.txt` lists each one with its repository,
