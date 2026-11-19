@@ -42,7 +42,9 @@ C<internal> topics), every file a topic names is distributed, every name
 and alias is unique, the text is ASCII in lines of at most 79 characters,
 and the first word of each example (an C<Examples> line indented two
 blanks) is a topic or alias.  A C<@DIST16@> line in a topic is replaced
-by the C<*16> programs, and each is an alias of that topic.
+by the C<*16> programs (their F<.EXE> and F<.COM> files, not dist16's
+F<SOURCES.TXT>), and each, without its extension, is an alias of that
+topic.
 
 The file is CRLF text: each topic starts with a line C<@@NAME ALIAS...>,
 then C<NAME - Summary>, its origin and where its files are, a blank line
@@ -141,9 +143,10 @@ sub main (@args) {
     fail("$file: unknown group $t->{group}") unless $group_title{$t->{group}};
     $t->{body} =~ s/\n+\z/\n/;
     if($t->{body} =~ /^\@DIST16\@$/m) {
-      my @lines = map { "  $_" } wrap(list_and(@dist16), 76);
+      my @programs = grep { /\.(EXE|COM)$/ } @dist16;
+      my @lines = map { "  $_" } wrap(list_and(@programs), 76);
       $t->{body} =~ s/^\@DIST16\@\n/join '', map { "$_\n" } @lines/me;
-      push $t->{aliases}->@*, map { s/\.EXE$//r } @dist16;
+      push $t->{aliases}->@*, map { s/\.(EXE|COM)$//r } @programs;
     }
     $topic{$t->{name}} = $t;
   }
