@@ -77,7 +77,7 @@ C<shift-y>, ...);
 
 =item C<type TEXT>
 
-types the text C<TEXT> (letters, digits, space and C<:./\-%|"E<gt>>);
+types the text C<TEXT> (letters, digits, space and C<:./\-%|"E<lt>E<gt>>);
 
 =item C<screen NAME>
 
@@ -226,7 +226,7 @@ sub screen ($mon) {
 my %char_key = (
   ' ' => 'spc', ':' => 'shift-semicolon', '.' => 'dot', '/' => 'slash',
   '\\' => 'backslash', '-' => 'minus', '%' => 'shift-5',
-  '|' => 'shift-backslash', '"' => 'shift-apostrophe', '>' => 'shift-dot',
+  '|' => 'shift-backslash', '"' => 'shift-apostrophe', '>' => 'shift-dot', '<' => 'shift-comma',
 );
 
 sub type_keys ($text) {

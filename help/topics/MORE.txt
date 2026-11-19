@@ -5,17 +5,25 @@ Group: command
 Files: MORE.COM
 
 Syntax
+  MORE [drive:][path]filename
   MORE < [drive:][path]filename
   command | MORE
 
-  MORE takes no parameters: it reads its standard input, given with < or
-  a pipe (|), and writes it to the screen.
+  filename     The file to show. Without one, MORE reads its standard
+               input, given with < or a pipe (|). One file only.
 
 Examples
-  MORE < README.TXT
+  MORE README.TXT
     Shows README.TXT, stopping after each screenful.
+  MORE < README.TXT
+    The same, with the file as MORE's input.
   DIR | MORE
     Lists a long directory a screen at a time.
+
+Exit status
+  0  The text was shown.
+  1  The file could not be opened (not found, or access denied).
+  2  A bad parameter: more than one, or a switch.
 
 Notes
   After each screenful MORE shows -- More -- and waits for a key; any key
@@ -23,4 +31,5 @@ Notes
   the input or at a Ctrl+Z. MORE counts long lines that wrap, and expands
   tabs to every eighth column. It takes the screen's number of lines from
   the display driver when it can (25 otherwise). The keys come from the
-  keyboard, so MORE works at the end of a pipe.
+  keyboard, so MORE works at the end of a pipe. A file name is GR-DOS's
+  addition: MS-DOS 4.00's MORE reads only its standard input.

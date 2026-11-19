@@ -20,6 +20,7 @@ What GR-DOS changes or adds
     used Microsoft C 5.1.
   - FIND, EXE2BIN and IFSFUNC are not EXEPACKed: the unpacker fails
     when a program loads in the first 64 KB of memory.
+  - MORE can show a file named after it: MORE README.TXT (HELP MORE).
   - HELP and this help file.
   - TICO, the editor, and the other *16 programs in C:\DOS (HELP
     DIST16).

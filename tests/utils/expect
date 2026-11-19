@@ -5,6 +5,30 @@
 # MORE: the file, which fits on the screen
 ^alpha$
 ^xyz$
+# MORE with a file named (issue #34): the same lines from the name, the
+# full path, and the name with piped input ignored; nothing from an empty
+# file; then DOS's messages, with the parameter, and the errorlevels
+^-- MORE LINES\.TXT$
+^alpha$
+^xyz$
+^-- MORE A:\\LINES\.TXT$
+^alpha$
+^xyz$
+^-- TYPE LINES\.TXT : MORE$
+^alpha$
+^xyz$
+^-- MORE EMPTY\.TXT$
+^MORE-EMPTY-0$
+^File not found - NOFILE\.TXT$
+^MORE-ERRORLEVEL-1$
+^Path not found - A:\\NODIR\\X\.TXT$
+^MORE-ERRORLEVEL-1$
+^Too many parameters - EXTRA$
+^MORE-ERRORLEVEL-2$
+^Invalid switch - /X$
+^MORE-ERRORLEVEL-2$
+^Invalid switch - /X$
+^MORE-ERRORLEVEL-2$
 # FIND: lines with "beta", the count of lines with "a", the numbered lines
 # without "a", and FIND in a pipe
 ^---------- LINES\.TXT$

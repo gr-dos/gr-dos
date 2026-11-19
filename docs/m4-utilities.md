@@ -264,6 +264,35 @@ The other compatibility edits, all keeping MASM's output identical:
 The JWasm patches the utilities need, 0003 to 0011, are described in
 [M2](m2-jwasm.md#jwasm-patches).
 
+### MORE with a file name
+
+`MORE README.TXT` pages the file, where MS-DOS 4.00's MORE reads only its
+standard input (issue #34). It is a change to MORE.ASM in
+`patches/utilities/0001-more-file.patch`, applied with the other
+`PATCHES` to the build's copy of `v4.0/src`, so `make check`, which
+builds without them, still gives Microsoft's MORE.COM.
+
+- **Parameters.** With none, MORE reads standard input as before. With
+  one, it opens that file (any path DOS takes) and pages it in place of
+  standard input; the keys still come from the keyboard. Only one file:
+  a second parameter is `Too many parameters - X`, and one starting with
+  `/` is `Invalid switch - /X`, errorlevel 2. A file that cannot be
+  opened gives DOS's message with its name, such as
+  `File not found - X.TXT` or `Path not found - ...`, errorlevel 1.
+  The messages are COMMAND.COM's extended and parse error texts, through
+  the message retriever's character substitution (`CHARmsg`), so MORE
+  adds no text of its own. An empty file shows nothing, errorlevel 0.
+- **Several files** are not supported: the paging, the screen's line
+  count and the code page set from the input are per input, and headings
+  between files would be new messages. One file covers `MORE FILE` in
+  place of `MORE <FILE`.
+- **Paging** is unchanged: the same loop, the same `-- More --`.
+- **Size.** MORE.COM is 2,335 bytes, from 2,134: still three 1 KB
+  clusters on the 360 KB floppy, which keeps its 17 files and its
+  16,384 bytes free ([M5](m5-utilities.md#floppies)). Its contents change,
+  as the kernel's do with each GR-DOS change, and
+  `build/linux/manifest-360k.txt` shows the new SHA-256.
+
 ## TICO.EXE
 
 `TICO.EXE` is `tico.exe` from the tico16 release v0.02. It is not compiled
@@ -293,7 +322,12 @@ Their free space is in [M5](m5-utilities.md#floppies).
 - **`test-1440`, `test-1200`, `test-720`, `test-360`**: each image's files,
   with the smoke test's AUTOEXEC.BAT and HELLO.COM ([M3](m3-boot.md)). The
   `DIR` it checks lists every file of the disk.
-- **`test-utils`**: `tests/utils/utils.bat` runs MORE, FIND, ATTRIB, DEBUG
+- **`test-more`**: MORE pages a 60-line file named on its command line,
+  piped and redirected, a key for each screenful, read from the screen
+  (`scripts/disk-test`, `tests/more`): each way gives the same screens.
+- **`test-utils`**: `tests/utils/utils.bat` runs MORE (with its input
+  redirected, a file named, relative and with a path, piped input with a
+  file, an empty file, and each error with its errorlevel), FIND, ATTRIB, DEBUG
   (assembling, writing and running a program, then unassembling it), MEM,
   MODE and CHKDSK, then DISKCOPY A: B: and FORMAT B: /S to a blank,
   disposable 1.44 MB image in drive B: (`scripts/smoke-test --drive-b`),

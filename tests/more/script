@@ -1,0 +1,52 @@
+# MORE on the screen (issue #34), from a 1.44 MB disk with MORE.COM and
+# LONG.TXT, 60 lines ("line 01" to "line 60"). MORE LONG.TXT pages the
+# file: a screenful, "-- More --", a key, the next, and after the last
+# line the prompt. TYPE LONG.TXT | MORE and MORE <LONG.TXT page the same
+# screens, as before. CLS first, so that each screen has none of the
+# earlier ones. A floppy boot: the hard disk is not used.
+disk 1M
+unchanged
+wait A:\\>
+
+# A file named
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type MORE LONG.TXT
+key ret
+wait -- More --
+screen file-1
+key spc
+wait line 48\s+-- More --
+screen file-2
+key spc
+wait line 60\s+A:\\>\s*\z
+screen file-3
+
+# A pipe
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type TYPE LONG.TXT | MORE
+key ret
+wait -- More --
+screen pipe-1
+key spc
+wait line 48\s+-- More --
+screen pipe-2
+key spc
+wait line 60\s+A:\\>\s*\z
+
+# A redirection
+type CLS
+key ret
+wait \A\s*A:\\>\s*\z
+type MORE <LONG.TXT
+key ret
+wait -- More --
+screen redirect-1
+key spc
+wait line 48\s+-- More --
+key spc
+wait line 60\s+A:\\>\s*\z
+quit
