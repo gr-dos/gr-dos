@@ -277,7 +277,9 @@ corresponding source
 ([`docs/dist16.md`](docs/dist16.md#source-licenses), issue #56). GR-DOS is
 an aggregation of separately licensed programs: including one under the
 GPL does not relicense GR-DOS, its kernel or any other program.
-ATTRIB.EXE, MEM.EXE, FDISK.EXE and FC.EXE are compiled with Open Watcom C but linked with
+ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM,
+RESTORE.COM, FILESYS.EXE, REPLACE.EXE, GRVER.EXE and HELP.EXE are
+compiled with Open Watcom C but linked with
 [libc16](https://github.com/gr-dos/libc16), an MIT C runtime, and contain
 no Open Watcom code ([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes
 these notices. MS-DOS is a trademark of
