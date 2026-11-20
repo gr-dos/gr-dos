@@ -25,7 +25,8 @@ CF    := $(BUILD)/cf
 # Patches to v4.0/src, applied in order with patch -p1 (no fuzz): the
 # branding (decision 7), then the kernel's GR-DOS identification call
 # (patches/kernel, issue #46), then GR-DOS's changes to the assembly
-# utilities, such as MORE with a file name (patches/utilities, issue #34).
+# utilities and COMMAND.COM, such as MORE with a file name (patches/utilities,
+# issue #34) and DIR with a switch before the filespec (issue #91).
 PATCHES := $(sort $(wildcard patches/branding/*.patch)) $(sort $(wildcard patches/kernel/*.patch)) \
 	$(sort $(wildcard patches/utilities/*.patch))
 
