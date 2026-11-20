@@ -19,9 +19,12 @@ watcom="$dest/watcom-$release"
 if [ ! -x "$watcom/binl64/wlink" ]; then
   mkdir -p "$dest"
   tarball="$dest/$asset"
-  if ! echo "$sha256  $tarball" | sha256sum -c --status 2>/dev/null; then
+  # Only the exit status of the checks is used: stdout is the WATCOM
+  # directory alone. Some sha256sum (uutils coreutils) print "FAILED open
+  # or read" on stdout for a missing file, even with --status (issue #78).
+  if ! echo "$sha256  $tarball" | sha256sum -c --status >/dev/null 2>&1; then
     curl -fsSL -o "$tarball" "$url"
-    echo "$sha256  $tarball" | sha256sum -c --quiet
+    echo "$sha256  $tarball" | sha256sum -c --quiet >&2
   fi
   rm -rf "$watcom.tmp"
   mkdir -p "$watcom.tmp"
