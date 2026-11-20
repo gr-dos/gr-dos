@@ -239,6 +239,36 @@ sub screen_quiet ($dir) {
   return $screen !~ /INCLUDEFILE|Error in CONFIG\.SYS|Unrecognized/;
 }
 
+# C:'s volume label for a version (issue #97): GRDOS-x_yy, padded to 11.
+sub label_of ($version) { sprintf '%-11s', 'GRDOS-' . ($version =~ tr/./_/r) }
+
+sub dist_version ($dir) { (split ' ', slurp("$dir/VERSION"))[0] }
+
+# C:'s label, read from the image: the boot sector's field must be the
+# label, and so must the root's only volume label entry (attribute 08h,
+# no clusters), which comes after IO.SYS and MSDOS.SYS, the first two
+# entries, with IO.SYS at cluster 2.
+sub check_label ($img, $r, $version, $when) {
+  my $want = label_of($version);
+  open my $fh, '<:raw', $img or die "unable to read $img: $!";
+  sysseek $fh, $r->{sys_start} * 512, 0;
+  sysread $fh, my $bs, 512;
+  my($spf, $root) = (unpack('v', substr $bs, 0x16, 2), unpack('v', substr $bs, 0x11, 2));
+  sysseek $fh, ($r->{sys_start} + 1 + 2 * $spf) * 512, 0;
+  sysread $fh, my $dir, $root * 32;
+  my @e;
+  for(my $i = 0; $i < length $dir && ord substr($dir, $i, 1); $i += 32) {
+    my($raw, $attr, $cl, $size) = unpack 'a11 C x14 v V', substr $dir, $i, 32;
+    push @e, { raw => $raw, attr => $attr, cluster => $cl, size => $size };
+  }
+  my @labels = grep { $e[$_]{attr} & 0x08 } 0 .. $#e;
+  ok(substr($bs, 0x2B, 11) eq $want, "$when: C:'s boot sector has the label \"$want\"");
+  ok(@labels == 1 && $e[$labels[0]]{raw} eq $want && $e[$labels[0]]{attr} == 0x08 && !$e[$labels[0]]{cluster}
+    && !$e[$labels[0]]{size} && $labels[0] > 1, "$when: C:'s root has one label entry, \"$want\", after the system files");
+  ok(@e > 1 && $e[0]{raw} eq 'IO      SYS' && $e[1]{raw} eq 'MSDOS   SYS' && $e[0]{cluster} == 2,
+    "$when: IO.SYS and MSDOS.SYS are C:'s first entries, IO.SYS at cluster 2");
+}
+
 sub c_files ($img, $r) {
   my $out = must('mdir', '-/', '-a', '-b', '-i', at($img, $r->{sys_start}), '::');
   return join ' ', sort map { m{^::/(.*)} ? $1 : () } split /\n/, $out;
@@ -270,6 +300,8 @@ sub test_size ($size, $out) {
   ok($table =~ /^mbr 1 80 0[146] 0\/1\/1 /m && $table =~ /^mbr 2 00 05 /m
     && (() = $table =~ /^ebr \d+ 1 00 0[146] /mg) == $n, "partition table: C: active, $n logical drives");
   check_sources($img, $r, $out);
+  my $version = dist_version($dist);
+  check_label($img, $r, $version, 'provision');
   ok((mread($img, $r->{sys_start}, 'CONFIG.SYS', $out) // '') eq $config_sys,
     'C:\CONFIG.SYS has the defaults and INCLUDEFILE=D:\CONFIG.SYS');
   my $fsck_c = "$out/c.img";
@@ -299,11 +331,13 @@ sub test_size ($size, $out) {
   my @dist16 = dist16_programs();
   push @extras, 'CTTY AUX', (map { "$_->{name} $_->{args}" } @dist16), 'CTTY CON';
   spew("$out/AUTOEXEC.BAT", join "\r\n", '@ECHO OFF', 'ECHO GRDOS-USER-AUTOEXEC>AUX', 'VER>AUX', 'PATH>AUX', 'BREAK>AUX',
-    'TYPE C:\GRDOS.ID>AUX', @bat, @extras, 'PROMPT GR$G', '');
+    'TYPE C:\GRDOS.ID>AUX', 'VOL C:>AUX', 'DIR C:\>AUX', @bat, @extras, 'PROMPT GR$G', '');
   must('mcopy', '-i', at($img, $r->{logical}[0][1]), "$out/AUTOEXEC.BAT", '::');
   # The boot's expected output, written to $path. What DOS must find free on
   # each drive is what mtools finds, so it is read just before each boot.
   # Without D:\CONFIG.SYS, BREAK is off, as before issue #68; with it, on.
+  # VOL C: and DIR C:\ give the label (issue #97).
+  my $vol = "^ Volume in drive C is \Q@{[label_of($version) =~ s/ +\z//r]}\E *\$";
   my $expect = sub ($path, $break) {
     my @expect;
     my $letter = 'D';
@@ -314,7 +348,7 @@ sub test_size ($size, $out) {
       $letter++;
     }
     spew($path, join "\n", '^GRDOS-USER-AUTOEXEC$', '^GR-DOS Version 4\.00$', '^PATH=C:\\\\DOS$',
-      "^BREAK is $break\$", '^layout 1$', @expect, '^FASTOPEN installed$', '^\\xC0\\xC4{3}DOS$',
+      "^BREAK is $break\$", '^layout 1$', $vol, $vol, ' Directory of  C:\\\\$', '^COMMAND +COM ', @expect, '^FASTOPEN installed$', '^\\xC0\\xC4{3}DOS$',
       '^  [0-9A-F]{6}      FASTOPEN     [0-9A-F]{6}     Program +$',
       '^  [0-9A-F]{6}      GRAPHICS     [0-9A-F]{6}     Program +$',
       (map { "(?i)\\b\Q$_->{stem}\E\\b.*\\b\Q$_->{version}\E\\b" } @dist16),
@@ -344,16 +378,23 @@ sub test_size ($size, $out) {
   copy("$dist/$_", "$alt/$_") or die "copy $_: $!" for map { (split ' ')[-1] } split /\n/, slurp("$dist/manifest.txt");
   copy("$dist/$_", "$alt/$_") or die "copy $_: $!" for qw( MSBOOT.BIN FDBOOT.BIN VERSION );
   rename "$alt/MORE.COM", "$alt/MORE2.COM" or die "rename: $!";
+  spew("$alt/VERSION", "9.99\n");
   unlink "$alt/DEBUG.COM";
   spew("$alt/manifest.txt", join '', map { s/  MORE\.COM$/  MORE2.COM/r . "\n" } grep { !/  DEBUG\.COM$/ }
     split /\n/, slurp("$dist/manifest.txt"));
   must($tool, 'update', '--dist', $alt, '--confirm', 'disk.img', $img);
   ok(c_files($img, $r) eq dist_files($alt), 'after an update, C: has exactly the files of the distribution (renamed, removed, stray file gone)');
   ok(hash_outside_c($img, $r) eq $hash, 'every sector outside C: is unchanged');
+  check_label($img, $r, '9.99', 'update to version 9.99');
+  my($rc_fsck) = run('sh', '-c', "dd if=$img of=$fsck_c bs=512 skip=$r->{sys_start} count=$r->{sys_len} status=none"
+    . " && fsck.fat -n $fsck_c");
+  ok($rc_fsck == 0, 'fsck.fat finds C: clean after the update');
+  unlink $fsck_c;
   for my $i (1, 2) {
     must($tool, 'update', '--confirm', 'disk.img', $img);
     ok(c_files($img, $r) eq dist_files($dist), "update $i: C: has exactly the distribution's files");
     ok(hash_outside_c($img, $r) eq $hash, "update $i: every sector outside C: is unchanged");
+    check_label($img, $r, $version, "update $i");
   }
   ok((mread($img, $r->{sys_start}, 'CONFIG.SYS', $out) // '') eq $config_sys,
     'after the updates, C:\CONFIG.SYS is the generated one');
@@ -423,6 +464,21 @@ sub test_failures ($out) {
   must(@update[0, 1], '--recover', @update[2 .. $#update]);
   ok(c_files($img, $r) eq dist_files($dist), 'update --recover completes the interrupted update');
   ok(hash_outside_c($img, $r) eq $h, '... and nothing outside C: changed');
+
+  # A version that does not give a GRDOS-x_yy label of at most 11
+  # characters (issue #97): refused before anything is written.
+  my $alt = "$out/dist-version";
+  system('rm', '-rf', $alt);
+  mkdir $alt or die "mkdir $alt: $!";
+  copy("$dist/$_", "$alt/$_") or die "copy $_: $!"
+    for (map { (split ' ')[-1] } split /\n/, slurp("$dist/manifest.txt")), qw( manifest.txt MSBOOT.BIN FDBOOT.BIN );
+  my $before_v = Digest::SHA->new(256)->addfile($img)->hexdigest;
+  for my $v (['0.5', qr/is not x\.yy/], ['1.2.3', qr/is not x\.yy/], ['123.45', qr/longer than FAT's 11/]) {
+    spew("$alt/VERSION", "$v->[0]\n");
+    refuses("version $v->[0], for C:'s label", $v->[1], @update[0, 1], '--dist', $alt, @update[2 .. $#update]);
+  }
+  ok(Digest::SHA->new(256)->addfile($img)->hexdigest eq $before_v, '... and writes nothing');
+  system('rm', '-rf', $alt);
 
   # Same disk, another size.
   must('cp', '--sparse=always', $img, "$out/grown.img");

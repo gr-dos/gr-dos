@@ -145,6 +145,18 @@ following, in this order:
    TRUNCATE and WHICH;
    [dist16.md](dist16.md)). The floppy images keep those they carry in the
    root directory.
+7. The volume label, `GRDOS-x_yy` for GR-DOS x.yy, from the
+   distribution's `VERSION`: `GRDOS-0_05` for 0.05. A period is not a
+   character of a DOS volume label, so an underscore takes its place.
+   `VOL C:` and `DIR C:\` show it.
+
+The label is also in the boot sector's volume label field, which
+`provision` and `update` write with the rest of the boot sector; the BPB,
+the boot code and the signature are MS-DOS 4.00's, as before. Each
+`update` labels C: with the version it installs. A `VERSION` that is not
+x.yy, or whose label would be longer than FAT's 11 characters, is refused
+before anything is written. The logical drives D:, E:, ... have no label,
+`NO NAME` in their boot sectors.
 
 If `D:\AUTOEXEC.BAT` sets its own `PATH`, include `C:\DOS` in it, for
 example `PATH C:\DOS;D:\BIN`.
@@ -321,19 +333,25 @@ Read from the MS-DOS 4.00 source, and followed by `deploy-cf`:
   - `provision`. The geometry must be the one SeaBIOS gives the drive,
     `scripts/partition-table --chs` must agree with the BIOS geometry,
     `fsck.fat` must find C: clean, and `C:\CONFIG.SYS` must be the
-    generated one, with `INCLUDEFILE=D:\CONFIG.SYS`.
+    generated one, with `INCLUDEFILE=D:\CONFIG.SYS`. C:'s label must be
+    `GRDOS-x_yy` for the distribution's version, in the boot sector and
+    in the root's one volume label entry, which comes after IO.SYS and
+    MSDOS.SYS, the first two entries, with IO.SYS at cluster 2.
   - Sentinel files go on every logical drive, with a `D:\AUTOEXEC.BAT`
     that reports to COM1. Every sector outside C: is hashed: the MBR, the
     record, the extended boot records and the logical drives.
   - Boot from the hard disk in QEMU, with no `D:\CONFIG.SYS`: nothing
     about the include may be on the screen, and BREAK is off.
-    `D:\AUTOEXEC.BAT` must run exactly once. Each sentinel must be read through its letter. CHKDSK on each
+    `D:\AUTOEXEC.BAT` must run exactly once. `VOL C:` and `DIR C:\` must
+    show C:'s label. Each sentinel must be read through its letter. CHKDSK on each
     logical drive must report the free space mtools does. At the prompt
     `D:\AUTOEXEC.BAT` set, a typed command must run, which shows the CALL
     returned.
   - Put a `D:\CONFIG.SYS` with `BREAK=ON`, and hash again. Put a stray
     file on C:, then `update` with a distribution in which a file is
-    renamed and another removed. Then `update` twice with the real one.
+    renamed and another removed, and whose `VERSION` is 9.99: C: must then
+    be labelled `GRDOS-9_99`, and `fsck.fat` find it clean. Then `update`
+    twice with the real one, which labels it for its version again.
     Each time C: must hold exactly the distribution's files, and the hash
     must not change. `C:\CONFIG.SYS` must be the generated one, and
     `D:\CONFIG.SYS` unchanged.
@@ -347,7 +365,9 @@ Read from the MS-DOS 4.00 source, and followed by `deploy-cf`:
   - a wrong `--confirm`;
   - a C: without GRDOS.ID, which `--recover` then reinstalls;
   - after an I/O error part way through an update, which `--recover` then
-    completes.
+    completes;
+  - a distribution whose `VERSION` is `0.5` or `1.2.3`, not x.yy, or
+    `123.45`, whose label `GRDOS-123_45` is longer than 11 characters.
 
   In each case nothing outside C: may change. The suite also checks:
   - that dry runs and `inspect` write nothing;
