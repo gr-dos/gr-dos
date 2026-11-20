@@ -5,13 +5,15 @@ Group: command
 Files: MEM.EXE
 
 Syntax
-  MEM [/PROGRAM | /DEBUG]
+  MEM [/PROGRAM | /DEBUG] [/HUMAN]
 
   /PROGRAM     Lists what is in memory, block by block, with its address,
                name, size and type: the parts of DOS, each program and its
                environment, and the free blocks.
   /DEBUG       As /PROGRAM, and lists the device drivers too, and the
                EMS handles when there is expanded memory.
+  /HUMAN       Shows the totals in KiB, MiB or GiB, as DF -H does,
+               rather than in bytes.
 
 Examples
   MEM
@@ -19,10 +21,17 @@ Examples
     program that can be run.
   MEM /PROGRAM | MORE
     Lists the programs in memory, a screen at a time.
+  MEM /HUMAN
+    Shows the totals as 640.0KiB, 575.4KiB and so on.
 
 Notes
   Sizes are in bytes, and the addresses and sizes of the lists in hex.
   MEM also shows the total and free expanded (EMS) memory, when an EMS
   driver is loaded, and the extended memory of an AT or later. Only one
-  switch may be given. In GR-DOS, MEM is compiled with Open Watcom C
-  rather than Microsoft C; its output is the same.
+  of /PROGRAM and /DEBUG may be given.
+
+  With /HUMAN, a total below 1 KiB is in bytes (512B); a larger one has
+  one decimal, rounded up, in KiB, MiB or GiB (1 KiB is 1024 bytes),
+  so 589,136 bytes is 575.4KiB. /HUMAN is a GR-DOS addition; the lists
+  stay in hex. In GR-DOS, MEM is compiled with Open Watcom C rather than
+  Microsoft C; without /HUMAN its output is the same.

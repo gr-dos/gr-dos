@@ -333,9 +333,14 @@ TEST_FORMATS := $(addprefix test-,$(FORMATS))
 TEST_SYS     := $(addprefix test-sys-,$(FORMATS))
 TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
-test: test-help test-dist16 $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
+test: test-help test-dist16 test-mem-human $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
 	test-keyb test-help-less test-more test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
 	test-join-subst test-backup-restore test-filesys test-replace
+
+# MEM /HUMAN's size format, compiled from the patched MEM.C on the host and
+# checked against df -h's rules (tests/mem-human, issue #89): no QEMU.
+test-mem-human: $(BUILD)/tree.stamp tests/mem-human/run
+	tests/mem-human/run $(SRC)/CMD/MEM/MEM.C $(TESTS)/mem-human
 
 # scripts/dist16 against a fake GitHub (tests/dist16): offline, no QEMU.
 test-dist16: scripts/dist16 tests/dist16/run
@@ -751,6 +756,7 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
   make test-replace        REPLACE on a CF install and a floppy image,
                            against Microsoft's output
   make test-dist16         scripts/dist16 against a fake GitHub (offline)
+  make test-mem-human      MEM /HUMAN's size format, on the host (offline)
   make test-help           check this list against the Makefile's targets
 
 Maintenance
@@ -803,7 +809,7 @@ test-help: scripts/check-help
 
 .PHONY: all check check-tree test $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc fc-expect test-fdisk \
 	$(TEST_FDISK) test-install $(TEST_INSTALL) test-deploy-cf $(TEST_DEPLOY_CF) fdisk-expect dist clean \
-	test-dist16 dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb test-help-less test-more \
+	test-dist16 test-mem-human dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb test-help-less test-more \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
 	test-codepage-screen test-printer $(TEST_PRINTER) test-join-subst join-subst-expect test-backup-restore \
 	backup-restore-expect test-filesys filesys-expect test-replace replace-expect

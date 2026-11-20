@@ -313,6 +313,47 @@ lists the default drive, the second drive's current directory and its
 root, with `/W` and `/P` before and after the filespec, and a file
 that is not there.
 
+### MEM /HUMAN
+
+`MEM /HUMAN` shows the summary's sizes as `df -h` (gr-dos/df16) shows a
+disk's (issue #89):
+
+```
+  640.0KiB total memory
+  639.0KiB available
+  575.5KiB largest executable program size
+```
+
+- **Units.** Binary: whole bytes below 1 KiB (`0B`, `512B`), otherwise
+  KiB, MiB or GiB with one decimal, rounded up, so a size that is not
+  zero never shows as zero; a size that would show as `1024.0` moves up a
+  unit. These are df16's rules, worked out in 32-bit arithmetic without
+  overflow up to 4 GiB.
+- **What changes.** The seven summary lines: total, available and
+  largest executable program, and, when there is EMS or extended memory,
+  its total and free or available. Their texts are new messages, 52 to
+  58, without "bytes", and the size keeps the same 10 right-aligned
+  columns. The block and driver lists of `/PROGRAM` and `/DEBUG`, and
+  the EMS handles', stay in hex. Nothing is computed differently.
+- **Switches.** `/HUMAN`, in any case, goes with `/PROGRAM` or `/DEBUG`,
+  in either order. A second `/HUMAN`, or `/PROGRAM` with `/DEBUG`, is
+  `Too many parameters`, as two switches were before. Without `/HUMAN`
+  the output is unchanged. MS-DOS 4.00's commands have no `/?`;
+  `HELP MEM` describes it.
+- **Size.** MEM.EXE is 12,944 bytes, from 12,074; the formatting needs
+  only some 30 bytes of stack, and no other memory. On the 360 KB
+  floppy MEM.EXE takes 13 1 KB clusters rather than 12, which leaves
+  15,360 bytes free ([M5](m5-utilities.md#floppies)).
+
+The change is `patches/utilities/0003-mem-human.patch` (MEM.C, MEM.SKL,
+MSGDEF.H, PARSE.H, which gets room for a third switch, and the message
+file). `make test-utils` runs `MEM /HUMAN`, `mem /human`, both with
+`/PROGRAM` and `/DEBUG`, and the refusals. QEMU gives MEM only a few
+sizes, so `make test-mem-human` compiles MEM.C's `HumanSize` on the host
+with 32-bit `unsigned long` and checks it against df16's rules: zero, each
+unit's boundaries and their neighbours, the largest 32-bit size, and
+2,000 pseudo-random ones.
+
 ## TICO.EXE
 
 `TICO.EXE` is `tico.exe` from the tico16 release v0.02. It is not compiled
