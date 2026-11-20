@@ -21,6 +21,7 @@ What GR-DOS changes or adds
   - FIND, EXE2BIN and IFSFUNC are not EXEPACKed: the unpacker fails
     when a program loads in the first 64 KB of memory.
   - MORE can show a file named after it: MORE README.TXT (HELP MORE).
+  - MEM /HUMAN shows the totals in KiB and MiB (HELP MEM).
   - HELP and this help file.
   - TICO, the editor, and the other *16 programs in C:\DOS (HELP
     DIST16).

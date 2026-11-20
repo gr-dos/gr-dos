@@ -72,10 +72,10 @@ sudo scripts/deploy-cf update /dev/sdX      # afterwards: C: only
 
 | Format | Image | Bytes | Geometry | Free |
 |---|---|---:|---|---:|
-| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 591,360 |
-| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 347,648 |
-| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 47,104 |
-| 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 16,384 |
+| 3.5" 1.44 MB HD (default) | `build/linux/gr-dos-1440k.img` | 1,474,560 | 80 cylinders, 2 heads, 18 sectors | 587,264 |
+| 5.25" 1.2 MB HD | `build/linux/gr-dos-1200k.img` | 1,228,800 | 80 cylinders, 2 heads, 15 sectors | 343,552 |
+| 3.5" 720 KB DD | `build/linux/gr-dos-720k.img` | 737,280 | 80 cylinders, 2 heads, 9 sectors | 43,008 |
+| 5.25" 360 KB DD | `build/linux/gr-dos-360k.img` | 368,640 | 40 cylinders, 2 heads, 9 sectors | 15,360 |
 
 `make` builds all four. Each is a boot disk for a machine with two floppy
 drives, the GR-DOS disk in A: and programs and data in B:; the larger ones

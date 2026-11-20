@@ -56,6 +56,34 @@
 ^ +655360 bytes total memory$
 ^ +[0-9A-F]{6} +MEM +[0-9A-F]{6} +Program
 ^ +A: - B: +System Device Driver $
+# MEM /HUMAN (issue #89): the summary in KiB and MiB, as df -h gives
+# sizes, in either case; with /PROGRAM (which lists MEM) and /DEBUG (which
+# lists the drivers) too; a second /HUMAN, and /PROGRAM with /DEBUG, are
+# refused
+^-- MEM /HUMAN$
+^ +640\.0KiB total memory$
+^ +\d+\.\dKiB available$
+^ +\d+\.\dKiB largest executable program size$
+^ +\d+\.\dMiB total extended memory$
+^ +\d+\.\dMiB available extended memory$
+^-- mem /human$
+^ +640\.0KiB total memory$
+^ +\d+\.\dKiB available$
+^ +\d+\.\dKiB largest executable program size$
+^-- MEM /PROGRAM /HUMAN$
+^ +[0-9A-F]{6} +MEM +[0-9A-F]{6} +Program
+^ +640\.0KiB total memory$
+^ +\d+\.\dKiB available$
+^ +\d+\.\dKiB largest executable program size$
+^-- MEM /HUMAN /DEBUG$
+^ +A: - B: +System Device Driver $
+^ +640\.0KiB total memory$
+^ +\d+\.\dKiB available$
+^ +\d+\.\dKiB largest executable program size$
+^-- MEM /HUMAN /HUMAN$
+^Too many parameters - /HUMAN$
+^-- MEM /PROGRAM /DEBUG /HUMAN$
+^Too many parameters - /DEBUG *$
 # MODE
 ^COM1: 9600,n,8,1,-$
 ^LPT1: set for 132$

@@ -1,0 +1,107 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+
+# ABSTRACT: Test MEM /HUMAN's size format (issue #89) on the host
+
+=head1 SYNOPSIS
+
+ tests/mem-human/run MEM.C OUTDIR
+
+=head1 DESCRIPTION
+
+Takes C<HumanSize> from MEM.C as the build patched it
+(F<patches/utilities/0003-mem-human.patch>), compiles it on the host with
+C<unsigned long> 32 bits wide, as Open Watcom's 16-bit C has it, and
+checks what it writes against df16's C<df -h> rules, worked out here with
+Perl's 64-bit integers: whole bytes below 1 KiB, otherwise one decimal,
+rounded up, in KiB, MiB or GiB, moving up a unit once it would show
+1024.0.  The cases are zero, each unit's boundaries and their
+neighbours, the sizes MEM shows on a 640 KB machine, the largest 32-bit
+value, and pseudo-random sizes of each magnitude.  QEMU cannot give MEM
+most of these sizes, so they are tested here; C<make test-utils> runs
+MEM /HUMAN itself.
+
+=cut
+
+my($src, $out) = @ARGV;
+die "usage: $0 MEM.C OUTDIR\n" unless @ARGV == 2;
+system('mkdir', '-p', $out) == 0 or die "unable to create $out\n";
+
+open my $fh, '<:raw', $src or die "unable to read $src: $!\n";
+my $c = do { local $/; <$fh> } =~ tr/\r//dr;
+my($fn) = $c =~ /^(void HumanSize\(Text,Bytes\)\n.*?\n\}\n)/ms or die "$src: no HumanSize (is the patch applied?)\n";
+
+# unsigned long is 32 bits in 16-bit C; uint32_t here.
+open my $h, '>', "$out/human.c" or die "unable to write $out/human.c: $!\n";
+print $h <<~'END', $fn =~ s/\bunsigned long int\b/uint32_t/gr =~ s/\bunsigned long\b/uint32_t/gr =~ s/(\d)l\b/$1u/gr, <<~'END';
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  #include <stdint.h>
+  END
+  int main(void)
+  {
+          char line[64], text[16];
+          while (fgets(line, sizeof line, stdin)) {
+                  HumanSize(text, (uint32_t)strtoul(line, NULL, 10));
+                  printf("%s\n", text);
+          }
+          return 0;
+  }
+  END
+close $h or die "unable to write $out/human.c: $!\n";
+system('cc', '-std=c99', '-Wall', '-Wno-implicit-int', '-Wno-old-style-definition', '-o', "$out/human",
+  "$out/human.c") == 0 or die "cc failed\n";
+
+# df16's fmt_human, with 64-bit integers.
+sub df_h ($bytes) {
+  return "${bytes}B" if $bytes < 1024;
+  my @units = qw( B KiB MiB GiB );
+  my($u, $div, $tenths) = (1, 1024);
+  for(;; $u++, $div *= 1024) {
+    $tenths = int($bytes / $div) * 10 + int((($bytes % $div) * 10 + $div - 1) / $div);
+    last if $tenths < 10240 || $u == 3;
+  }
+  return sprintf '%d.%d%s', int($tenths / 10), $tenths % 10, $units[$u];
+}
+
+my %known = (0 => '0B', 1 => '1B', 1023 => '1023B', 1024 => '1.0KiB', 1025 => '1.1KiB', 655360 => '640.0KiB',
+  589136 => '575.4KiB', 1048575 => '1.0MiB', 1048576 => '1.0MiB', 1048577 => '1.1MiB',
+  1073741824 => '1.0GiB', 4294967295 => '4.0GiB');
+my @sizes = (0 .. 3, 1020 .. 1030, 655360, 589136, 393216, 16384, 4294967295);
+for my $unit (1024, 1024**2, 1024**3) {
+  for my $k (1, 2, 10, 100, 1000, 1023, 1024) {
+    my $v = $k * $unit;
+    push @sizes, grep { $_ >= 0 && $_ < 2**32 } $v - $unit / 10 - 1, $v - $unit / 10, $v - $unit / 10 + 1,
+      $v - 1, $v, $v + 1;
+  }
+}
+my $seed = 89;
+for (1 .. 2000) {
+  $seed = ($seed * 1103515245 + 12345) % 2**31;
+  push @sizes, $seed % (2 ** (1 + $seed % 32));
+}
+@sizes = map { int } @sizes;
+
+open my $in, '>', "$out/sizes.txt" or die;
+say $in $_ for @sizes;
+close $in;
+my @got = split /\n/, `"$out/human" < "$out/sizes.txt"`;
+$? == 0 or die "$out/human failed\n";
+
+my $failed = 0;
+for my $i (0 .. $#sizes) {
+  my($n, $got) = ($sizes[$i], $got[$i] // '(nothing)');
+  my $want = df_h($n);
+  if(exists $known{$n} && $known{$n} ne $want) {
+    say "NOT OK - the reference gives $want for $n, not $known{$n}";
+    $failed++;
+  }
+  next if $got eq $want;
+  say "NOT OK - $n: $got, not $want";
+  $failed++;
+}
+say $failed ? "mem-human: $failed FAILED" : 'mem-human: passed, ' . @sizes . ' sizes as df -h gives them';
+exit($failed ? 1 : 0);

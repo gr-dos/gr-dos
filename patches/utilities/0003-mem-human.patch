@@ -1,0 +1,347 @@
+GR-DOS: MEM /HUMAN shows the memory sizes as df -h does (issue #89, HELP MEM).
+
+/HUMAN, in any case, prints the summary's sizes (total, available,
+largest executable program, and the EMS and extended memory lines) in
+binary units as gr-dos/df16's df -h does: whole bytes below 1 KiB
+("0B", "512B"), otherwise KiB, MiB or GiB with one decimal, rounded up,
+moving up a unit at 1024.0. They are new messages 52 to 58, the
+summary's texts without "bytes", with the size right-aligned in the
+same 10 columns. /HUMAN may come with /PROGRAM or /DEBUG, in either
+order; a second /HUMAN, or both /PROGRAM and /DEBUG, is "Too many
+parameters", as before. Without /HUMAN the output is unchanged. The
+lists of /PROGRAM and /DEBUG stay in hex.
+
+Applied to a copy of v4.0/src before it is converted to CRLF (Makefile,
+PATCHES). `make check` builds without it.
+
+--- a/CMD/MEM/MEM.C
++++ b/CMD/MEM/MEM.C
+@@ -92,9 +92,11 @@
+                                                                                                                                  /* ;an000; */
+ struct p_control_blk p_con1;                                                                                                     /* ;an000; */
+ struct p_control_blk p_con2;                                                                                                     /* ;an000; */
++struct p_control_blk p_con3;		/* GR-DOS: /HUMAN */
+                                                                                                                                  /* ;an000; */
+ struct p_result_blk  p_result1;                                                                                                  /* ;an000; */
+ struct p_result_blk  p_result2;                                                                                                  /* ;an000; */
++struct p_result_blk  p_result3;		/* GR-DOS: /HUMAN */
+                                                                                                                                  /* ;an000; */
+ struct p_value_blk p_noval;                                                                                                      /* ;an000; */
+                                                                                                                                  /* ;an000; */
+@@ -251,6 +253,9 @@
+ void     Parse_Message(int,int,unsigned char);                                                                                    /* ;an000; */
+ void     Sub0_Message(int,int,unsigned char);                                                                                    /* ;an000; */
+ void     Sub1_Message(int,int,unsigned char,unsigned long int *);                                                                /* ;an000; */
++void     SizeMessage(int,int,unsigned long int *);	/* GR-DOS: /HUMAN */
++void     HumanSize(char *,unsigned long int);		/* GR-DOS: /HUMAN */
++char     Human;						/* GR-DOS: /HUMAN given */
+ void     Sub2_Message(int,int,unsigned char,char *,int);                                                                         /* ;an000; */
+ void     Sub3_Message(int,int,unsigned char,                                                                                     /* ;an000; */
+                       char *,                                                                                                    /* ;an000; */
+@@ -328,7 +333,8 @@
+         cmd_line[i++] = (char) '\x0d';                                          /* an000; dms; CR terminate string      */       /* ;an000; */
+         cmd_line[i++] = (char) '\0';                                            /* an000; dms; null terminate string    */       /* ;an000; */
+                                                                                                                                  /* ;an000; */
+-        DataLevel = 0;                                                                                                           /* ;an000; */
++        DataLevel = 0;
++        Human = 0;                                                                                                           /* ;an000; */
+                                                                                                                                  /* ;an000; */
+         parse_init();                                                           /* an000; dms; init for parser          */       /* ;an000; */
+         InRegs.x.si = (unsigned)cmd_line;                                       /* an000; dms; initialize to command ln.*/       /* ;an000; */
+@@ -338,17 +344,32 @@
+         Parse_Ptr   = (unsigned)cmd_line;                                       /*;an003; dms; point to command         */
+                                                                                                                                  /* ;an000; */
+         parse(&InRegs,&OutRegs);                                                /* an000; dms; parse command line       */       /* ;an000; */
+-        while (OutRegs.x.ax == p_no_error)                                      /* an000; dms; good parse loop          */       /* ;an000; */
+-                {                                                                                                                /* ;an000; */
+-                if (p_result1.P_SYNONYM_Ptr == (unsigned int)p_con1.p_keyorsw)  /* an000; dms; DEBUG switch             */       /* ;an000; */
+-                        DataLevel = 2;                                          /* an000; dms; flag DEBUG switch        */       /* ;an000; */
+-                if (p_result2.P_SYNONYM_Ptr == (unsigned int)p_con2.p_keyorsw)  /* an000; dms; PROGRAM switch           */       /* ;an000; */
+-                        DataLevel = 1;                                          /* an000; dms; flag PROGRAM switch      */       /* ;an000; */
+-                Parse_Ptr = OutRegs.x.si;                                       /* an003; dms; point to next parm       */
+-                parse(&OutRegs,&OutRegs);                                       /* an000; dms; parse the line           */       /* ;an000; */
+-                if (OutRegs.x.ax == p_no_error)                                 /* an000; dms; check for > 1 switch     */       /* ;an000; */
+-                        OutRegs.x.ax = p_too_many;                              /* an000; dms; flag too many            */       /* ;an000; */
+-                }                                                                                                                /* ;an000; */
++        /* GR-DOS: /HUMAN, and at most one of /DEBUG and /PROGRAM (issue #89) */
++        while (OutRegs.x.ax == p_no_error)
++                {
++                if (p_result1.P_SYNONYM_Ptr == (unsigned int)p_con1.p_keyorsw)
++                        {
++                        if (DataLevel) OutRegs.x.ax = p_too_many;
++                        DataLevel = 2;
++                        }
++                if (p_result2.P_SYNONYM_Ptr == (unsigned int)p_con2.p_keyorsw)
++                        {
++                        if (DataLevel) OutRegs.x.ax = p_too_many;
++                        DataLevel = 1;
++                        }
++                if (p_result3.P_SYNONYM_Ptr == (unsigned int)p_con3.p_keyorsw)
++                        {
++                        if (Human) OutRegs.x.ax = p_too_many;
++                        Human = 1;
++                        }
++                if (OutRegs.x.ax != p_no_error)
++                        break;
++                p_result1.P_SYNONYM_Ptr = 0;
++                p_result2.P_SYNONYM_Ptr = 0;
++                p_result3.P_SYNONYM_Ptr = 0;
++                Parse_Ptr = OutRegs.x.si;
++                parse(&OutRegs,&OutRegs);
++                }
+                                                                                                                                  /* ;an000; */
+         if (OutRegs.x.ax != p_rc_eol)                                           /* an000; dms; parse error?             */       /* ;an000; */
+                 {                                                                                                                /* ;an000; */
+@@ -726,14 +747,14 @@
+                 total_mem = total_mem + ( (unsigned long int) (*CarvedPtr) * 1024l) ;   /* ;an002; dms;adjust total for */
+                 }                                                                       /*             RAM carve value  */
+                                                                                                                                  /* ;an000; */
+-        Sub1_Message(TotalMemoryMsg,STDOUT,Utility_Msg_Class,&total_mem);                                                        /* ;an000; */
++        SizeMessage(TotalMemoryMsg,HumanTotalMemoryMsg,&total_mem);                                                        /* ;an000; */
+                                                                                                                                  /* ;an000; */
+-        Sub1_Message(AvailableMemoryMsg,STDOUT,Utility_Msg_Class,&avail_mem);                                                    /* ;an000; */
++        SizeMessage(AvailableMemoryMsg,HumanAvailableMemoryMsg,&avail_mem);                                                    /* ;an000; */
+                                                                                                                                  /* ;an000; */
+ /* Calculate the total memory used.   PSP segment * 16. Subtract from total to get free_mem */                                   /* ;an000; */
+         free_mem = (DOS_TopOfMemory * 16l) - (FP_SEG(PSPptr)*16l);                                                               /* ;an000;ac005; */
+                                                                                                                                  /* ;an000; */
+-        Sub1_Message(FreeMemoryMsg,STDOUT,Utility_Msg_Class,&free_mem);                                                          /* ;an000; */
++        SizeMessage(FreeMemoryMsg,HumanFreeMemoryMsg,&free_mem);                                                          /* ;an000; */
+                                                                                                                                  /* ;an000; */
+                                                                                                                                  /* ;an000; */
+                                                                                                                                  /* ;an000; */
+@@ -824,7 +845,7 @@
+       EXTMemoryTot = (long) (SysVarsPtr) -> ExtendedMemory;                     /* get total EM size    ;an001; dms;*/
+       EXTMemoryTot *= (long) 1024l;                                             /*  at boot time        ;an001; dms;*/
+       Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                        /* print blank line     ;an001; dms;*/
+-      Sub1_Message(EXTMemoryMsg,STDOUT,Utility_Msg_Class,&EXTMemoryTot);        /* print total EM mem   ;an001; dms;*/
++      SizeMessage(EXTMemoryMsg,HumanEXTMemoryMsg,&EXTMemoryTot);        /* print total EM mem   ;an001; dms;*/
+                                                                                                                                  /* ;an000; */
+       OutRegs.x.cflag = 0;                                                      /* clear carry flag     ;an001; dms;*/
+       InRegs.x.ax = GetExtended;                                                /* get extended mem     ;an001; dms;*/
+@@ -834,7 +855,7 @@
+       EXTMemoryTot = (long) OutRegs.x.ax;                                       /* returns 1K mem blocks;an001; dms;*/
+       EXTMemoryTot *= (long) 1024l;                                             /* convert to bytes     ;an001; dms;*/
+ 
+-      Sub1_Message(EXTMemAvlMsg,STDOUT,Utility_Msg_Class,&EXTMemoryTot);        /* display available    ;an001; dms;*/
++      SizeMessage(EXTMemAvlMsg,HumanEXTMemAvlMsg,&EXTMemoryTot);        /* display available    ;an001; dms;*/
+   }
+ 
+                                                                                                                                  /* ;an000; */
+@@ -865,8 +886,8 @@
+   EMSAvailMemoryTot = OutRegs.x.dx;         /* total pages */                                                                    /* ;an000; */
+   EMSAvailMemoryTot *= (long) (16l*1024l);                                                                                       /* ;an000; */
+                                                                                                                                  /* ;an000; */
+-  Sub1_Message(EMSTotalMemoryMsg,STDOUT,Utility_Msg_Class,&EMSAvailMemoryTot);                                                   /* ;an000; */
+-  Sub1_Message(EMSFreeMemoryMsg,STDOUT,Utility_Msg_Class,&EMSFreeMemoryTot);                                                     /* ;an000; */
++  SizeMessage(EMSTotalMemoryMsg,HumanEMSTotalMemoryMsg,&EMSAvailMemoryTot);                                                   /* ;an000; */
++  SizeMessage(EMSFreeMemoryMsg,HumanEMSFreeMemoryMsg,&EMSFreeMemoryTot);                                                     /* ;an000; */
+                                                                                                                                  /* ;an000; */
+   return;                                                                                                                        /* ;an000; */
+                                                                                                                                  /* ;an000; */
+@@ -1184,6 +1205,98 @@
+ }                                                                                                                                /* ;an000; */
+                                                                                                                                  /* ;an000; */
+                                                                                                                                  /* ;an000; */
++/************************************************************************/
++/* GR-DOS: SIZEMESSAGE and HUMANSIZE, for MEM /HUMAN (issue #89).	*/
++/*									*/
++/* SizeMessage prints a summary line: in bytes with Msg_Num, as	*/
++/* before, or with /HUMAN the size as HumanSize gives it, with		*/
++/* Human_Msg_Num, which has no "bytes". Both right-align it in 10	*/
++/* columns.								*/
++/*									*/
++/* HumanSize writes a size as df -h does (gr-dos/df16): whole bytes	*/
++/* below 1 KiB ("512B", "0B"), otherwise KiB, MiB or GiB with one	*/
++/* decimal, rounded up, moving up a unit once it would show 1024.0.	*/
++/* The tenths are worked out without multiplying the remainder by 10,	*/
++/* which would overflow 32 bits for GiB.				*/
++/************************************************************************/
++
++void SizeMessage(Msg_Num,Human_Msg_Num,Size)
++int                  Msg_Num;
++int                  Human_Msg_Num;
++unsigned long int    *Size;
++{
++        char    Text[12];
++
++        if (!Human)
++                {
++                Sub1_Message(Msg_Num,STDOUT,Utility_Msg_Class,Size);
++                return;
++                }
++        HumanSize(Text,*Size);
++        sublist[1].value     = (unsigned far *)Text;
++        sublist[1].size      = Sublist_Length;
++        sublist[1].reserved  = Reserved;
++        sublist[1].id        = 1;
++        sublist[1].flags     = Char_Field_ASCIIZ+Right_Align;
++        sublist[1].max_width = 10;
++        sublist[1].min_width = 10;
++        sublist[1].pad_char  = Blank;
++
++        InRegs.x.ax = Human_Msg_Num;
++        InRegs.x.bx = STDOUT;
++        InRegs.x.cx = SubCnt1;
++        InRegs.h.dl = No_Input;
++        InRegs.h.dh = Utility_Msg_Class;
++        InRegs.x.si = (unsigned int)&sublist[1];
++        sysdispmsg(&InRegs,&OutRegs);
++        return;
++}
++
++void HumanSize(Text,Bytes)
++char                 *Text;
++unsigned long int    Bytes;
++{
++        static char     *Units[] = { "B", "KiB", "MiB", "GiB" };
++        unsigned long   Div, Whole, Rest, Tenths;
++        unsigned        Unit, Frac;
++        char            Digits[11];
++        int             n;
++
++        if (Bytes < 1024l)
++                {
++                Unit = 0;
++                Tenths = Bytes;
++                }
++        else
++                {
++                for (Unit = 1, Div = 1024l; ; Unit++, Div *= 1024l)
++                        {
++                        Whole = Bytes / Div;
++                        Rest  = Bytes % Div;
++                        /* the least Frac with Rest * 10 <= Frac * Div */
++                        for (Frac = 0; Frac < 10; Frac++)
++                                if (Rest <= (Div / 10) * Frac + (Div % 10) * Frac / 10)
++                                        break;
++                        Tenths = Whole * 10 + Frac;
++                        if (Tenths < 10240l || Unit == 3)
++                                break;
++                        }
++                }
++        n = 0;
++        do
++                {
++                Digits[n++] = (char)('0' + (int)(Tenths % 10));
++                Tenths /= 10;
++                if (Unit && n == 1)
++                        Digits[n++] = '.';
++                }
++        while (Tenths != 0 || (Unit && n < 3));
++        while (n > 0)
++                *Text++ = Digits[--n];
++        strcpy(Text,Units[Unit]);
++        return;
++}
++
+ /************************************************************************/                                                       /* ;an000; */
+ /* SUB2_MESSAGE                 - This routine will print only those    */                                                       /* ;an000; */
+ /*                                messages that require 2 replaceable   */                                                       /* ;an000; */
+@@ -1644,9 +1757,10 @@
+                                                                                                                                  /* ;an000; */
+   p_px.p_minp             = 0;                                                                                                   /* ;an000; */
+   p_px.p_maxp             = 0;                                                                                                   /* ;an000; */
+-  p_px.p_maxswitch        = 2;                                                                                                   /* ;an000; */
++  p_px.p_maxswitch        = 3;                                                                                                   /* ;an000; */
+   p_px.p_control[0]       = &p_con1;                                                                                             /* ;an000; */
+   p_px.p_control[1]       = &p_con2;                                                                                             /* ;an000; */
++  p_px.p_control[2]       = &p_con3;	/* GR-DOS: /HUMAN */
+   p_px.p_keyword          = 0;                                                                                                   /* ;an000; */
+                                                                                                                                  /* ;an000; */
+   p_con1.p_match_flag     = p_none;                                                                                              /* ;an000; */
+@@ -1662,6 +1776,13 @@
+   p_con2.p_value_list     = (unsigned int)&p_noval;                                                                              /* ;an000; */
+   p_con2.p_nid            = 1;                                                                                                   /* ;an000; */
+   strcpy(p_con2.p_keyorsw,"/PROGRAM"+NUL);                                                                                       /* ;an000; */
++
++  p_con3.p_match_flag     = p_none;		/* GR-DOS: /HUMAN */
++  p_con3.p_function_flag  = p_cap_file;
++  p_con3.p_result_buf     = (unsigned int)&p_result3;
++  p_con3.p_value_list     = (unsigned int)&p_noval;
++  p_con3.p_nid            = 1;
++  strcpy(p_con3.p_keyorsw,"/HUMAN");
+                                                                                                                                  /* ;an000; */
+   p_noval.p_val_num       = 0;                                                                                                   /* ;an000; */
+                                                                                                                                  /* ;an000; */
+@@ -1674,6 +1795,11 @@
+   p_result2.P_Item_Tag    = 0;                                                                                                   /* ;an000; */
+   p_result2.P_SYNONYM_Ptr = 0;                                                                                                   /* ;an000; */
+   p_result2.p_result_buff = 0;                                                                                                   /* ;an000; */
++
++  p_result3.P_Type        = 0;			/* GR-DOS: /HUMAN */
++  p_result3.P_Item_Tag    = 0;
++  p_result3.P_SYNONYM_Ptr = 0;
++  p_result3.p_result_buff = 0;
+                                                                                                                                  /* ;an000; */
+   return;                                                                                                                        /* ;an000; */
+                                                                                                                                  /* ;an000; */
+--- a/CMD/MEM/MEM.SKL
++++ b/CMD/MEM/MEM.SKL
+@@ -49,5 +49,13 @@
+ :def 49 "Program",0
+ :def 50 "Environment",0
+ :def 51 "Data",0
++;GR-DOS: MEM /HUMAN (issue #89)
++:def 52 "%1 total memory",CR,LF
++:def 53 "%1 available",CR,LF
++:def 54 "%1 largest executable program size",CR,LF
++:def 55 "%1 total EMS memory",CR,LF
++:def 56 "%1 free EMS memory",CR,LF
++:def 57 "%1 total extended memory",CR,LF
++:def 58 "%1 available extended memory",CR,LF
+ 
+ :end
+--- a/CMD/MEM/MSGDEF.H
++++ b/CMD/MEM/MSGDEF.H
+@@ -48,6 +48,14 @@
+ #define ProgramMsg			49
+ #define EnvironMsg			50
+ #define DataMsg 			51
++/* GR-DOS: MEM /HUMAN's summary lines, with the size as text (issue #89) */
++#define HumanTotalMemoryMsg		52
++#define HumanAvailableMemoryMsg		53
++#define HumanFreeMemoryMsg		54
++#define HumanEMSTotalMemoryMsg		55
++#define HumanEMSFreeMemoryMsg		56
++#define HumanEXTMemoryMsg		57
++#define HumanEXTMemAvlMsg		58
+ 
+ 
+ #define ParseError1Msg			01
+--- a/CMD/MEM/PARSE.H
++++ b/CMD/MEM/PARSE.H
+@@ -28,7 +28,7 @@
+ 	unsigned char	p_minp; 		/* Minimum positional number */
+ 	unsigned char	p_maxp; 		/* Maximum positional number  */
+ 	unsigned char	p_maxswitch;		/* Maximum switches	*/
+-	struct p_control_blk *p_control[2];	/* Address of the 1st CONTROL block */
++	struct p_control_blk *p_control[3];	/* Address of the 1st CONTROL block; GR-DOS: 3, for /HUMAN */
+ 	unsigned char	p_keyword;		/* Keyword count */
+ 	};
+ 
+--- a/MESSAGES/USA-MS.MSG
++++ b/MESSAGES/USA-MS.MSG
+@@ -917,7 +917,7 @@
+ 0016 U 0001 "Keyboard ID specified is inconsistent with the selected keyboard layout",CR,LF
+ 0017 U 0000 "Unable to create KEYB table in resident memory",CR,LF
+ REDIRSYS 9d28 0000
+-MEM      9d3c 0042
++MEM      9d3c 0049
+ 0010 U 0000  CR,LF
+ 0011 U 0000  "  Address     Name          Size       Type ",CR,LF
+ 0012 U 0000  "  컴컴컴�     컴컴컴컴     컴컴컴     컴컴컴",CR,LF
+@@ -960,6 +960,13 @@
+ 0049 U 0000  "Program",0
+ 0050 U 0000  "Environment",0
+ 0051 U 0000  "Data",0
++0052 U 0000  "%1 total memory",CR,LF
++0053 U 0000  "%1 available",CR,LF
++0054 U 0000  "%1 largest executable program size",CR,LF
++0055 U 0000  "%1 total EMS memory",CR,LF
++0056 U 0000  "%1 free EMS memory",CR,LF
++0057 U 0000  "%1 total extended memory",CR,LF
++0058 U 0000  "%1 available extended memory",CR,LF
+ REDIR    a37a 0029
+ 0004 U 0000 "Network has not been started",CR,LF
+ 0050 U 0000 "NET809: Network request not supported",CR,LF,0
