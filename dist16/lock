@@ -10,6 +10,7 @@
 # and after a program under a license-override (dist16/config), before its notices:
 # override REPO GITHUB SPDX LICENSE SHA256
 # skip REPO KIND REASON
+program gr-dos/cat16 v0.01 4c64b3d9ee9537742e2864244a5c4515cd2f0ebc cat.exe CAT.EXE 4986 d776f009912257a3bc8a1ab3e14f6aafcfa561b8a20ead3c4c2a2865f1ca1e22 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 program gr-dos/crcsum16 v0.03 87ccbadf42e14f23a8ca44b9efd394008d8e3f07 crcsum.exe CRCSUM.EXE 5948 0684f5394538d492c4e1b6216ffe32d5f463acb450569ce18dbc573de5ff6df1 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 program gr-dos/df16 v0.03 bf4bcd965326506943c0281e19b96c4395fdceb9 df.exe DF.EXE 4860 c205b902e9e5439d72f3b6d28414ef9bb510bc94d043b3154b348c6d0a066e81 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 program gr-dos/diff16 v0.02 1655e11d2cca5d62c8558b078692e96b471da943 diff.exe DIFF.EXE 16448 f033d572f37e1b8ac6a41ce3c9708f3644f57d45ba310fca0fd9c68cfcd88847 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
@@ -17,6 +18,7 @@ skip gr-dos/hello16 excluded the template for gr-dos *16 programs, not a utility
 program gr-dos/less16 v0.02 2917a058abdbd8d19cab62bf3cd7b1e5dedbec68 less.exe LESS.EXE 44696 8954b9d0af5c8252f5672e626cfd032626b421b9b551be3409deafc40581a2dc MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 skip gr-dos/libc16 excluded library repository (lib*16 convention), not a DOS executable
 skip gr-dos/libkitchen16 excluded library repository (lib*16 convention), not a DOS executable
+program gr-dos/ls16 v0.01 17877368748e1412c14d551e5373d1bac3dfe8ff ls.exe LS.EXE 9522 6334a0bb46010c2d71cc3447779b1c77acb70256da632fa660ad5e40535086b0 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 program gr-dos/md5sum16 v0.03 bf1cb20a4c240c1e8108e1ade4ebb5fb97279c64 md5sum.exe MD5SUM.EXE 14302 c0bf6ea467837acd22e27108ca2b55bdf824eda2ed091d97ec8db7793f5137d2 MIT LICENSE a22780350c1d4bc362d0a348892255666e54e529a4d5d1999b38c1f68949dbfe
 program gr-dos/patch16 v0.02 18fde41aaa8539123f6bbdf2f112a2dd13c72a92 patch.exe PATCH.EXE 53958 56c57bd4c6e7399333b46780da70b74ef95c0a6106456acb2493ae60fb7365fa GPL-2.0-or-later COPYING dcc100d4161cc0b7177545ab6e47216f84857cda3843847c792a25289852dcaa
 source gr-dos/patch16 patch16-0.02-src.tar.gz 153208 d1283e164742e59d545f04ae68e65db41dc429ac8558f060864144e06625b397 BUILDING.md
