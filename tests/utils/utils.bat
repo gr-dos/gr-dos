@@ -63,6 +63,30 @@ DISKCOPY A: B: <DISKCOPY.IN
 IF NOT ERRORLEVEL 1 ECHO GRDOS-DISKCOPY-OK
 DIR B:LINES.TXT
 TYPE B:LINES.TXT
+ECHO == DIR
+REM A switch before the filespec (issue #91): the filespec's drive, not
+REM the default drive A:, whether it is relative to B:'s current directory
+REM or absolute, and with the switch after it, or none, as before
+MD B:\SUB
+COPY B:LINES.TXT B:\SUB\SUBLINES.TXT >NUL
+CD B:\SUB
+ECHO -- DIR /W *.BAT
+DIR /W *.BAT
+ECHO -- DIR B:*.TXT /W
+DIR B:*.TXT /W
+ECHO -- DIR /W B:*.TXT
+DIR /W B:*.TXT
+ECHO -- DIR /W B:\*.TXT
+DIR /W B:\*.TXT
+ECHO -- DIR /P B:\SUB\*.TXT
+DIR /P B:\SUB\*.TXT
+ECHO -- DIR /W /P B:\SUB
+DIR /W /P B:\SUB
+ECHO -- DIR B:\LINES.TXT
+DIR B:\LINES.TXT
+ECHO -- DIR /W B:\NOFILE.TXT
+DIR /W B:\NOFILE.TXT
+CD B:\
 ECHO == FORMAT
 FORMAT B: /S /V:GRTEST <FORMAT.IN
 IF NOT ERRORLEVEL 1 ECHO GRDOS-FORMAT-OK

@@ -71,6 +71,50 @@
 ^LINES +TXT +41 
 ^alpha$
 ^xyz$
+# DIR with a switch before the filespec (issue #91) lists the filespec's
+# drive and directory, as with the switch after it; *.BAT on the default
+# drive A: is the control, with B:'s current directory B:\SUB
+^== DIR$
+^-- DIR /W \*\.BAT$
+^ Volume in drive A
+^ Directory of  A:\\$
+^AUTOEXEC BAT +BOOTB +BAT
+^ +2 File\(s\)
+^-- DIR B:\*\.TXT /W$
+^ Volume in drive B
+^ Directory of  B:\\SUB$
+^SUBLINES TXT +$
+^ +1 File\(s\)
+^-- DIR /W B:\*\.TXT$
+^ Volume in drive B
+^ Directory of  B:\\SUB$
+^SUBLINES TXT +$
+^ +1 File\(s\)
+^-- DIR /W B:\\\*\.TXT$
+^ Volume in drive B
+^ Directory of  B:\\$
+^LINES +TXT +EMPTY +TXT +$
+^ +2 File\(s\)
+^-- DIR /P B:\\SUB\\\*\.TXT$
+^ Volume in drive B
+^ Directory of  B:\\SUB$
+^SUBLINES TXT +41
+^ +1 File\(s\)
+^-- DIR /W /P B:\\SUB$
+^ Volume in drive B
+^ Directory of  B:\\SUB$
+^\. +\.\. +SUBLINES TXT +$
+^ +3 File\(s\)
+^-- DIR B:\\LINES\.TXT$
+^ Volume in drive B
+^ Directory of  B:\\$
+^LINES +TXT +41
+^ +1 File\(s\)
+^-- DIR /W B:\\NOFILE\.TXT$
+^ Volume in drive B
+^ Directory of  B:\\$
+^File not found$
+^== FORMAT$
 # FORMAT /S of B:, then CHKDSK B: (IO.SYS, MSDOS.SYS and the label hidden)
 ^System transferred$
 ^ +1457664 bytes total disk space$

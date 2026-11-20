@@ -1,0 +1,43 @@
+GR-DOS: DIR finds the filespec's drive when a switch comes first (issue #91).
+
+COMMAND parses a command's first argument into the FCB at 5CH, and DIR
+takes its drive from there for the volume ID, PATHCRUNCH and the search.
+With a switch first, as in DIR /W C:*.COM or DIR /W C:\DOS\*.COM, the
+FCB held the switch, so DIR listed the default drive. DIR now parses the
+filespec into the FCB itself, as COMMAND does, wherever it comes.
+
+Applied to a copy of v4.0/src before it is converted to CRLF (Makefile,
+PATCHES). `make check` builds without it.
+
+--- a/CMD/COMMAND/TCMD1A.ASM
++++ b/CMD/COMMAND/TCMD1A.ASM
+@@ -164,6 +164,20 @@
+ 	push	si				;AN000; save address
+ 	invoke	move_to_srcbuf			;AC000; move to srcbuf
+ 	pop	dx				;AC000; get address in DX
++;
++; GR-DOS: put the filespec's drive in the FCB.  COMMAND parsed the first
++; argument into it, which is not the filespec when a switch comes first
++; (DIR /W C:*.COM); the volume ID, PATHCRUNCH and the search take their
++; drive from it.
++;
++	push	dx				; save address of filespec
++	push	di				; save address of PARSE_DIR
++	mov	si,offset trangroup:srcbuf	; filespec, ending in 0DH
++	mov	di,FCB				; parse it as COMMAND does
++	mov	ax,(Parse_File_Descriptor SHL 8) OR 01H
++	int	int_command
++	pop	di				; restore address of PARSE_DIR
++	pop	dx				; get address in DX
+ 
+ ;
+ ; The user may have specified a device.  Search for the path and see if the
+@@ -199,7 +213,7 @@
+ 	or	bits,switchw			;AC000; indicate /w was selected
+ 	mov	linlen,wideperlin		;AC000; Set number of entries per line
+ 	mov	lincnt,wideperlin		;AC000;
+-	jmp	short dirscan			;AC000; keep parsing
++	jmp	dirscan 			; keep parsing (GR-DOS: near)
+ 
+ set_dir_pause:
+ 	test	byte ptr[bits],SwitchP		;AN018; /p already set?

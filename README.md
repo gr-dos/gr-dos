@@ -20,7 +20,8 @@ carry the DOS programs of the [gr-dos](https://github.com/gr-dos) organization's
 `*16` repositories, such as LESS, DIFF and TAR. They are found on GitHub
 and pinned in `dist16/lock` ([`docs/dist16.md`](docs/dist16.md)). Apart from the GR-DOS branding of the
 banner, `VER` and FDISK's menu (`patches/branding`), and the kernel's GR-DOS
-identification call (`patches/kernel`, [`docs/grver.md`](docs/grver.md)), the binaries of the
+identification call (`patches/kernel`, [`docs/grver.md`](docs/grver.md)), and GR-DOS's fixes to
+MORE and DIR (`patches/utilities`), the binaries of the
 assembly sources are byte-identical to the original MASM/LINK build; ATTRIB,
 MEM, FDISK, FC, JOIN, SUBST, BACKUP, RESTORE, FILESYS and REPLACE, which are C, are built with Open Watcom C and GR-DOS's own C
 runtime ([`docs/m4-utilities.md`](docs/m4-utilities.md)). See

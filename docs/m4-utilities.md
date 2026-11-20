@@ -293,6 +293,26 @@ builds without them, still gives Microsoft's MORE.COM.
   as the kernel's do with each GR-DOS change, and
   `build/linux/manifest-360k.txt` shows the new SHA-256.
 
+### DIR with a switch before the filespec
+
+`DIR /W C:*.COM` and `DIR /W C:\DOS\*.COM` list C:, where MS-DOS 4.00's
+COMMAND.COM listed the default drive and, usually, `File not found`
+(issue #91). COMMAND parses a command's first argument into the FCB at
+5CH, and DIR took the drive for the volume ID, the directory and the
+search from that FCB: with a switch first, it held the switch, and the
+drive was the default. A filespec with no drive, `DIR /W *.COM`, was
+therefore right, and so was any switch after the filespec.
+
+DIR now parses its filespec into that FCB itself, with the same call
+COMMAND makes, wherever the filespec comes on the line; nothing else
+changes. It is a change to TCMD1A.ASM in
+`patches/utilities/0002-dir-switch-first.patch`, which also makes one
+jump back to the parsing loop near, as the added code put it out of a
+short jump's reach. `make check` builds without it. `make test-utils`
+lists the default drive, the second drive's current directory and its
+root, with `/W` and `/P` before and after the filespec, and a file
+that is not there.
+
 ## TICO.EXE
 
 `TICO.EXE` is `tico.exe` from the tico16 release v0.02. It is not compiled
