@@ -67,6 +67,9 @@ F<MSBOOT.BIN>, F<FDBOOT.BIN> and F<VERSION>.  C:'s root gets IO.SYS and
 MSDOS.SYS first, COMMAND.COM, and a generated F<CONFIG.SYS> (with
 C<INCLUDEFILE=D:\CONFIG.SYS>), F<AUTOEXEC.BAT> (with C<PATH C:\DOS>, calling
 F<D:\AUTOEXEC.BAT>) and F<GRDOS.ID>; the other files go in F<C:\DOS>.
+C: is labelled C<GRDOS-x_yy> for the distribution's F<VERSION> x.yy, in
+the boot sector and in the root's last entry; a version that does not
+give such a label of at most 11 characters is refused.
 Neither command creates or changes F<D:\CONFIG.SYS> or F<D:\AUTOEXEC.BAT>.
 
 C<provision> and C<update> ask for the target's name (C<sdd>, or the image
@@ -161,7 +164,18 @@ sub load_dist ($dir) {
     or fail "$dir/FDBOOT.BIN: not FDISK's master boot record";
   $d{mbr_code} = substr $fdboot, 0x600, 446;
   ($d{version}) = slurp("$dir/VERSION") =~ /^(\S+)/ or fail "$dir/VERSION: empty";
+  $d{label} = volume_label($d{version}, "$dir/VERSION");
   return \%d;
+}
+
+# C:'s volume label for GR-DOS version x.yy: GRDOS-x_yy, as a period is
+# not a character of a DOS volume label. It must fit FAT's 11 characters.
+sub volume_label ($version, $where = 'VERSION') {
+  my($major, $minor) = $version =~ /^(\d+)\.(\d\d)\z/
+    or fail "$where: version $version is not x.yy, so C: cannot be labelled GRDOS-x_yy";
+  my $label = "GRDOS-${major}_$minor";
+  length $label <= 11 or fail "$where: the label $label for version $version is longer than FAT's 11 characters";
+  return $label;
 }
 
 # --- Geometry and layout ----------------------------------------------------
@@ -352,6 +366,13 @@ sub dir_entry ($name, $attr, $cluster, $size, $mtime, $utc) {
   return pack 'A8 A3 C x10 v v v V', $base, $ext // '', $attr, $time, $date, $cluster, $size;
 }
 
+# A root directory's volume label entry (attribute 08h): the label in the
+# 11 bytes of the name and extension, padded with spaces, and no clusters.
+sub label_entry ($label, $mtime) {
+  my($time, $date) = dos_time($mtime);
+  return pack 'A11 C x10 v v v V', $label, 0x08, $time, $date, 0, 0;
+}
+
 sub is_dir ($f) { exists $f->{children} }
 
 # The files of a tree, subdirectories' included.
@@ -361,14 +382,15 @@ sub count_files ($files) { sum0 map { is_dir($_) ? count_files($_->{children}) :
 # the first cluster on, the files' data, contiguous: the root's entries in
 # their order, then each subdirectory's (an entry with children, whose own
 # clusters come where it is listed). The rest of the volume is free space
-# and is not written.
-sub volume_image ($p, $geom, $boot_tmpl, $serial, $label, $files = []) {
+# and is not written. With $label_mtime, the root's last entry is the
+# volume label, after the files, so that IO.SYS and MSDOS.SYS stay first.
+sub volume_image ($p, $geom, $boot_tmpl, $serial, $label, $files = [], $label_mtime = undef) {
   my $csize = $p->{spc} * SECTOR;
   my $eoc = $p->{bits} == 16 ? 0xFFFF : 0xFFF;
   my $fat = "\0" x ($p->{spf} * SECTOR);
   fat_set(\$fat, $p->{bits}, 0, $p->{bits} == 16 ? 0xFFF8 : 0xFF8);
   fat_set(\$fat, $p->{bits}, 1, $eoc);
-  fail 'too many files for the root directory' if @$files > ROOT_ENTRIES;
+  fail 'too many files for the root directory' if @$files + (defined $label_mtime ? 1 : 0) > ROOT_ENTRIES;
   # Clusters, in order.
   my($next, %first, @order) = (2);
   my @todo = ([$files, 0]);
@@ -403,6 +425,7 @@ sub volume_image ($p, $geom, $boot_tmpl, $serial, $label, $files = []) {
     $data .= $bytes . "\0" x ($n * $csize - length $bytes);
   }
   my $dir = $entries->($files);
+  $dir .= label_entry($label, $label_mtime) if defined $label_mtime;
   $dir .= "\0" x ($p->{root_secs} * SECTOR - length $dir);
   return { bytes => boot_sector($boot_tmpl, $p, $geom, $serial, $label) . $fat . $fat . $dir . $data,
     used_clusters => $next - 2 };
@@ -450,8 +473,9 @@ sub system_files ($dist, $l, $disk_id, $now) {
 sub system_image ($dist, $l, $disk_id, $now) {
   my $p = $l->{system}{params};
   my @files = system_files($dist, $l, $disk_id, $now);
-  my $img = volume_image($p, $l->{geometry}, $dist->{boot}, serial_of("$disk_id C: $now"), 'NO NAME', \@files);
-  return { %$img, files => \@files };
+  my $img = volume_image($p, $l->{geometry}, $dist->{boot}, serial_of("$disk_id C: $now"), $dist->{label}, \@files,
+    $now);
+  return { %$img, files => \@files, label => $dist->{label} };
 }
 
 # --- Targets ----------------------------------------------------------------
@@ -680,7 +704,8 @@ sub dir_entries ($dir) {
     last if ord $e == 0;
     next if ord $e == 0xE5 || ord $e == ord '.';
     my($n, $x, $attr, $cl, $size) = unpack 'A8 A3 C x14 v V', $e;
-    push @entries, { name => length $x ? "$n.$x" : $n, attr => $attr, cluster => $cl, size => $size };
+    push @entries, { name => length $x ? "$n.$x" : $n, raw => substr($e, 0, 11), attr => $attr, cluster => $cl,
+      size => $size };
   }
   return \@entries;
 }
@@ -831,7 +856,14 @@ sub verify_system ($disk, $l, $img) {
       }
     }
   };
-  $check->($img->{files}, $v->{entries}, 'C:\\');
+  # The volume label: the root's last entry, and the boot sector's field.
+  my @root = $v->{entries}->@*;
+  my $label = pack 'A11', $img->{label};
+  my $e = pop @root;
+  $e && $e->{attr} == 0x08 && $e->{raw} eq $label && !$e->{cluster} && !$e->{size}
+    or fail "C:'s root does not end with the volume label $img->{label}";
+  substr($v->{boot}, 0x2B, 11) eq $label or fail "C:'s boot sector does not have the volume label $img->{label}";
+  $check->($img->{files}, \@root, 'C:\\');
   $v->{entries}[0]{cluster} == 2 or fail 'IO.SYS does not start at cluster 2';
   return count_files($img->{files});
 }
