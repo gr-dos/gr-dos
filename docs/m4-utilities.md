@@ -25,8 +25,9 @@ to the larger ones; these are still the 360 KB disk's.
 | `TICO.EXE` | tico16 release v0.02, not built | | |
 | `AUTOEXEC.BAT` | `image/autoexec.bat` | | |
 
-EDLIN is left out: TICO.EXE replaces it. SPROCKET.EXE is not included yet,
-as it has no release asset.
+EDLIN is left out: TICO.EXE replaces it. SPROCKET.EXE is on no floppy: it
+is in the full distribution only, C:\DOS and the release ZIP, from
+plicease/sprocket's release ([dist16.md](dist16.md), issue #37).
 
 `make check` compares the eight assembler utilities, `CHKDSK.EXE` and the
 message files of all ten (`X.CL*`, `X.CTL`, and FORMAT's copy of

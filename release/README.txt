@@ -153,10 +153,12 @@ Microsoft's were: the EXEPACK loader fails with "Packed file is corrupt"
 when a program is loaded in the first 64 KB of memory, as it is on
 GR-DOS. TICO.EXE and the programs listed after GRVER.EXE are the
 releases of the GitHub projects named, unchanged: the ones whose names
-end in 16 in the gr-dos organization (https://github.com/gr-dos), and
-tico16 (https://github.com/tico-edit/tico16). They are on no floppy but
-TICO.EXE. Each is under its own project's license, named in the list
-above, with its text at the end of this file.
+end in 16 in the gr-dos organization (https://github.com/gr-dos), tico16
+(https://github.com/tico-edit/tico16), and SPROCKET
+(https://github.com/plicease/sprocket), with SPROCKET.LIC, its license
+notice. They are on no floppy but TICO.EXE. Each is under its own
+project's license, named in the list above, with its text at the end of
+this file.
 
 Booting
 -------
@@ -225,6 +227,29 @@ On a running GR-DOS system, FORMAT B: /S makes a new boot disk in drive B:
 (FORMAT B: /F:720 or /F:360 for a double-density disk in a high-density
 drive), and DISKCOPY A: B: copies the system disk to a disk of the same
 format.
+
+Copying files over a serial line
+--------------------------------
+
+A hard disk or CF install has SPROCKET.EXE in C:\DOS, from
+https://github.com/plicease/sprocket: it copies files, and images disks,
+between this computer and another over a serial line. Connect a COM port
+to the other computer with a null-modem cable (a USB serial adapter on
+its side does if it has no COM port), and run sprocket for Linux or
+Windows, from the same project, there. At the same speed on both ends:
+
+  SPROCKET CLIENT COM1 38400
+    with "sprocket serve --port /dev/ttyUSB0 --baud 38400 --root DIR"
+    on the other computer, to browse DIR and get and put files;
+  SPROCKET SERVER COM1 38400 C:\SHARE /W
+    with "sprocket client --port /dev/ttyUSB0 --baud 38400" there, to
+    share C:\SHARE, and let it send files to it;
+  SPROCKET SERVER COM1 38400 /D
+    with "sprocket image ... --list" there, to image this computer's
+    disks, read-only.
+
+The line is 8N1 with no flow control; a 4.77 MHz 8088 keeps up with 38400
+baud. HELP SPROCKET has more. It is on no floppy.
 
 Checking the downloads
 ----------------------

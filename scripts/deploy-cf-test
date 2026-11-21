@@ -183,7 +183,9 @@ sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
 # itself (its file name without the extension) and version (the tag's),
 # and how to ask it its version (--version, the gr-dos *16 convention).
 # Tcl16 0.01 predates --version for it: TCL /? gives "Tcl16 0.01: ...".
-my %VERSION = ('TCL.EXE' => { args => '/?', stem => 'tcl16' });
+# SPROCKET (plicease/sprocket, issue #37) has no --version: with no
+# subcommand it prints its usage, "SPROCKET 0.5.1: ...".
+my %VERSION = ('TCL.EXE' => { args => '/?', stem => 'tcl16' }, 'SPROCKET.EXE' => { args => '' });
 sub dist16_programs () {
   my @p;
   for (split /\n/, slurp("$root/dist16/lock")) {
