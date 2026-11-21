@@ -43,8 +43,8 @@ and alias is unique, the text is ASCII in lines of at most 79 characters,
 and the first word of each example (an C<Examples> line indented two
 blanks) is a topic or alias.  A C<@DIST16@> line in a topic is replaced
 by the C<*16> programs (their F<.EXE> and F<.COM> files, not dist16's
-F<SOURCES.TXT>), and each, without its extension, is an alias of that
-topic.
+F<SOURCES.TXT> or a program's F<.LIC>), and each, without its extension,
+is an alias of that topic, unless it is a topic of its own.
 
 The file is CRLF text: each topic starts with a line C<@@NAME ALIAS...>,
 then C<NAME - Summary>, its origin and where its files are, a blank line
@@ -146,11 +146,16 @@ sub main (@args) {
       my @programs = grep { /\.(EXE|COM)$/ } @dist16;
       my @lines = map { "  $_" } wrap(list_and(@programs), 76);
       $t->{body} =~ s/^\@DIST16\@\n/join '', map { "$_\n" } @lines/me;
-      push $t->{aliases}->@*, map { s/\.(EXE|COM)$//r } @programs;
+      $t->{dist16} = [ map { s/\.(EXE|COM)$//r } @programs ];
     }
     $topic{$t->{name}} = $t;
   }
   closedir $dh;
+  # A *16 program is an alias of the @DIST16@ topic, unless it has its
+  # own topic (SPROCKET, issue #37).
+  for my $t (grep { $_->{dist16} } values %topic) {
+    push $t->{aliases}->@*, grep { !$topic{$_} } $t->{dist16}->@*;
+  }
 
   # Every name first, for the examples.
   for my $t (map { $topic{$_} } sort keys %topic) {

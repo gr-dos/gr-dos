@@ -17,7 +17,9 @@ FORMAT and SYS, GR-DOS installs on a hard disk and boots from it
 Linux on a CF card or disk image, then updates C: without touching the data
 drives ([`docs/deploy-cf.md`](docs/deploy-cf.md)). That install, and the release ZIP, also
 carry the DOS programs of the [gr-dos](https://github.com/gr-dos) organization's
-`*16` repositories, such as LESS, DIFF and TAR. They are found on GitHub
+`*16` repositories, such as LESS, DIFF and TAR, and
+[SPROCKET](https://github.com/plicease/sprocket), for serial file transfer
+and disk imaging. They are found on GitHub
 and pinned in `dist16/lock` ([`docs/dist16.md`](docs/dist16.md)). Apart from the GR-DOS branding of the
 banner, `VER` and FDISK's menu (`patches/branding`), and the kernel's GR-DOS
 identification call (`patches/kernel`, [`docs/grver.md`](docs/grver.md)), and GR-DOS's fixes to
@@ -188,8 +190,9 @@ gr-dos-VERSION/
 │   ├── DISPLAY.SYS, EGA.CPI, LCD.CPI   code page switching for the screen
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
-│   ├── CRCSUM.EXE, DF.EXE, DIFF.EXE, LESS.EXE, MD5SUM.EXE, PATCH.EXE,
+│   ├── CAT.EXE, CRCSUM.EXE, DF.EXE, DIFF.EXE, LESS.EXE, LS.EXE, MD5SUM.EXE, PATCH.EXE,
 │   │   RETROFCH.EXE, TAR.EXE, TCL.EXE, TERM16.EXE, TRUNCATE.EXE, WHICH.COM (the *16 programs dist16/lock pins)
+│   ├── SPROCKET.EXE, SPROCKET.LIC   serial file transfer and disk imaging, and its license
 │   ├── SOURCES.TXT   only with a *16 program under the GPL or another
 │   │                 source license: where its source is, and its license
 │   └── AUTOEXEC.BAT
@@ -271,6 +274,10 @@ MIT. TCL.EXE ([tcl16](https://github.com/gr-dos/tcl16)) is under the Tcl
 license, with Tiny Tcl's notice; GitHub does not recognize that license,
 so `dist16/config` names it, pinned to the license file's SHA-256
 ([`docs/dist16.md`](docs/dist16.md#license-overrides), issue #83).
+SPROCKET.EXE is [plicease/sprocket](https://github.com/plicease/sprocket)'s,
+MIT, and linked with libc16 (MIT) rather than Open Watcom's runtime; its
+release's license notice is shipped beside it as SPROCKET.LIC
+([`docs/dist16.md`](docs/dist16.md#license-assets), issue #37).
 PATCH.EXE ([patch16](https://github.com/gr-dos/patch16)) is under the GPL
 version 2 or later, and a `*16` program may also be under version 1 or
 later (perl16's Perl 3); such a program ships with its exact
