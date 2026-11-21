@@ -21,8 +21,10 @@ release.
 
 ## What is shipped
 
-The current lock includes CRCSUM, DF, DIFF, LESS, MD5SUM, PATCH, RETROFCH,
-TAR, TCL, TERM16, TRUNCATE and WHICH from `gr-dos`, and TICO from `tico-edit`.
+The current lock includes CAT, CRCSUM, DF, DIFF, LESS, LS, MD5SUM, PATCH,
+RETROFCH, TAR, TCL, TERM16, TRUNCATE and WHICH from `gr-dos`, TICO from
+`tico-edit`, and SPROCKET from `plicease` (issue #37), with its license
+notice, SPROCKET.LIC ([License assets](#license-assets)).
 TCL's license is taken from a [license override](#license-overrides),
 since GitHub does not recognize it.
 `gr-dos/retrofetch16`'s program is `retrofch.exe`, not the repository's
@@ -165,6 +167,13 @@ notice REPO PATH SHA256
 depend REPO DEP TAG COMMIT ASSET SIZE SHA256 SPDX LICENSE LICENSE_SHA256
 ```
 
+A program whose `include` has `license-asset=` is followed right away
+by its [license asset](#license-assets):
+
+```text
+license-asset REPO ASSET NAME SIZE SHA256
+```
+
 A program under a [license override](#license-overrides) is followed by
 the override, then its notices:
 
@@ -192,6 +201,42 @@ in `source/NAME`, and `SOURCES.TXT`). A verified file
 in the cache is not downloaded again, so a rebuild needs no network, and
 CI caches `build/tools` by the lock's hash. A file that does not match is a
 build error, and is never used.
+
+## License assets
+
+Most projects' license is their repository's `LICENSE`, which the ZIP's
+README carries. Some release the program's license notice as an asset of
+its own, to go with the executable. plicease/sprocket does (issue #37):
+its `SPROCKET.EXE` links [libc16](https://github.com/gr-dos/libc16)
+instead of Open Watcom's runtime, and each release from 0.5.1 has
+`sprocket-exe-license.txt` beside `sprocket.exe`. It is SPROCKET's MIT
+`LICENSE`, and covers libc16 too, since the two have the same text and
+holder; SPROCKET's release job fails if they differ. The project asks
+that it ship with the program, so `dist16/config` names it:
+
+```text
+include plicease/sprocket asset=sprocket.exe license-asset=sprocket-exe-license.txt
+```
+
+- **Checked like the program.** The asset must be in the release, and is
+  checked against GitHub's size and digest.
+- **The license GitHub finds.** It must be the license file at the
+  release's commit (`LICENSE`), byte for byte, so the README's notice and
+  the shipped one are the same text. A release whose asset differs fails
+  until someone reads it and decides what to do.
+- **Pinned.** The lock has a `license-asset` line right after the
+  program's, with its size and SHA-256, and its DOS name: the program's,
+  with `.LIC` for its extension (`SPROCKET.LIC`). The lock is refused if
+  the line is not the config's `license-asset=`, or is missing.
+- **Shipped beside the program.** `fetch` stages it, `list` names it
+  after the program, so it goes in `C:\DOS` and the ZIP's `BIN` right
+  after `SPROCKET.EXE`, and `bin-list` gives it a line in the README.
+  `check-dist` checks it in the ZIP's tree and the CF files, against the
+  lock.
+
+`sprocket.exe` is not a `*16` repository's, and its releases also hold the
+Linux and Windows host programs, so `asset=` names it. `SPROCKET.EXE` is
+on no floppy, like the other programs after TICO.
 
 ## License overrides
 
@@ -403,6 +448,11 @@ one, and run `make dist16-resolve`:
 include someone/tool16
 ```
 
+If its repository's name does not end in `16`, or its release holds other
+programs, name the DOS one with `asset=`. If the release gives the
+program's license notice as an asset, name that with `license-asset=`
+([License assets](#license-assets)), as plicease/sprocket's does.
+
 ### Leaving a program out
 
 Add an `exclude` with its reason to `dist16/config`. The reason is
@@ -542,6 +592,15 @@ downloads and raw files. It needs no network. It covers:
   refused with a GPL program and no `source` line, a `source` line under
   MIT, or lines out of order; and the MIT programs beside it are locked
   as before.
+- **License assets (issue #37):** another owner's program with
+  `asset=` and `license-asset=`, locked with its `license-asset` line,
+  listed, staged as `STEM.LIC` (offline too), and checked in the CF and
+  ZIP layouts. Each of these fails: a release without the asset, an
+  asset that is not the license at the commit, one that does not match
+  GitHub's digest, a corrupt cached copy, a changed or missing `.LIC` in
+  the distribution, a lock line the config does not name, another asset
+  than it names, none when it names one, a line with another SHA-256 or
+  DOS name, or out of place, and `license-asset=` naming the program.
 - **Architecture:** PE, NE, COFF behind a stub, a DOS extender, no MZ
   header, a malformed MZ header, and a `.COM` over 65,280 bytes (with one
   at exactly 65,280).
@@ -556,5 +615,5 @@ downloads and raw files. It needs no network. It covers:
 
 The CF boot test (`make test-deploy-cf`) runs every locked program from
 `C:\DOS`. Each prints its version with `--version`, the gr-dos
-convention, except diff16 0.01, which has no `--version` and prints its
-version in `--help`.
+convention, except those that have none: TCL prints its version with
+`/?`, and SPROCKET in its usage, with no subcommand.

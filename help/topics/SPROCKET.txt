@@ -1,0 +1,56 @@
+Topic: SPROCKET
+Summary: Copies files and disk images over a serial line
+Origin: sprocket
+Group: command
+Files: SPROCKET.EXE SPROCKET.LIC
+
+Syntax
+  SPROCKET CLIENT [port [baud]]
+  SPROCKET SERVER [port [baud [dir]]] [/W] [/D] [/1]
+
+  port         COM1 to COM4. The default is COM1.
+  baud         The line speed. The default is SPROCKET_BAUD, if it is set,
+               else 9600.
+  dir          The directory a server shares, with those below it.
+  /W           Lets the client send files to dir.
+  /D           Offers the BIOS floppy and hard disks for imaging,
+               read-only.
+  /1           Exits when the first client ends its session.
+
+Examples
+  SPROCKET CLIENT COM1 38400
+    Calls a server on COM1 at 38400 baud, and gives a /> prompt for ls,
+    cd, get, put and the rest (type help there).
+  SPROCKET SERVER COM1 38400 C:\SHARE /W
+    Shares C:\SHARE on COM1 at 38400 baud, and lets the client send
+    files to it, until Esc is pressed.
+  SPROCKET SERVER COM1 38400 /D
+    Lets the other computer image this one's disks, until Esc is
+    pressed.
+
+With a modern computer
+  Connect a COM port to the other computer with a null-modem cable,
+  through a USB serial adapter on its side if it has no COM port. On it,
+  install sprocket for Linux or Windows from github.com/plicease/sprocket
+  and give it the same speed, for example:
+
+    sprocket serve --port /dev/ttyUSB0 --baud 38400 --root ~/vintage
+      to share a directory, for SPROCKET CLIENT;
+    sprocket client --port /dev/ttyUSB0 --baud 38400
+      to browse SPROCKET SERVER's directory;
+    sprocket image --port /dev/ttyUSB0 --baud 38400 --list
+      to list SPROCKET SERVER /D's disks (--device and --output image
+      one).
+
+Notes
+  The line is 8N1 with no flow control. A 4.77 MHz 8088 keeps up with
+  38400 baud, but not 57600. Turn off write-behind disk caching while
+  files are sent to this computer. Files arrive under a temporary name,
+  and are put in place only when complete and checked.
+
+  SPROCKET.EXE is a release of github.com/plicease/sprocket, under the
+  MIT license, linked with libc16 (MIT). It is not built from source
+  here: GR-DOS ships the release's SPROCKET.EXE and its license notice,
+  SPROCKET.LIC, each checked against a pinned checksum. SPROCKET with no
+  subcommand shows its usage and version. It is in C:\DOS only, on no
+  floppy.

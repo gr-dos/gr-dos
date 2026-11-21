@@ -11,7 +11,8 @@ each a release of its own project, shipped unchanged. They are:
 @DIST16@
 
 TICO, the editor, from tico16, is the only one on the floppies (HELP
-TICO).
+TICO). SPROCKET, from github.com/plicease/sprocket, copies files and
+disk images over a serial line (HELP SPROCKET).
 
 Help for each
   Most show their usage with --help after the name, and their release

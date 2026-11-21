@@ -32,7 +32,9 @@ offline from the cache; and programs under a source license (issue #56):
 GPL-2.0-or-later and GPL-1.0-or-later programs with their corresponding
 source and a linked library's, resolved, locked, fetched, staged and packaged, and each way
 its source can be missing, unverifiable or mislabeled; and a license
-override (issue #83), verified by SHA-256, and each way it is refused.
+override (issue #83), verified by SHA-256, and each way it is refused;
+and a license asset (issue #37), a release's license notice for its
+program, pinned, staged as STEM.LIC and checked in the distribution.
 
 =cut
 
@@ -866,6 +868,128 @@ sub prog ($name, %r) {
     ($rc, $o) = dist16($dir, 'list');
     ok($rc == 2 && $o =~ $cfg{$c}, "a config error: @{[ $c =~ s/\n/; /gr ]}") or diag($o);
   }
+}
+
+# 13. A license-asset (issue #37): another owner's program whose release
+# gives its license notice as an asset of its own, as plicease/sprocket's
+# sprocket-exe-license.txt, pinned, staged beside it as STEM.LIC, and
+# checked in the distribution; and each way it is refused.
+{
+  my $lic = sub ($repo) { license_text($repo, 'MIT') };
+  my $rel = sub ($repo, %r) {
+    my($name) = $repo =~ m{/(.*)};
+    return { name => $name, releases => [ { tag => 'v0.5.1', latest => 1, license => 'MIT',
+      assets => { "$name.exe" => mz(700, $name), "$name-exe-license.txt" => $lic->("plicease/$name"),
+        "$name-v0.5.1-x86_64-unknown-linux-gnu.tar.gz" => 'tgz' }, %r } ] };
+  };
+  my $inc = sub ($name) { "include plicease/$name asset=$name.exe license-asset=$name-exe-license.txt\n" };
+  my $config = $base_config . join '', map { $inc->($_) } qw( sprocket nolic other badsum );
+  my $dir = github(config => $config, owners => {
+    'gr-dos' => [ prog('md5sum16') ],
+    plicease => [
+      $rel->('plicease/sprocket'),
+      { name => 'nolic', releases => [ { tag => 'v0.5.1', latest => 1, license => 'MIT', assets => { 'nolic.exe' => mz(700, 'nolic') } } ] },
+      $rel->('plicease/other', assets => { 'other.exe' => mz(700, 'other'), 'other-exe-license.txt' => "another notice\n" }),
+      $rel->('plicease/badsum', digest => { 'badsum-exe-license.txt' => 'sha256:' . ('0' x 64) }),
+    ] });
+  my($rc, $o) = dist16($dir, 'resolve');
+  my $lines = lock_lines($dir);
+  ok($rc == 0, 'license-asset: resolve succeeds') or diag($o);
+  my $lsha = sha256_hex($lic->('plicease/sprocket'));
+  my $len = length $lic->('plicease/sprocket');
+  my($i) = grep { $lines->[$_] =~ m{^program plicease/sprocket } } 0 .. $#$lines;
+  ok(defined $i && $lines->[$i] =~ m{^program plicease/sprocket v0\.5\.1 [0-9a-f]{40} sprocket\.exe SPROCKET\.EXE 700 \S+ MIT LICENSE \Q$lsha\E$}
+    && $lines->[$i + 1] eq "license-asset plicease/sprocket sprocket-exe-license.txt SPROCKET.LIC $len $lsha",
+    'the program is locked, with its license asset right after it, as SPROCKET.LIC');
+  ok($o =~ m{^included +plicease/sprocket v0\.5\.1 sprocket\.exe as SPROCKET\.EXE, MIT, license sprocket-exe-license\.txt as SPROCKET\.LIC \(ignored: sprocket-v0\.5\.1-x86_64-unknown-linux-gnu\.tar\.gz\)$}m,
+    'the report names the license asset, and not as ignored') or diag($o);
+  ok(has($lines, qr{^skip plicease/nolic failed v0\.5\.1 has no license asset nolic-exe-license\.txt \(license-asset=\)$}),
+    'a release without the license asset fails');
+  ok(has($lines, qr{^skip plicease/other failed v0\.5\.1: the license asset other-exe-license\.txt is not LICENSE at [0-9a-f]{40}$}),
+    'a license asset that is not the license at the commit fails');
+  ok(has($lines, qr{^skip plicease/badsum failed v0\.5\.1: badsum-exe-license\.txt checksum mismatch}),
+    'a license asset that does not match GitHub\'s digest fails');
+  ok(has($lines, qr{^program gr-dos/md5sum16 }) && !has($lines, qr{^license-asset gr-dos/}), 'the other programs have no license asset');
+  my $first = slurp("$dir/lock");
+  ($rc) = dist16($dir, 'resolve');
+  ok(slurp("$dir/lock") eq $first, 'license-asset: resolving again writes the same lock');
+
+  ($rc, $o) = dist16($dir, 'list');
+  ok($rc == 0 && $o eq "MD5SUM.EXE\nSPROCKET.EXE\nSPROCKET.LIC\n", 'list: the license asset follows its program') or diag($o);
+  ($rc, $o) = dist16($dir, 'bin-list');
+  ok($rc == 0 && $o =~ m{^  BIN\\SPROCKET\.EXE +from plicease/sprocket v0\.5\.1, MIT\n  BIN\\SPROCKET\.LIC +SPROCKET\.EXE's license notice, the release's sprocket-exe-license\.txt$}m,
+    'bin-list: the README names it after its program') or diag($o);
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest");
+  ok($rc == 0 && slurp("$dir/dest/SPROCKET.LIC") eq $lic->('plicease/sprocket')
+    && slurp("$dir/dest/licenses/SPROCKET.EXE.txt") eq $lic->('plicease/sprocket'), 'fetch stages SPROCKET.LIC beside the program')
+    or diag($o);
+  remove_tree("$dir/dl", "$dir/raw");
+  ($rc) = dist16($dir, 'fetch', "$dir/dest2");
+  ok($rc == 0 && slurp("$dir/dest2/SPROCKET.LIC") eq $lic->('plicease/sprocket'), 'offline, fetch reproduces it from the cache');
+  spew("$dir/cache/plicease/sprocket/v0.5.1/sprocket-exe-license.txt", "tampered\n");
+  ($rc, $o) = dist16($dir, 'fetch', "$dir/dest3");
+  ok($rc == 2 && $o =~ /sprocket-exe-license\.txt.*cannot download/, 'a corrupt cached license asset is refused, not used') or diag($o);
+
+  # check-dist: the CF files and the ZIP's BIN must have it, unchanged.
+  my $cf = "$dir/cf";
+  make_path($cf);
+  spew("$cf/$_", slurp("$dir/dest/$_")) for qw( MD5SUM.EXE SPROCKET.EXE SPROCKET.LIC );
+  ($rc, $o) = dist16($dir, 'check-dist', $cf, "$dir/dest");
+  ok($rc == 0 && $o =~ /SPROCKET\.LIC, the license of SPROCKET\.EXE/, 'check-dist accepts the CF files with SPROCKET.LIC') or diag($o);
+  my $zip = "$dir/zip";
+  spew("$zip/BIN/$_", slurp("$dir/dest/$_")) for qw( MD5SUM.EXE SPROCKET.EXE SPROCKET.LIC );
+  spew("$zip/README.txt", "GR-DOS\n");
+  ($rc, $o) = dist16($dir, 'check-dist', $zip, "$dir/dest");
+  ok($rc == 0, 'check-dist accepts the ZIP\'s BIN with SPROCKET.LIC') or diag($o);
+  spew("$cf/SPROCKET.LIC", "another\n");
+  ($rc, $o) = dist16($dir, 'check-dist', $cf, "$dir/dest");
+  ok($rc == 2 && $o =~ m{SPROCKET\.LIC is not the license of SPROCKET\.EXE dist16/lock pins}, 'check-dist refuses a changed SPROCKET.LIC') or diag($o);
+  unlink "$zip/BIN/SPROCKET.LIC";
+  ($rc, $o) = dist16($dir, 'check-dist', $zip, "$dir/dest");
+  ok($rc == 2 && $o =~ m{BIN/SPROCKET\.LIC is not the license}, 'check-dist refuses a ZIP without SPROCKET.LIC') or diag($o);
+
+  # The lock is checked against the config's license-asset=.
+  my $lock = slurp("$dir/lock");
+  my $la = qr{^license-asset plicease/sprocket .*\n}m;
+  my %bad = (
+    'a license-asset line the config does not name' =>
+      [ $lock, $config =~ s/ license-asset=sprocket-exe-license\.txt//r, qr{has the license-asset sprocket-exe-license\.txt, but \S+ names none} ],
+    'another license asset than the config names' =>
+      [ $lock, $config =~ s/license-asset=sprocket-exe-license\.txt/license-asset=LICENSE.txt/r, qr{but \S+ names LICENSE\.txt} ],
+    'no license-asset line, though the config names one' =>
+      [ $lock =~ s/$la//r, $config, qr{SPROCKET\.EXE \(plicease/sprocket\) has no license-asset line, but \S+ names sprocket-exe-license\.txt} ],
+    'a license-asset line that is not the program\'s license' =>
+      [ $lock =~ s/^(license-asset plicease\/sprocket .* )\S+$/$1 . ('d' x 64)/mer, $config, qr{the license-asset line is not its program's license} ],
+    'a license-asset line with another DOS name' =>
+      [ $lock =~ s/ SPROCKET\.LIC / SPROCKET.TXT /r, $config, qr{malformed license-asset line} ],
+    'a license-asset line of another program' =>
+      [ $lock =~ s/^license-asset plicease\/sprocket /license-asset plicease\/other /mr, $config, qr{a license-asset line must follow its program's} ],
+    'a license-asset line before its program\'s' =>
+      [ $lock =~ s/^(program plicease\/sprocket .*\n)(license-asset .*\n)/$2$1/mr, $config, qr{a license-asset line must follow its program's} ],
+    'two license-asset lines' =>
+      [ $lock =~ s/^(license-asset .*\n)/$1$1/mr, $config, qr{a license-asset line out of place} ],
+  );
+  for my $what (sort keys %bad) {
+    my($l, $cfg, $re) = $bad{$what}->@*;
+    spew("$dir/lock", $l);
+    spew("$dir/config", $cfg);
+    ($rc, $o) = dist16($dir, 'list');
+    ok($rc == 2 && $o =~ $re, "the lock is refused: $what") or diag($o);
+  }
+  spew("$dir/lock", $lock);
+
+  # Errors in the config.
+  my %cfg = (
+    "include plicease/sprocket asset=sprocket.exe license-asset=sprocket.exe\n" => qr{license-asset= names the program asset=},
+    "include plicease/sprocket license-asset=../LICENSE\n" => qr{license-asset= is the name of a release asset},
+    "include plicease/sprocket license-asset=\n" => qr{license-asset= is the name of a release asset},
+  );
+  for my $c (sort keys %cfg) {
+    spew("$dir/config", "$base_config$c");
+    ($rc, $o) = dist16($dir, 'list');
+    ok($rc == 2 && $o =~ $cfg{$c}, "a config error: @{[ $c =~ s/\n/; /gr ]}") or diag($o);
+  }
+  spew("$dir/config", $config);
 }
 
 say "1..$tests";

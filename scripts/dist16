@@ -71,16 +71,29 @@ program's C<depends> (F<dist16.source>), is resolved and shipped as before.
 
 Leave a repository out; the reason is required, and is in the lock.
 
-=item include OWNER/NAME [tag=TAG] [asset=FILE | prefer=com|exe] [required]
+=item include OWNER/NAME [tag=TAG] [asset=FILE | prefer=com|exe] [license-asset=FILE] [required]
 
 Add a repository from any owner, or set options for a discovered one;
 it is then not excluded as a library (C<lib*16>).
 C<tag=> pins a release instead of the latest; C<asset=> names the release
 asset to ship; C<prefer=> chooses between a release's F<STEM.com> and
 F<STEM.exe> (issue #42), overriding C<prefer>, below; C<asset=> and
-C<prefer=> together are an error; C<required> makes C<resolve> fail, not
+C<prefer=> together are an error; C<license-asset=> names the release's
+asset that is the program's license notice, which is shipped beside it as
+F<STEM.LIC> (issue #37, below); C<required> makes C<resolve> fail, not
 skip it, if it cannot be included. An include overrides fork and archived. A repository
 both included and excluded is an error.
+
+A C<license-asset=> is for a project whose release gives the program's
+license notice as an asset of its own, to go with the executable, such
+as plicease/sprocket's F<sprocket-exe-license.txt>. The asset is checked
+against GitHub's size and digest like the program, and must be the
+license file GitHub finds at the release's commit, byte for byte, so the
+notice in the ZIP's README is the one the project ships. The lock pins it
+on a C<license-asset> line after the program's; C<fetch> stages it as the
+program's name with F<.LIC> for its extension (F<SPROCKET.LIC>), which
+goes in C:\DOS and the ZIP's F<BIN> after the program, and C<check-dist>
+checks it there.
 
 =item prefer com|exe
 
@@ -216,6 +229,12 @@ my @DEPEND = qw( repo dep tag commit asset size sha256 spdx license license_sha2
 # After a program whose license is a license-override's (issue #83): what
 # GitHub reported, and the file and SHA-256 the override pins.
 my @OVERRIDE = qw( repo github spdx license sha256 );
+# Right after a program whose include has license-asset= (issue #37): the
+# release's license notice asset, and its DOS name.
+my @LICENSE_ASSET = qw( repo asset name size sha256 );
+
+# A license-asset's DOS name: the program's, with this extension.
+sub lic_name ($name) { base($name) . '.LIC' }
 
 # A program under a source license has this at its release's commit.
 my $MANIFEST = 'dist16.source';
@@ -321,12 +340,14 @@ sub read_config ($path) {
       die "$where: $key is excluded twice\n" if $c{exclude}{$key};
       $c{exclude}{$key} = "@w";
     } elsif($cmd eq 'include') {
-      die "$where: include OWNER/NAME [tag=TAG] [asset=FILE | prefer=com|exe] [required]\n" unless @w && $w[0] =~ $repo_re;
+      die "$where: include OWNER/NAME [tag=TAG] [asset=FILE | prefer=com|exe] [license-asset=FILE] [required]\n" unless @w && $w[0] =~ $repo_re;
       my $repo = shift @w;
       die "$where: $repo is included twice\n" if $c{include}{lc $repo};
       my %i = (repo => $repo);
       for (@w) {
         if(/^(tag|asset)=(\S+)$/) { $i{$1} = $2 }
+        elsif(/^license-asset=([\w.+-]+)$/) { $i{license_asset} = $1 }
+        elsif(/^license-asset=/) { die "$where: $_: license-asset= is the name of a release asset\n" }
         elsif(/^prefer=(com|exe)$/) { $i{prefer} = $1 }
         elsif(/^prefer=/) { die "$where: $_: prefer= is com or exe\n" }
         elsif($_ eq 'required') { $i{required} = 1 }
@@ -334,6 +355,8 @@ sub read_config ($path) {
       }
       die "$where: $repo has both asset= and prefer=: asset= names the program, so prefer= would do nothing\n"
         if defined $i{asset} && defined $i{prefer};
+      die "$where: $repo: license-asset= names the program asset=\n"
+        if defined $i{asset} && defined $i{license_asset} && $i{asset} eq $i{license_asset};
       $c{include}{lc $repo} = \%i;
     } elsif($cmd eq 'prefer') {
       die "$where: prefer com|exe\n" unless @w == 1 && $w[0] =~ /^(com|exe)$/;
@@ -630,6 +653,20 @@ sub resolve_one ($c, $r, $notes) {
     return $skip->('failed', "$tag: $why");
   }
   @res{qw( size sha256 )} = (length $data, sha256_hex($data));
+  # The release's license notice for the program (issue #37): its own
+  # asset, which must be the license at the commit, byte for byte.
+  if(defined(my $want = $i->{license_asset})) {
+    my($la) = grep { $_->{name} eq $want } @$assets;
+    return $skip->('failed', "$tag has no license asset $want (license-asset=)") unless $la;
+    return $skip->('failed', "$tag: license-asset= names the program $want") if $want eq $asset->{name};
+    my($text, $why) = download($repo, $tag, $la);
+    return $skip->('failed', "$tag: $why") if $why;
+    return $skip->('failed', "$tag: the license asset $want is not $lpath at $res{commit}")
+      unless $text eq $ltext;
+    $res{license_asset} = { repo => $repo, asset => $want, name => lic_name($res{name}),
+      size => length $text, sha256 => sha256_hex($text) };
+    $res{ignored} = [ grep { $_ ne $want } $res{ignored}->@* ];
+  }
   unless($c->{license}{$spdx}) {
     my $why = source_of($c, \%res, $assets, $data, $ltext);
     return $skip->('failed', "$tag: $why") if $why;
@@ -832,11 +869,14 @@ sub lock_text ($results) {
     "# depend @{[ map { uc } @DEPEND ]}",
     '# and after a program under a license-override (dist16/config), before its notices:',
     "# override @{[ map { uc } @OVERRIDE ]}",
+    '# and right after a program whose include has license-asset= (dist16/config):',
+    "# license-asset @{[ map { uc } @LICENSE_ASSET ]}",
     '# skip REPO KIND REASON',
   );
   for my $res (@$results) {
     if($res->{kind} eq 'included') {
       push @lines, join ' ', 'program', map { $res->{$_} } @FIELDS;
+      if(my $l = $res->{license_asset}) { push @lines, join ' ', 'license-asset', map { $l->{$_} } @LICENSE_ASSET }
       if(my $o = $res->{override}) { push @lines, join ' ', 'override', map { $o->{$_} } @OVERRIDE }
       if(my $s = $res->{source}) { push @lines, join ' ', 'source', map { $s->{$_} } @SOURCE }
       for my $x (($res->{notices} // [])->@*) { push @lines, join ' ', 'notice', map { $x->{$_} } @NOTICE }
@@ -857,6 +897,7 @@ sub report ($results, $notes) {
         $src = ", source $s->{asset}" . join '', map { ", with $_->{dep} $_->{tag} ($_->{spdx}, source $_->{asset})" } $res->{depends}->@*;
       }
       my $chosen = $res->{chosen} ? ", $res->{chosen}" : '';
+      $chosen .= ", license $res->{license_asset}{asset} as $res->{license_asset}{name}" if $res->{license_asset};
       if(my $o = $res->{override}) {
         $src = " by license-override (GitHub finds $o->{github}; $o->{license} SHA-256 verified"
           . join('', map { ", notice $_->{path}" } $res->{notices}->@*) . ')';
@@ -893,6 +934,17 @@ sub read_lock () {
       $p->{notices} = [];
       $p->{depends} = [];
       push @programs, $p;
+    } elsif($kind eq 'license-asset') {
+      my $x = $fields->($kind, \@LICENSE_ASSET, @w);
+      my $p = $programs[-1];
+      die "$opt{lock}:$n: a license-asset line must follow its program's\n" unless $p && $p->{repo} eq $x->{repo};
+      die "$opt{lock}:$n: a license-asset line out of place\n"
+        if $p->{license_asset} || $p->{override} || $p->{source} || $p->{notices}->@*;
+      die "$opt{lock}:$n: malformed license-asset line\n"
+        unless $x->{asset} =~ /^[\w.+-]+$/ && $x->{asset} ne $p->{asset} && $x->{size} =~ /^\d+$/
+          && $hex->($x->{sha256}, 64) && $x->{name} eq lic_name($p->{name});
+      die "$opt{lock}:$n: the license-asset line is not its program's license\n" unless $x->{sha256} eq $p->{license_sha256};
+      $p->{license_asset} = $x;
     } elsif($kind eq 'override') {
       my $x = $fields->($kind, \@OVERRIDE, @w);
       my $p = $programs[-1];
@@ -956,6 +1008,13 @@ sub read_lock () {
         unless $x->{spdx} eq $o->{spdx} && $x->{license} eq $o->{license} && $x->{sha256} eq $o->{sha256}
           && join("\0", map { $_->{path} } $p->{notices}->@*) eq join("\0", $o->{notices}->@*);
     }
+    # A license-asset in the lock is the one the config's include names,
+    # and the include's is in the lock.
+    my $la = ($c->{include}{lc $p->{repo}} // {})->{license_asset};
+    die "$opt{lock}: $p->{name} ($p->{repo}) has no license-asset line, but $opt{config} names $la\n"
+      if defined $la && !$p->{license_asset};
+    die "$opt{lock}: $p->{name} ($p->{repo}) has the license-asset $p->{license_asset}{asset}, but $opt{config} names "
+      . ($la // 'none') . "\n" if $p->{license_asset} && ($la // '') ne $p->{license_asset}{asset};
     for my $d ($p->{depends}->@*) {
       die "$opt{lock}: $p->{name} ($p->{repo}) depends on $d->{dep}, under $d->{spdx}, which $opt{config} does not allow\n"
         unless $c->{license}{$d->{spdx}} || source_licenses($c, $d->{spdx});
@@ -995,6 +1054,11 @@ sub cmd_fetch ($dest) {
       $p->{license_sha256}, "$what $p->{license}");
     copy($exe, "$dest/$p->{name}") or die "$dest/$p->{name}: $!\n";
     copy($lic, "$dest/licenses/$p->{name}.txt") or die "$dest/licenses/$p->{name}.txt: $!\n";
+    # The release's license notice, beside the program (issue #37).
+    if(my $l = $p->{license_asset}) {
+      my $f = cached(release_url($p->{repo}, $p->{tag}, $l->{asset}), "$dir/$l->{asset}", $l->{sha256}, "$what $l->{asset}");
+      copy($f, "$dest/$l->{name}") or die "$dest/$l->{name}: $!\n";
+    }
     # The further notices (a source license's, or a license-override's),
     # in licenses.
     my $k = 0;
@@ -1120,6 +1184,12 @@ sub cmd_check_dist ($dir, $dest) {
   push @texts, $norm->(slurp("$bin/$SOURCES")) if -f "$bin/$SOURCES";
   push @texts, $norm->(slurp("$dir/README.txt")) unless $cf;
   my @problems;
+  # Each program's license notice asset, beside it (issue #37).
+  for my $p (grep { $_->{license_asset} } @$programs) {
+    my $l = $p->{license_asset};
+    push @problems, "$bin/$l->{name} is not the license of $p->{name} dist16/lock pins ($l->{asset})"
+      unless $sha->("$bin/$l->{name}") eq $l->{sha256};
+  }
   if(!@s) {
     push @problems, "$bin/$SOURCES: no program has a source license, but it exists" if -e "$bin/$SOURCES";
     push @problems, "$dir/SOURCE: no program has a source license, but it exists" if -e "$dir/SOURCE";
@@ -1156,6 +1226,9 @@ sub cmd_check_dist ($dir, $dest) {
     }
   }
   die join('', map { "$_\n" } @problems) if @problems;
+  if(my @l = grep { $_->{license_asset} } @$programs) {
+    say "$dir: " . join(', ', map { "$_->{license_asset}{name}, the license of $_->{name}" } @l);
+  }
   say "$dir: " . (@s ? join(', ', map { "$_->{name} ($_->{spdx})" } @s) . ' with source and licenses' : 'no program under a source license');
 }
 
@@ -1201,7 +1274,10 @@ sub main (@args) {
   }
   if($cmd eq 'list') {
     my $programs = read_lock();
-    say $_->{name} for @$programs;
+    for my $p (@$programs) {
+      say $p->{name};
+      say $p->{license_asset}{name} if $p->{license_asset};
+    }
     say $SOURCES if sourced($programs);
     return 0;
   }
@@ -1220,7 +1296,11 @@ sub main (@args) {
   if($cmd eq 'bin-list') {
     my %skip = map { uc($_) => 1 } @args;
     my $programs = read_lock();
-    printf "  BIN\\%-12s from %s %s, %s\n", $_->{name}, $_->{repo}, $_->{tag}, $_->{spdx} for grep { !$skip{$_->{name}} } @$programs;
+    for my $p (grep { !$skip{$_->{name}} } @$programs) {
+      printf "  BIN\\%-12s from %s %s, %s\n", $p->{name}, $p->{repo}, $p->{tag}, $p->{spdx};
+      printf "  BIN\\%-12s %s's license notice, the release's %s\n", $p->{license_asset}{name}, $p->{name}, $p->{license_asset}{asset}
+        if $p->{license_asset};
+    }
     printf "  BIN\\%-12s where to get the source of %s\n", $SOURCES, join ', ', map { $_->{name} } sourced($programs)
       if sourced($programs);
     return 0;
