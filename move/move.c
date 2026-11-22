@@ -421,18 +421,6 @@ static int make_dirs(char *path)
 
 /* ---- moving ---- */
 
-/* Deletes PATH: 0, or 1 if it is not there, 2 if read-only or not deleted. */
-static int delete_file(const char *path)
-{
-    int a = get_attr(path);
-
-    if (a < 0)
-        return 1;
-    if (a & _A_RDONLY)
-        return 2;
-    return dos_remove(path) < 0 ? 2 : 0;
-}
-
 static int dos_handle_call(unsigned ax, int handle, union REGS *r)
 {
     r->x.ax = ax;
@@ -460,7 +448,8 @@ static long file_size(int handle)
 
 /*
  * Copies FROM to TO, with its date, time and attributes: NULL, or why not.
- * The copy is checked to be the size of the source.
+ * The copy is checked to be the size of the source. If it fails, what it
+ * created is deleted; a TO it did not create is left alone.
  */
 static const char *copy_file(const char *from, const char *to)
 {
@@ -468,7 +457,7 @@ static const char *copy_file(const char *from, const char *to)
     const char *why = no_memory;
     unsigned size = 0x2800, n, written, cx, dx, attr;
     char *buf;
-    int in = -1, out = -1, a;
+    int in = -1, out = -1, a, created = 0, attr_set = 0;
     long total = 0, expect;
     union REGS r;
 
@@ -489,6 +478,7 @@ static const char *copy_file(const char *from, const char *to)
         out = -1;
         goto done;
     }
+    created = 1;
     expect = file_size(in);
     why = "Unable to write destination";
     for (;;) {
@@ -526,20 +516,16 @@ static const char *copy_file(const char *from, const char *to)
     why = "Unable to set destination attributes";
     if (set_attr(to, attr) < 0)
         goto done;
+    attr_set = 1;
     /* The copy, closed, must be the source's size: if not, it is deleted,
      * and the source kept. */
     why = "Unable to write destination";
     if (_dos_open(to, 0x40, &out) != 0) {
         out = -1;
-        set_attr(to, 0);
         goto done;
     }
-    if (file_size(out) != total) {
-        _dos_close(out);
-        out = -1;
-        set_attr(to, 0);
+    if (file_size(out) != total)
         goto done;
-    }
     _dos_close(out);
     out = -1;
     why = NULL;
@@ -549,26 +535,100 @@ done:
         _dos_close(in);
     if (out >= 0)
         _dos_close(out);
+    if (why != NULL && created) {
+        if (attr_set)
+            set_attr(to, 0);
+        dos_remove(to);
+    }
     return why;
 }
 
-/* Moves FROM to TO: NULL, or why not. */
+/* True if PATH, which exists, is a character device (INT 21h 4400h). */
+static int is_device(const char *path)
+{
+    union REGS r;
+    int h, dev;
+
+    if (_dos_open(path, 0x40, &h) != 0)
+        return 0;
+    dev = dos_handle_call(0x4400, h, &r) == 0 && (r.x.dx & 0x80);
+    _dos_close(h);
+    return dev;
+}
+
+/*
+ * Renames the file TO, which is to be replaced, aside in its directory, as
+ * ~MOVEnnn.$$$, into ASIDE: 0, or -1.
+ */
+static int set_aside(const char *to, char *aside)
+{
+    char *name;
+    unsigned i;
+
+    strcpy(aside, to);
+    name = aside + strlen(aside);
+    while (name > aside && !is_slash(name[-1]) && name[-1] != ':')
+        name--;
+    for (i = 0; i < 1000; i++) {
+        name[0] = '~';
+        strcpy(name + 1, "MOVE");
+        name[5] = (char)('0' + i / 100);
+        name[6] = (char)('0' + i / 10 % 10);
+        name[7] = (char)('0' + i % 10);
+        strcpy(name + 8, ".$$$");
+        if (get_attr(aside) >= 0)
+            continue;
+        return dos_rename(to, aside);
+    }
+    return -1;
+}
+
+/*
+ * Moves FROM to TO: NULL, or why not. A file TO replaces is renamed aside
+ * first, and deleted only once FROM is in its place; if the move fails, it
+ * is renamed back. A copy is kept only once its source is deleted. (MS-DOS
+ * 6.22's MOVE deletes the file it replaces first, and reports [ok] when it
+ * copies a file it then cannot delete.)
+ */
 static const char *move_file(const char *from, const char *to)
 {
-    const char *why;
+    static char aside[PATHLEN];
+    const char *why = NULL;
+    int a, staged = 0;
 
     if (dos_rename(from, to) == 0)
         return NULL;
-    delete_file(to);
-    if (dos_rename(from, to) == 0)
-        return NULL;
-    why = copy_file(from, to);
-    if (why != NULL) {
-        dos_remove(to);
-        return why;
+    a = get_attr(to);
+    if (a >= 0 && !(a & _A_SUBDIR) && !is_device(to)) {
+        if (a & _A_RDONLY)
+            return "Unable to create destination";
+        if (set_aside(to, aside) < 0)
+            return "Unable to create destination";
+        staged = 1;
+        if (dos_rename(from, to) == 0)
+            goto moved;
     }
-    set_attr(from, 0);
-    delete_file(from);
+    why = copy_file(from, to);
+    if (why == NULL) {
+        a = get_attr(from);
+        set_attr(from, 0);
+        if (dos_remove(from) == 0)
+            goto moved;
+        /* The source is still there: the copy goes, not it. */
+        why = "Unable to delete source";
+        if (a > 0)
+            set_attr(from, (unsigned)a);
+        set_attr(to, 0);
+        dos_remove(to);
+    }
+    if (staged)
+        dos_rename(aside, to);
+    return why;
+moved:
+    if (staged) {
+        set_attr(aside, 0);
+        dos_remove(aside);
+    }
     return NULL;
 }
 

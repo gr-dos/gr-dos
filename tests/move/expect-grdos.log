@@ -34,5 +34,40 @@ D:\M\T19>EL
 errorlevel 1
 D:\M\T19>C:\DOS\SUBST E: /D
 
+D:\M\T19>MOVE B:\B.TXT D:\M\T19\SUB
+b:\b.txt => d:\m\t19\sub\b.txt 
+Write protect error writing drive B
+Abort, Retry, Fail?F
+
+Write protect error writing drive B
+Abort, Retry, Fail?F
+
+Write protect error writing drive B
+Abort, Retry, Fail?F
+
+Write protect error writing drive B
+Abort, Retry, Fail?F
+
+Write protect error writing drive B
+Abort, Retry, Fail?F
+[Unable to delete source]
+
+D:\M\T19>EL
+errorlevel 1
+D:\M\T19>IF EXIST SUB\B.TXT ECHO The copy is still there.
+
+D:\M\T19>COPY A.TXT A:\BIG.BIN > NUL
+
+D:\M\T19>MOVE ..\BIG\BIG.BIN A:\
+Overwrite a:\big.bin (Yes/No/All)?y
+d:\m\big\big.bin => a:\big.bin [Unable to write destination]
+
+D:\M\T19>EL
+errorlevel 1
+D:\M\T19>TYPE A:\BIG.BIN
+A.TXT
+
+D:\M\T19>DEL A:\BIG.BIN
+
 D:\M\T19>ECHO GRDOS-TEST-END
 GRDOS-TEST-END

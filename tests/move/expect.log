@@ -235,21 +235,6 @@ Abort, Retry, Fail?F
 errorlevel 1
 d:\m\big\big.bin => a:\big.bin [Unable to write destination]
 errorlevel 1
-== keys F F F F F F
-b:\b.txt => d:\m\t12\b.txt 
-Write protect error writing drive B
-Abort, Retry, Fail?F
-
-Write protect error writing drive B
-Abort, Retry, Fail?F
-
-Write protect error writing drive B
-Abort, Retry, Fail?F
-
-Write protect error writing drive B
-Abort, Retry, Fail?F
-[ok]
-errorlevel 0
 d:\m\t12\sub\b.txt => a:\b.txt [ok]
 errorlevel 0
 a:\b.txt => d:\m\t12\sub\b.txt [ok]

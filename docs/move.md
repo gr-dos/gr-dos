@@ -52,7 +52,8 @@ d:\letters\sigrid.txt => c:\letters\sigrid.txt [ok]
   `Overwrite NAME (Yes/No/All)?`. All stops the questions; No skips the
   file. A read-only destination is not replaced (`[Unable to create
   destination]`). A directory given as the new name of another replaces a
-  file of that name, as 6.22's does.
+  file of that name, as 6.22's does. The file replaced is kept until the
+  move is done ([Moving a file](#moving-a-file)).
 - **Questions** take Y or N (and A for All), in either case, then Enter;
   the key is shown, and other keys are ignored. Ctrl-Z is No. Ctrl-C ends
   MOVE through DOS (`Terminate batch job (Y/N)?` in a batch file). Keys
@@ -87,12 +88,12 @@ in order:
 ### Moving a file
 
 Within a drive MOVE renames the file (INT 21h 56h), which moves no data.
-If that fails because the destination exists, it deletes the destination
-(unless it is read-only) and renames again. If the rename still fails, as
-it does from one drive to another, MOVE copies the file:
+If that fails because the destination exists, MOVE renames the
+destination aside, in its own directory, as `~MOVEnnn.$$$`, and renames
+again. If the rename still fails, as it does from one drive to another,
+MOVE copies the file:
 
-1. It opens the source, and creates the destination (INT 21h 3Ch), which
-   replaces any file of that name.
+1. It opens the source, and creates the destination (INT 21h 3Ch).
 2. It copies the data through a 10 KB buffer (1 KB if memory is short). A
    write that writes fewer bytes than it was given, a full disk, is
    `[Unable to write destination]`; a read error, `[Unable to read
@@ -102,14 +103,30 @@ it does from one drive to another, MOVE copies the file:
    size of the source.
 4. Only then does it delete the source (its attributes cleared first, so
    that a read-only source can be deleted).
+5. Last, it deletes the file it replaced, renamed aside.
 
-If any step fails, the copy is deleted and the source kept, so a move
-never loses the only whole copy of a file. A source MOVE cannot delete,
-on a write-protected disk for example, stays where it is, and the move is
-still `[ok]`, as 6.22's is: then there are two copies.
+If any step fails, MOVE undoes the others: it deletes the part copied, or
+the copy, gives the source back its attributes, and renames the file it
+was to replace back. So a move never loses the only whole copy of a file,
+nor the file it was to replace. If MOVE is stopped part way (Abort at a
+critical error, or the machine turned off), a file it was replacing may
+be left as `~MOVEnnn.$$$`, in its directory.
 
-Where MOVE goes beyond 6.22's, for safety:
+Where MOVE goes beyond 6.22's, for safety, and differs from it:
 
+- **A source MOVE cannot delete**, after copying it, on a write-protected
+  disk for example, is `[Unable to delete source]`, errorlevel 1, and the
+  copy is deleted: the file was not moved. 6.22's MOVE says `[ok]`, and
+  leaves two copies.
+- **The file replaced.** 6.22's MOVE deletes it before it copies the
+  source, so a copy that fails, a full disk for example, loses it.
+  GR-DOS's keeps it, renamed aside, until the move is done, and renames it
+  back if the move fails. The disk it is on needs room for the new file
+  next to the old one, where 6.22's needs room for the new file only: a
+  file replaced by a larger one on a nearly full disk may not fit, and
+  then stays as it was.
+- **A destination MOVE did not make** is never deleted when a move fails;
+  6.22's deletes the destination whatever stopped the copy.
 - **The same file under two names.** 6.22's MOVE compares names as they
   are written, so `MOVE A.TXT E:\A.TXT`, with E: a SUBST of the current
   directory, deletes the destination, which is the source, and then
@@ -166,10 +183,13 @@ questions, and checks:
 - that D: and A: pass `fsck.fat`.
 
 On GR-DOS it then also types `tests/move/grdos.txt`'s commands, whose
-output must be `tests/move/expect-grdos.log`: a file under two names
-through SUBST, which 6.22's MOVE gets wrong (and 6.22's SUBST.EXE is not
-on the install), so it is GR-DOS's own reference, not 6.22's. Nothing
-there changes a file.
+output must be `tests/move/expect-grdos.log`, GR-DOS's own reference, not
+6.22's: where GR-DOS's MOVE differs from 6.22's. A file under two names
+through SUBST (6.22's SUBST.EXE is not on the install); a source on the
+write-protected B: that MOVE copies and cannot delete, whose copy must be
+gone; and a file on A: that MOVE fails to replace with one too large for
+A:, which must be kept. Each leaves the files as they were, so
+`files.txt` is still 6.22's.
 
 The cases: the parameters; renames and moves into directories; replacing,
 with and without questions; wildcards; commas; several files to a file,
@@ -194,7 +214,7 @@ AUTOEXEC.BAT expands Disk 2's MOVE.EX_ into `C:\DOS\MOVE.EXE` with Disk
 
 ## Size
 
-`MOVE.EXE` is 7,994 bytes (MS-DOS 6.22's is 18,319). It needs 14,832
+`MOVE.EXE` is 8,380 bytes (MS-DOS 6.22's is 18,319). It needs 14,832
 bytes loaded, a 4 KB stack included, and its 10 KB copy buffer, allocated
 only to copy a file to another drive: some 25 KB in all.
 
