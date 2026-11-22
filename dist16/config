@@ -19,7 +19,7 @@ exclude gr-dos/hello16 the template for gr-dos *16 programs, not a utility
 # The tico16 text editor, from another organization. It is on every boot
 # floppy as TICO.EXE, and the 360 KB disk's files are frozen (issue #17),
 # so it is pinned, and a release of it is taken only by changing tag= here.
-include tico-edit/tico16 tag=v0.02 required
+include tico-edit/tico16 tag=v0.03 required
 
 # SPROCKET.EXE, the DOS program of plicease/sprocket (issue #37): serial
 # file transfer and disk imaging, as client or server. The repository is
