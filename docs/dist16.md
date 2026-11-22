@@ -483,7 +483,7 @@ include gr-dos/libfoo16
   ([Shipping the .COM](#shipping-the-com)).
 - `include gr-dos/foo16 tag=v0.02` holds the program at that release. The
   report notes each newer one.
-- TICO is held at v0.03 this way, because it is on the frozen 360 KB
+- TICO is held at v0.04 this way, because it is on the frozen 360 KB
   floppy. It is also marked `required`, so if it cannot be included,
   `resolve` fails rather than dropping it.
 

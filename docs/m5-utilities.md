@@ -196,10 +196,10 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 
 | Image | Files | Bytes free |
 |---|---:|---:|
-| 360 KB | 17 | 27,648 |
-| 720 KB | 35 | 50,176 |
-| 1.2 MB | 50 | 350,208 |
-| 1.44 MB | 50 | 593,920 |
+| 360 KB | 17 | 25,600 |
+| 720 KB | 35 | 40,960 |
+| 1.2 MB | 50 | 340,992 |
+| 1.44 MB | 50 | 584,704 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's
