@@ -1,0 +1,66 @@
+Topic: GZIP
+Aliases: GUNZIP ZCAT
+Summary: Compresses and decompresses gzip files
+Origin: gzip16
+Group: command
+Files: GZIP.EXE
+
+Syntax
+  GZIP [options] [files]
+  GZIP -d [options] [files]
+
+  -d           Decompresses. There is no GUNZIP or ZCAT: use GZIP -d and
+               GZIP -dc.
+  -N           With -d, gives the file the name stored in it (see File
+               names). SET GZIP=-N makes it the default.
+  -c           Writes to standard output, and keeps the input file.
+  -t           Tests a compressed file.
+  -l           Lists a compressed file's sizes and ratio.
+  -f           Replaces an output file that exists, without asking.
+  -1 to -9     -1 compresses fastest, -9 best. The default is -6.
+  -v, -q       Says more, or nothing.
+  -r           Goes into the directories named, and those below them.
+  -h, -V, -L   Show the usage, the version or the license.
+
+  With no files, GZIP reads standard input and writes standard output.
+
+Examples
+  GZIP REPORT.TXT
+    Compresses REPORT.TXT to REPORT.TXZ, and deletes REPORT.TXT.
+  GZIP -dN REPORT.TXZ
+    Decompresses REPORT.TXZ, back to REPORT.TXT, and deletes REPORT.TXZ.
+  GZIP -c REPORT.TXT > REPORT.GZ
+    Compresses REPORT.TXT to REPORT.GZ, and keeps REPORT.TXT.
+  GZIP -dc BACKUP.GZ > BACKUP.TAR
+    Decompresses BACKUP.GZ, made on another computer, to BACKUP.TAR.
+  GZIP -t REPORT.TXZ
+    Tests REPORT.TXZ, with exit status 0 if it is sound.
+
+File names
+  DOS names are 8.3, so the suffix is z: REPORT.TXT becomes REPORT.TXZ,
+  AB.C becomes AB.CZ, and README becomes README.GZ. The original name is
+  kept inside the file, as gzip does on other computers.
+
+  Decompressing takes the suffix off, so BACKUP.GZ becomes BACKUP. But
+  GZIP -d REPORT.TXZ makes REPORT.TX: use -N, which gives back the name
+  stored in the file, REPORT.TXT. A long name made on another computer is
+  cut to 8.3: a-long-file-name.text becomes A-LONG-F.TEX.
+
+Notes
+  Without -f, GZIP asks before it replaces a file that exists, and waits
+  for an answer at the keyboard, even in a batch file. Use -f, or -c with
+  redirection. Messages, and -h, -V and -L, go to standard error.
+
+  The exit status is 0 when done, 1 after an error (a file not found, not
+  gzip data, a bad CRC, a truncated file, a full disk) and 2 after a
+  warning. After an error GZIP deletes the file it was writing and keeps
+  its input: a full disk leaves the original as it was.
+
+  Its files decompress with any gzip, and it decompresses what modern
+  gzip makes, of any size and with several members. It needs about 306 KB
+  of free conventional memory, and runs on an 8088.
+
+  GZIP.EXE is GNU gzip 1.2.4's own 16-bit MS-DOS program, as GNU released
+  it in 1993, unchanged, from github.com/gr-dos/gzip16. It is under the GNU
+  GPL version 2 or later, and is not GR-DOS's code: C:\DOS\SOURCES.TXT
+  says where its source is. It is in C:\DOS only, on no floppy.
