@@ -241,7 +241,9 @@ Windows, from the same project, there. At the same speed on both ends:
 
   SPROCKET CLIENT COM1 38400
     with "sprocket serve --port /dev/ttyUSB0 --baud 38400 --root DIR"
-    on the other computer, to browse DIR and get and put files;
+    on the other computer, to browse DIR and get files from it, read-only;
+    add --writable to that command to also put files there, which lets
+    this computer create and replace files in DIR;
   SPROCKET SERVER COM1 38400 C:\SHARE /W
     with "sprocket client --port /dev/ttyUSB0 --baud 38400" there, to
     share C:\SHARE, and let it send files to it;

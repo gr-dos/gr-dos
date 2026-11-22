@@ -12,7 +12,8 @@ Syntax
   baud         The line speed. The default is SPROCKET_BAUD, if it is set,
                else 9600.
   dir          The directory a server shares, with those below it.
-  /W           Lets the client send files to dir.
+  /W           Lets the client send files to dir. Without it, dir is
+               read-only and the client's put is refused.
   /D           Offers the BIOS floppy and hard disks for imaging,
                read-only.
   /1           Exits when the first client ends its session.
@@ -20,7 +21,8 @@ Syntax
 Examples
   SPROCKET CLIENT COM1 38400
     Calls a server on COM1 at 38400 baud, and gives a /> prompt for ls,
-    cd, get, put and the rest (type help there).
+    cd, get, put and the rest (type help there). put works only if the
+    server is writable.
   SPROCKET SERVER COM1 38400 C:\SHARE /W
     Shares C:\SHARE on COM1 at 38400 baud, and lets the client send
     files to it, until Esc is pressed.
@@ -35,12 +37,18 @@ With a modern computer
   and give it the same speed, for example:
 
     sprocket serve --port /dev/ttyUSB0 --baud 38400 --root ~/vintage
-      to share a directory, for SPROCKET CLIENT;
+      to share a directory, read-only, for SPROCKET CLIENT to get from;
+    sprocket serve --port /dev/ttyUSB0 --baud 38400 --root ~/vintage --writable
+      to also let SPROCKET CLIENT put files there;
     sprocket client --port /dev/ttyUSB0 --baud 38400
       to browse SPROCKET SERVER's directory;
     sprocket image --port /dev/ttyUSB0 --baud 38400 --list
       to list SPROCKET SERVER /D's disks (--device and --output image
       one).
+
+  sprocket serve is read-only unless given --writable, which lets the
+  DOS client create and replace files in the shared directory. Leave it
+  off unless files are to be sent from this computer.
 
 Notes
   The line is 8N1 with no flow control. A 4.77 MHz 8088 keeps up with
