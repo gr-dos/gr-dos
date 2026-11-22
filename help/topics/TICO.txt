@@ -16,7 +16,7 @@ Examples
     Edits the AUTOEXEC.BAT of the floppy in A:.
 
 Notes
-  TICO is the tico16 editor, version 0.02, from
+  TICO is the tico16 editor, version 0.04, from
   github.com/tico-edit/tico16, under the MIT license. It is not built
   from source here: GR-DOS ships the release's TICO.EXE, checked against
   a pinned checksum. Its keys are shown in its own help. TICO is on every

@@ -4,10 +4,12 @@
 # tree: the boot sector, IO.SYS, MSDOS.SYS and COMMAND.COM, then any further
 # FILEs into the root directory. Checks the result with scripts/check-image.
 #
-# usage: scripts/mkimage [--format 1440|1200|720|360] OUT.IMG SRCDIR [FILE...]
+# usage: scripts/mkimage [--format 2880|1440|1200|720|360] OUT.IMG SRCDIR [FILE...]
 #
 # --format picks the disk, by its size in KB (cylinders/heads/sectors):
 #
+#   2880  3.5" ED, 80/2/36, only to stage the CF install's files (MS-DOS
+#         4.00 has no 2.88 MB floppy; no image of it is released)
 #   1440  3.5" HD, 80/2/18 (the default)
 #   1200  5.25" HD, 80/2/15
 #   720   3.5" DD, 80/2/9
@@ -19,15 +21,15 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-usage="usage: $0 [--format 1440|1200|720|360] OUT.IMG SRCDIR [FILE...]"
+usage="usage: $0 [--format 2880|1440|1200|720|360] OUT.IMG SRCDIR [FILE...]"
 format=1440
 if [ "${1:-}" = --format ]; then
   format=${2:?$usage}
   shift 2
 fi
 case $format in
-  1440|1200|720|360) ;;
-  *) echo "$0: --format must be 1440, 1200, 720 or 360" >&2; exit 2 ;;
+  2880|1440|1200|720|360) ;;
+  *) echo "$0: --format must be 2880, 1440, 1200, 720 or 360" >&2; exit 2 ;;
 esac
 [ $# -ge 2 ] || { echo "$usage" >&2; exit 2; }
 img=$1

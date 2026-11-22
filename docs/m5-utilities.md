@@ -196,10 +196,10 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 
 | Image | Files | Bytes free |
 |---|---:|---:|
-| 360 KB | 17 | 27,648 |
-| 720 KB | 35 | 50,176 |
-| 1.2 MB | 50 | 350,208 |
-| 1.44 MB | 50 | 593,920 |
+| 360 KB | 17 | 25,600 |
+| 720 KB | 35 | 40,960 |
+| 1.2 MB | 50 | 340,992 |
+| 1.44 MB | 50 | 584,704 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's
@@ -216,13 +216,15 @@ and LCD.CPI (issue #24), PRINTER.SYS, 4201.CPI, 4208.CPI and 5202.CPI
 (issue #25), the other `*16` programs ([dist16.md](dist16.md), since
 issue #36) and AUTOEXEC.BAT. `scripts/deploy-cf` installs all of it but
 AUTOEXEC.BAT in `C:\DOS` (`build/linux/cf`). Its manifest is that of a
-1.44 MB image of the same files, so each file is stamped as on the
-floppies. The release ZIP's `BIN` has the same files.
+2.88 MB image of the same files (`scripts/mkimage --format 2880`, used
+only for this, since with EDIT.EXE they no longer fit on 1.44 MB), so
+each file is stamped as on the floppies. The release ZIP's `BIN` has the same files.
 
 ## Tests
 
 - **`make test-extras`** (`tests/extras`) boots a 1.44 MB image of
-  `ALL_FILES` with a blank, disposable 1.44 MB disk in B:. It runs each of
+  `ALL_FILES`, less the `*16` programs only `C:\DOS` has, with a blank,
+  disposable 1.44 MB disk in B:. It runs each of
   the 19 commands: their normal use, on B: where they write, and a bad
   switch, a missing file or a missing argument. It also checks what each
   resident one does when run again, and that MEM lists them. EXE2BIN

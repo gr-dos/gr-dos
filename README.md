@@ -88,7 +88,7 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `IO.SYS`, `MSDOS.SYS` (hidden, system, read-only), `COMMAND.COM` | ✓ | ✓ | ✓ |
 | `FORMAT.COM`, `SYS.COM`, `CHKDSK.COM`, `DISKCOPY.COM`, `FDISK.EXE` | ✓ | ✓ | ✓ |
 | `ATTRIB.EXE`, `MORE.COM`, `FIND.EXE`, `FC.EXE`, `DEBUG.COM`, `MEM.EXE`, `MODE.COM` | ✓ | ✓ | ✓ |
-| `TICO.EXE`, the tico16 text editor, v0.03 | ✓ | ✓ | ✓ |
+| `TICO.EXE`, the tico16 text editor, v0.04 | ✓ | ✓ | ✓ |
 | `XCOPY.EXE`, `COMP.COM`, `DISKCOMP.COM`, `LABEL.COM`, `TREE.COM`, `SORT.EXE`, `EDLIN.COM`, `PRINT.COM`, `ASSIGN.COM`, `RECOVER.COM` | | ✓ | ✓ |
 | `KEYB.COM`, with `COUNTRY.SYS` and `KEYBOARD.SYS` ([`docs/country-keyboard.md`](docs/country-keyboard.md)) | | ✓ | ✓ |
 | `BACKUP.COM`, `RESTORE.COM` ([`docs/backup-restore.md`](docs/backup-restore.md)) | | ✓ | ✓ |
@@ -191,7 +191,7 @@ gr-dos-VERSION/
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
 │   ├── MOVE.EXE      moves files and renames directories, as MS-DOS 6.22's
-│   ├── CAT.EXE, CRCSUM.EXE, DF.EXE, DIFF.EXE, GZIP.EXE, LESS.EXE, LS.EXE, MD5SUM.EXE, PATCH.EXE,
+│   ├── CAT.EXE, CRCSUM.EXE, DF.EXE, DIFF.EXE, EDIT.EXE, GZIP.EXE, LESS.EXE, LS.EXE, MD5SUM.EXE, PATCH.EXE,
 │   │   RETROFCH.EXE, TAR.EXE, TCL.EXE, TERM16.EXE, TRUNCATE.EXE, UNAME.COM, WHICH.COM (the *16 programs dist16/lock pins)
 │   ├── SPROCKET.EXE, SPROCKET.LIC   serial file transfer and disk imaging, and its license
 │   ├── SOURCES.TXT   only with a *16 program under the GPL or another

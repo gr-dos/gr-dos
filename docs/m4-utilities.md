@@ -22,7 +22,7 @@ to the larger ones; these are still the 360 KB disk's.
 | `DEBUG.COM` | `CMD/DEBUG` | `.EXE` as LINK writes it, then CONVERT | yes |
 | `MEM.EXE` | `CMD/MEM` (C) | Open Watcom C, `wlink` and libc16 | no |
 | `MODE.COM` | `CMD/MODE` | EXE2BIN | yes |
-| `TICO.EXE` | tico16 release v0.03, not built | | |
+| `TICO.EXE` | tico16 release v0.04, not built | | |
 | `AUTOEXEC.BAT` | `image/autoexec.bat` | | |
 
 EDLIN is left out: TICO.EXE replaces it. SPROCKET.EXE is on no floppy: it
@@ -357,7 +357,7 @@ unit's boundaries and their neighbours, the largest 32-bit size, and
 
 ## TICO.EXE
 
-`TICO.EXE` is `tico.exe` from the tico16 release v0.03. It is not compiled
+`TICO.EXE` is `tico.exe` from the tico16 release v0.04. It is not compiled
 here. `dist16/config` pins that release and marks it `required`, and
 `dist16/lock` pins the release's commit and the SHA-256 checksums of
 `tico.exe` and the `LICENSE` from that commit. The build fetches and checks

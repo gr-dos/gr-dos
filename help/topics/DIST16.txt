@@ -13,7 +13,8 @@ each a release of its own project, shipped unchanged. They are:
 TICO, the editor, from tico16, is the only one on the floppies (HELP
 TICO). SPROCKET, from github.com/plicease/sprocket, copies files and
 disk images over a serial line (HELP SPROCKET). GZIP, from gzip16, is
-GNU gzip 1.2.4's own MS-DOS program (HELP GZIP).
+GNU gzip 1.2.4's own MS-DOS program (HELP GZIP). EDIT, from edit16, is
+a full-screen editor with the menus and keys of MS-DOS EDIT (HELP EDIT).
 
 Help for each
   Most show their usage with --help after the name, and their release
