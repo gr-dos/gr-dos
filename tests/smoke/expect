@@ -20,7 +20,7 @@
 ^DEBUG    COM +\d+ 
 ^MEM      EXE +\d+ 
 ^MODE     COM +\d+ 
-^TICO     EXE +29702 
+^TICO     EXE +18378 
 ^AUTOEXEC BAT +\d+ 
 ^HELLO    COM +\d+ 
 ^ +16 File\(s\) +\d+ bytes free$

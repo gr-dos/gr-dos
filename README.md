@@ -88,7 +88,7 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `IO.SYS`, `MSDOS.SYS` (hidden, system, read-only), `COMMAND.COM` | ✓ | ✓ | ✓ |
 | `FORMAT.COM`, `SYS.COM`, `CHKDSK.COM`, `DISKCOPY.COM`, `FDISK.EXE` | ✓ | ✓ | ✓ |
 | `ATTRIB.EXE`, `MORE.COM`, `FIND.EXE`, `FC.EXE`, `DEBUG.COM`, `MEM.EXE`, `MODE.COM` | ✓ | ✓ | ✓ |
-| `TICO.EXE`, the tico16 text editor, v0.02 | ✓ | ✓ | ✓ |
+| `TICO.EXE`, the tico16 text editor, v0.03 | ✓ | ✓ | ✓ |
 | `XCOPY.EXE`, `COMP.COM`, `DISKCOMP.COM`, `LABEL.COM`, `TREE.COM`, `SORT.EXE`, `EDLIN.COM`, `PRINT.COM`, `ASSIGN.COM`, `RECOVER.COM` | | ✓ | ✓ |
 | `KEYB.COM`, with `COUNTRY.SYS` and `KEYBOARD.SYS` ([`docs/country-keyboard.md`](docs/country-keyboard.md)) | | ✓ | ✓ |
 | `BACKUP.COM`, `RESTORE.COM` ([`docs/backup-restore.md`](docs/backup-restore.md)) | | ✓ | ✓ |
