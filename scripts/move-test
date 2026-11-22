@@ -1,0 +1,456 @@
+#!/usr/bin/env perl
+
+use 5.042;
+use warnings;
+use File::Basename qw( dirname );
+use File::Temp qw( tempdir );
+use IO::Socket::UNIX;
+use IO::Select;
+use Time::HiRes qw( sleep time );
+use Digest::SHA qw( sha256_hex );
+use File::Find qw( find );
+
+# ABSTRACT: Test MOVE on a CF install and floppies, against MS-DOS 6.22's
+
+=head1 SYNOPSIS
+
+ scripts/move-test [--update --msdos622 DIR] OUTDIR
+
+=head1 DESCRIPTION
+
+Tests MOVE (issue #106, F<docs/move.md>) on a 512 MB CF install made by
+F<scripts/deploy-cf> in C<OUTDIR>, with an empty 1.44 MB floppy in drive
+A: and a write-protected one in B:, never on a block device.
+F<tests/move/mv.bat> runs from C:'s root, started by F<D:\AUTOEXEC.BAT>,
+with F<EL.BAT> (that of F<tests/join-subst>) in F<C:\DOS>.  It works on
+D:\M (FAT16), whose directories T01 to T20 each hold the same files, put
+there with mtools, and on A: and B: (FAT12).  It uses COMMAND.COM's own
+commands only, which give the same output on GR-DOS and on MS-DOS 6.22.
+
+QEMU is run here: COM1, which the batch file makes the console (CTTY AUX),
+is a socket, and MOVE's questions are answered.  A line C<== keys KEYS>
+gives the answers, one character each (C<^C> for Ctrl-C), to the
+"Overwrite NAME (Yes/No/All)?", "Make directory "NAME"? [yn]", DOS's
+"Abort, Retry, Fail?" and COMMAND.COM's "Terminate batch job (Y/N)?" that
+follow.  When F<mv.bat> ends, COMMAND.COM's
+prompt is on COM1, and the lines of F<tests/move/typed.txt> are typed at
+it, one at each prompt: those are commands not run from a batch file,
+which MOVE asks about by default.  C<== keys> lines there give answers
+too, and are not typed.  On GR-DOS, F<tests/move/grdos.txt>'s lines are
+typed then too, after C<ECHO == grdos>: the cases MS-DOS 6.22 cannot run
+with GR-DOS's programs, such as SUBST.  The clock starts at 2026-01-01
+12:00.
+
+What COM1 shows from C<GRDOS-TEST-BEGIN> to C<GRDOS-TEST-END>, carriage
+returns included, must be F<tests/move/expect.log>, byte for byte, with
+grdos.txt's part, from its prompt to the end, F<tests/move/expect-grdos.log>
+instead.  Then
+the FAT file systems of D: and A: must be sound (C<fsck.fat -n>), and their
+files and directories, D:\M's, A:'s and B:'s, must be those of
+F<tests/move/files.txt>: each file's attributes (C<mattrib>), date and time
+to the second, size and SHA-256, hidden files too, and each directory's
+attributes.
+
+With C<--update>, the test is run on MS-DOS 6.22 itself, and its output is
+written to F<expect.log> and F<files.txt> instead: C<make move-expect
+MSDOS622=DIR>.  C<DIR> holds the three 3.5" disks of the MS-DOS 6.22
+Upgrade, F<Disk1.img> to F<Disk3.img>.  C: gets 6.22's boot sector code,
+F<IO.SYS>, F<MSDOS.SYS> and F<COMMAND.COM> in place of GR-DOS's, and its
+F<AUTOEXEC.BAT> expands Disk 2's F<MOVE.EX_> with Disk 1's F<EXPAND.EXE>
+into F<C:\DOS\MOVE.EXE> before it calls F<D:\AUTOEXEC.BAT>.  The other
+programs in F<C:\DOS> are GR-DOS's, which the test does not run.
+Microsoft's files are never part of this repository.
+
+=cut
+
+my $root = dirname(dirname(__FILE__));
+my $tool = "$root/scripts/deploy-cf";
+my $tests = "$root/tests/move";
+my $begin = 'GRDOS-TEST-BEGIN';
+my $end = 'GRDOS-TEST-END';
+
+sub slurp ($path) {
+  open my $fh, '<:raw', $path or die "unable to read $path: $!";
+  local $/;
+  return scalar <$fh>;
+}
+
+sub spew ($path, $data) {
+  open my $fh, '>:raw', $path or die "unable to write $path: $!";
+  print $fh $data;
+  close $fh or die "unable to write $path: $!";
+}
+
+sub must (@cmd) {
+  say '+ ', join ' ', @cmd;
+  system(@cmd) == 0 or die "failed: @cmd\n";
+}
+
+sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
+
+# CRLF text, as DOS reads it.
+sub dos_text ($path) { slurp($path) =~ s/\r?\n/\r\n/gr }
+
+sub pattern ($seed, $n) {
+  my($x, $s) = ($seed, '');
+  for(1 .. $n / 4) {
+    $x = ($x * 1103515245 + 12345) % 2**31;
+    $s .= pack 'V', $x;
+  }
+  return $s;
+}
+
+# The files of each of D:\M\T01 to T20: name, contents, date and time (UTC,
+# as mtools reads it with TZ=UTC), attributes for mattrib.  SUB\B.TXT is in
+# the way of B.TXT, and SUB\ROX.TXT is read-only; DIR1 is a directory to
+# rename, with a subdirectory.
+my @set = (
+  [ 'A.TXT',          "A.TXT\r\n",                 '2025-03-01 10:00:00', '' ],
+  [ 'B.TXT',          "B.TXT, longer\r\n",         '2025-03-02 10:00:02', '' ],
+  [ 'C.TXT',          "C.TXT\r\n",                 '2025-03-03 10:00:04', '' ],
+  [ 'X.DAT',          pattern(2, 3000),            '2025-03-04 10:00:06', '' ],
+  [ 'Y.DAT',          pattern(3, 700),             '2025-03-05 10:00:08', '-a' ],
+  [ 'RO.TXT',         "RO.TXT\r\n",                '2025-03-06 10:00:10', '+r' ],
+  [ 'HID.TXT',        "HID.TXT\r\n",               '2025-03-07 10:00:12', '+h' ],
+  [ 'SYS.TXT',        "SYS.TXT\r\n",               '2025-03-08 10:00:14', '+s -a' ],
+  [ 'SUB/B.TXT',      "old SUB\\B.TXT\r\n",        '2024-01-01 09:00:00', '-a' ],
+  [ 'SUB/ROX.TXT',    "old SUB\\ROX.TXT\r\n",      '2024-01-02 09:00:00', '+r' ],
+  [ 'DIR1/IN.TXT',    "DIR1\\IN.TXT\r\n",          '2025-04-01 08:00:00', '' ],
+  [ 'DIR1/DEEP/IN2.TXT', "DIR1\\DEEP\\IN2.TXT\r\n", '2025-04-02 08:00:00', '' ],
+);
+
+my @files = (
+  (map { my $t = $_; map { [ "$t/$_->[0]", @$_[1 .. 3] ] } @set } map { sprintf 'T%02d', $_ } 1 .. 20),
+  [ 'BIG/BIG.BIN', pattern(1, 1600000), '2025-05-01 12:00:00', '' ],
+);
+
+# The files of DIR (::M on D:, :: on A:) of the FAT image IMG, a line each:
+# attributes, date and time (UTC), size, SHA-256 and name; and its
+# directories, with their attributes and a name ending in /, but not their
+# dates and times, which are when the test made them.
+sub listing ($img, $dir, $tmp) {
+  local $ENV{TZ} = 'UTC';
+  my %attr;
+  for(`mattrib -i '$img' -/ '$dir'`) {
+    chomp;
+    my($a, $name) = /^(.*?)::\/?(.*)$/ or die "move-test: mattrib: $_\n";
+    $attr{uc $name} = join('', $a =~ /[A-Z]/g) || '-';
+  }
+  system('rm', '-rf', $tmp) == 0 && system('mkdir', '-p', $tmp) == 0 or die "unable to create $tmp\n";
+  must('mcopy', '-s', '-m', '-n', '-i', $img, $dir eq '::' ? '::*' : $dir, $tmp)
+    if `mdir -b -i '$img' '$dir' 2>/dev/null` =~ /\S/;
+  my %lines;
+  find({ no_chdir => 1, wanted => sub {
+    return if $_ eq $tmp;
+    my $name = substr($_, length($tmp) + 1);
+    my $key = uc $name;
+    if(-d $_) {
+      $lines{"$key/"} = sprintf "%-4s %s/\n", $attr{$key} // '?', $key;
+      return;
+    }
+    my @t = gmtime((stat $_)[9]);
+    $lines{$key} = sprintf "%-4s %04d-%02d-%02d %02d:%02d:%02d %8d %s %s\n", $attr{$key} // '?',
+      $t[5] + 1900, $t[4] + 1, @t[3, 2, 1, 0], -s $_, sha256_hex(slurp($_)), $key;
+  } }, $tmp);
+  system('rm', '-rf', $tmp) == 0 or die "unable to remove $tmp\n";
+  return map { $lines{$_} } sort keys %lines;
+}
+
+# The answers of a == keys line: one for each question, separated by
+# spaces, each the keys typed for it, ^X for Ctrl-X (^M is Enter).
+sub answers ($list) {
+  return map { join '', map { /^\^(.)$/ ? chr(ord($1) & 0x1f) : $_ } /\^.|./g } split ' ', $list;
+}
+
+# C: made an MS-DOS 6.22 system disk, from the 6.22 Upgrade's disks in DIR
+# (see the description above).
+sub msdos622 ($img, $sys_start, $c, $dir, $out) {
+  my($disk1, $disk2) = map { "$dir/Disk$_.img" } 1, 2;
+  -f $_ or die "move-test: no $_\n" for $disk1, $disk2;
+  my $ms = "$out/msdos622";
+  system('mkdir', '-p', $ms) == 0 or die "unable to create $ms\n";
+  must('mcopy', '-n', '-i', $disk1, "::$_", "$ms/$_") for qw( IO.SYS MSDOS.SYS COMMAND.COM EXPAND.EXE );
+  must('mcopy', '-n', '-i', $disk2, '::MOVE.EX_', "$ms/MOVE.EX_");
+  # IO.SYS and MSDOS.SYS must be the first two entries of the root and
+  # IO.SYS's clusters the first ones: deleted, GR-DOS's leave both free.
+  must('mattrib', '-i', $c, '-r', '-s', '-h', '::IO.SYS', '::MSDOS.SYS');
+  must('mdel', '-i', $c, '::IO.SYS', '::MSDOS.SYS');
+  system('mdel', '-i', $c, '::DOS/MOVE.EXE') if `mdir -b -i '$c' ::DOS/MOVE.EXE 2>/dev/null` =~ /\S/;
+  must('mcopy', '-i', $c, "$ms/IO.SYS", '::IO.SYS');
+  must('mcopy', '-i', $c, "$ms/MSDOS.SYS", '::MSDOS.SYS');
+  must('mattrib', '-i', $c, '+r', '+s', '+h', '::IO.SYS', '::MSDOS.SYS');
+  my @root = `mdir -a -b -i '$c' ::`;
+  die "move-test: C:'s root does not start with IO.SYS and MSDOS.SYS\n"
+    unless @root >= 2 && $root[0] =~ /IO\.SYS/i && $root[1] =~ /MSDOS\.SYS/i;
+  my $fat = `mshowfat -i '$c' ::IO.SYS`;
+  die "move-test: IO.SYS is not in clusters 2 on: $fat" unless $fat =~ /<2-\d+>\s*$/;
+  must('mcopy', '-o', '-i', $c, "$ms/COMMAND.COM", '::COMMAND.COM');
+  must('mcopy', '-o', '-i', $c, "$ms/$_", "::DOS/$_") for qw( EXPAND.EXE MOVE.EX_ );
+  spew("$ms/CONFIG.SYS", "FILES=20\r\nBUFFERS=20\r\n");
+  spew("$ms/AUTOEXEC.BAT", join '', map { "$_\r\n" } '@ECHO OFF', 'PROMPT $P$G', 'PATH C:\\DOS',
+    'C:\\DOS\\EXPAND C:\\DOS\\MOVE.EX_ C:\\DOS\\MOVE.EXE > NUL', 'IF EXIST D:\\AUTOEXEC.BAT CALL D:\\AUTOEXEC.BAT');
+  must('mcopy', '-o', '-i', $c, "$ms/$_", "::$_") for qw( CONFIG.SYS AUTOEXEC.BAT );
+  # The boot sector: 6.22's jump, OEM name and code, C:'s BPB.
+  open my $bfh, '<:raw', $disk1 or die "unable to read $disk1: $!";
+  sysread $bfh, my $ms_boot, 512;
+  close $bfh;
+  open my $fh, '+<:raw', $img or die "unable to open $img: $!";
+  sysseek $fh, $sys_start * 512, 0;
+  sysread $fh, my $boot, 512;
+  substr($boot, 0, 11) = substr($ms_boot, 0, 11);
+  substr($boot, 0x3e) = substr($ms_boot, 0x3e);
+  sysseek $fh, $sys_start * 512, 0;
+  syswrite $fh, $boot;
+  close $fh;
+  system('rm', '-rf', $ms) == 0 or die "unable to remove $ms\n";
+}
+
+sub floppy ($path, $serial) {
+  open my $fh, '>', $path or die "unable to create $path: $!";
+  truncate $fh, 1474560 or die "truncate: $!";
+  close $fh;
+  must('mformat', '-i', $path, '-f', 1440, '-N', $serial, '::');
+}
+
+sub main (@args) {
+  my %opt;
+  while(@args && $args[0] =~ /^--/) {
+    my $o = shift @args;
+    if($o eq '--update') { $opt{update} = 1 }
+    elsif($o eq '--msdos622') { $opt{msdos622} = shift @args }
+    else { die "unknown option $o\n" }
+  }
+  my($out) = @args;
+  die "usage: $0 [--update --msdos622 DIR] OUTDIR\n" unless defined $out && @args == 1;
+  die "--update needs --msdos622\n" if $opt{update} && !$opt{msdos622};
+  die "--msdos622 is for --update\n" if !$opt{update} && $opt{msdos622};
+  my $dist = "$root/build/linux/cf";
+  -f "$dist/manifest.txt" or die "$dist: no distribution (run make)\n";
+  system('rm', '-rf', $out) == 0 && system('mkdir', '-p', $out) == 0 or die "unable to create $out\n";
+
+  my $img = "$out/disk.img";
+  open my $fh, '>', $img or die "unable to create $img: $!";
+  truncate $fh, 993 * 16 * 63 * 512 or die "truncate: $!";
+  close $fh;
+  must($tool, 'provision', '--confirm', 'disk.img', $img);
+  # The layout record, sector 1.
+  open my $rfh, '<:raw', $img or die "unable to read $img: $!";
+  sysseek $rfh, 512, 0;
+  sysread $rfh, my $rec, 512;
+  close $rfh;
+  my($sys_start) = $rec =~ /^system (\d+) \d+$/m;
+  my($d_start, $d_len) = $rec =~ /^logical \d+ (\d+) (\d+)$/m;
+  die "no layout record\n" unless $sys_start && $d_start && $d_len;
+  my $c = at($img, $sys_start);
+  my $d = at($img, $d_start);
+
+  spew("$out/MV.BAT", dos_text("$tests/mv.bat"));
+  spew("$out/EL.BAT", dos_text("$root/tests/join-subst/el.bat"));
+  spew("$out/AUTOEXEC.BAT", "C:\\MV\r\n");
+  must('mcopy', '-o', '-i', $c, "$out/MV.BAT", '::MV.BAT');
+  must('mcopy', '-o', '-i', $c, "$out/EL.BAT", '::DOS/EL.BAT');
+  must('mcopy', '-o', '-i', $d, "$out/AUTOEXEC.BAT", '::AUTOEXEC.BAT');
+  msdos622($img, $sys_start, $c, $opt{msdos622}, $out) if $opt{update};
+  # D:\M, its files' times as UTC, which mtools then writes unchanged.
+  {
+    local $ENV{TZ} = 'UTC';
+    my $files = "$out/files";
+    my %dirs;
+    must('mmd', '-i', $d, '::M');
+    for my $f (@files) {
+      my($name, $data, $when, $attr) = @$f;
+      my $path = "$files/$name";
+      system('mkdir', '-p', dirname($path)) == 0 or die "unable to create $path\n";
+      spew($path, $data);
+      must('touch', '-d', "$when UTC", $path);
+      my @parts = split m{/}, "M/$name";
+      for my $i (2 .. $#parts) {
+        my $dir = join '/', @parts[0 .. $i - 1];
+        next if $dirs{$dir}++;
+        must('mmd', '-i', $d, "::$dir");
+      }
+      must('mcopy', '-m', '-i', $d, $path, "::M/$name");
+      must('mattrib', '-i', $d, (split ' ', $attr), "::M/$name") if $attr;
+    }
+    system('rm', '-rf', $files) == 0 or die "unable to remove $files\n";
+  }
+
+  my $a_img = "$out/a.img";
+  floppy($a_img, '21212121');
+  my $b_img = "$out/b.img";
+  floppy($b_img, '21212122');
+  {
+    local $ENV{TZ} = 'UTC';
+    spew("$out/B.TXT", "B:'s B.TXT\r\n");
+    must('touch', '-d', '2025-01-01 12:00:00 UTC', "$out/B.TXT");
+    must('mcopy', '-m', '-i', $b_img, "$out/B.TXT", '::B.TXT');
+    unlink "$out/B.TXT";
+  }
+
+  # What is typed at the prompt when mv.bat ends; on GR-DOS, then grdos.txt.
+  my @typed = grep { /\S/ && !/^#/ } split /\r?\n/, slurp("$tests/typed.txt");
+  push @typed, 'ECHO == grdos', grep { /\S/ && !/^#/ } split /\r?\n/, slurp("$tests/grdos.txt")
+    unless $opt{update};
+
+  my $tmp = tempdir('move-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+  my $serial_sock = "$tmp/serial";
+  my @cmd = (
+    'qemu-system-i386',
+    -display => 'none',
+    -m       => 4,
+    '-no-reboot',
+    -drive   => "file=$img,if=none,id=hd0,format=raw",
+    -device  => 'ide-hd,drive=hd0,bus=ide.0,unit=0,cyls=993,heads=16,secs=63,bios-chs-trans=none',
+    -drive   => "file=$a_img,if=floppy,index=0,format=raw",
+    -drive   => "file=$b_img,if=floppy,index=1,format=raw,readonly=on",
+    -boot    => 'c',
+    -rtc     => 'base=2026-01-01T12:00:00',
+    -serial  => "unix:$serial_sock,server=on,wait=on",
+    -monitor => 'none',
+  );
+  my $pid = fork // die "fork: $!";
+  if($pid == 0) {
+    open STDOUT, '>', "$out/qemu.log" or die "unable to write $out/qemu.log: $!";
+    open STDERR, '>&', \*STDOUT or die "dup: $!";
+    exec @cmd or die "exec qemu-system-i386: $!";
+  }
+  my $serial;
+  for(1 .. 100) {
+    $serial = IO::Socket::UNIX->new(Peer => $serial_sock);
+    last if $serial;
+    sleep 0.1;
+  }
+  die "move-test: no QEMU socket $serial_sock\n" unless $serial;
+
+  # COM1: what the batch file shows, MOVE's questions answered, and, at
+  # the prompt when it ends, typed.txt's commands.
+  my $question = qr/\(Yes\/No\/All\)\?|\? \[yn\] |Abort, Retry, Fail\?|Terminate batch job \(Y\/N\)\?/;
+  my $prompt = qr/[A-Z]:\\[^\r\n>]*>/;
+  my($log, $done, $typing, @keys, $last) = ('', 0, 0);
+  my($scanned, $quiet) = (0, time);
+  my $sel = IO::Select->new($serial);
+  my $deadline = time + 600;
+  open my $raw, '>:raw', "$out/serial.log" or die "unable to write $out/serial.log: $!";
+  $raw->autoflush(1);
+  STDOUT->autoflush(1);
+  my $send = sub ($s) {
+    sleep 0.5;
+    syswrite $serial, $s;
+  };
+  while(time < $deadline) {
+    if($sel->can_read(0.25)) {
+      my $n = sysread $serial, my $chunk, 65536;
+      last unless $n;
+      print $raw $chunk;
+      $log .= $chunk;
+      $quiet = time;
+    }
+    # A key sent before MOVE flushed DOS's input is lost: while nothing
+    # comes after the question, it is sent again.
+    elsif(defined $last && $log =~ /(?:$question)\z/ && time - $quiet > 3) {
+      say 'move-test: the key again';
+      syswrite $serial, $last;
+      $quiet = time;
+    }
+    last if waitpid($pid, 1) == $pid;
+    # Complete lines, a question waiting for its answer at the end, and,
+    # once typing, the prompt at the start of a line.
+    while(substr($log, $scanned) =~ /\A(.*?)(\r?\n|$question)/s
+      || ($typing && substr($log, $scanned) =~ /\A()($prompt)\z/)) {
+      my($line, $eol) = ($1, $2);
+      $scanned += length($1) + length($2);
+      if($line =~ /^== keys (.+?)\r?$/) { @keys = answers($1) }
+      elsif($line =~ /^== typed$/) { $typing = 1 }
+      elsif($line =~ /^\Q$end\E\r?$/) { $done = 1 }
+      # BIOS INT 14h gives up on COM1 when QEMU is slow to take its output,
+      # as on a busy host: the output is incomplete, and DOS asks forever.
+      elsif($line =~ /error writing device AUX/) {
+        kill 'TERM', $pid;
+        waitpid $pid, 0;
+        die "move-test: DOS could not write to COM1 (a busy host?); see $out/serial.log\n";
+      }
+      if($eol =~ /^[A-Z]:\\/) {
+        # The prompt: the next command, after any == keys lines.
+        while(@typed && $typed[0] =~ /^== keys (.+)$/) {
+          @keys = answers($1);
+          shift @typed;
+        }
+        my $line = @typed ? shift @typed : "ECHO $end";
+        undef $last;
+        $send->("$line\r");
+      }
+      elsif($eol =~ /yn|Yes|Fail|Terminate/) {
+        die "move-test: no key left for the question: $line$eol\n" unless @keys;
+        $last = shift @keys;
+        $send->($last);
+      }
+    }
+    last if $done;
+  }
+  kill 'TERM', $pid;
+  waitpid $pid, 0;
+  close $raw;
+
+  my($got) = $log =~ /^(\Q$begin\E\r\n.*?^\Q$end\E\r\n)/ms;
+  die "move-test: no $begin to $end on COM1\n" unless defined $got;
+  # A secondary COMMAND.COM's banner, which is the system's own, is left out.
+  $got =~ s/(>C:\\COMMAND\r*\n).*?(?=^[A-Z]:\\[^\r\n>]*>)/$1/gms;
+  # On GR-DOS, grdos.txt's part, from its prompt: what 6.22's has instead
+  # is the end.
+  my $grdos;
+  unless($opt{update}) {
+    my $rest;
+    ($got, $grdos, $rest) = $got =~ /\A(.*\n)([A-Z]:\\[^\r\n>]*>)(ECHO == grdos\r*\n.*)\z/s
+      or die "move-test: no == grdos on COM1\n";
+    $got .= "${grdos}ECHO $end\r\r\n$end\r\n";
+    $grdos .= $rest;
+    spew("$out/output-grdos.log", $grdos);
+  }
+  spew("$out/output.log", $got);
+
+  # The file systems MOVE wrote, as DOS left them.
+  my $ok = 1;
+  must('dd', "if=$img", "of=$out/d.img", 'bs=512', "skip=$d_start", "count=$d_len", 'status=none');
+  for my $fs ([ 'D:', "$out/d.img" ], [ 'A:', $a_img ]) {
+    my($name, $path) = @$fs;
+    next if system('fsck.fat', '-n', $path) == 0;
+    say "move-test: FAILED, $name is not sound (fsck.fat -n $path)";
+    $ok = 0;
+  }
+
+  my $files = join '', (map { "D: $_" } listing("$out/d.img", '::M', "$out/list")),
+    (map { "A: $_" } listing($a_img, '::', "$out/list")), (map { "B: $_" } listing($b_img, '::', "$out/list"));
+  spew("$out/files.txt", $files);
+
+  if($opt{update}) {
+    die "move-test: the file systems are not sound\n" unless $ok;
+    spew("$tests/expect.log", $got);
+    spew("$tests/files.txt", $files);
+    say "move-test: wrote $tests/expect.log and $tests/files.txt";
+    unlink $img, "$out/d.img";
+    return 0;
+  }
+  if($got ne slurp("$tests/expect.log")) {
+    system("diff -u $tests/expect.log $out/output.log | tr -d '\\r'");
+    say 'move-test: FAILED, not the output of expect.log';
+    $ok = 0;
+  }
+  if($grdos ne slurp("$tests/expect-grdos.log")) {
+    system("diff -u $tests/expect-grdos.log $out/output-grdos.log | tr -d '\\r'");
+    say 'move-test: FAILED, not the output of expect-grdos.log';
+    $ok = 0;
+  }
+  if($files ne slurp("$tests/files.txt")) {
+    system('diff', '-u', "$tests/files.txt", "$out/files.txt");
+    say 'move-test: FAILED, not the files of files.txt';
+    $ok = 0;
+  }
+  if($ok) {
+    say 'move-test: passed, the same output as expect.log, the same files as files.txt, and sound file systems';
+    unlink $img, "$out/d.img";
+    return 0;
+  }
+  return 1;
+}
+
+exit main(@ARGV);

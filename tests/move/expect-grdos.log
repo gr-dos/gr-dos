@@ -1,0 +1,38 @@
+D:\M\T20>ECHO == grdos
+== grdos
+
+D:\M\T20>CD \M\T19
+
+D:\M\T19>C:\DOS\SUBST E: D:\M\T19
+
+D:\M\T19>MOVE A.TXT E:\A.TXT
+Source and destination are the same, d:\m\t19\a.txt
+
+D:\M\T19>EL
+errorlevel 1
+D:\M\T19>MOVE E:\B.TXT D:B.TXT
+Source and destination are the same, e:\b.txt
+
+D:\M\T19>EL
+errorlevel 1
+D:\M\T19>MOVE *.DAT E:\
+Source and destination are the same, d:\m\t19\x.dat
+Source and destination are the same, d:\m\t19\y.dat
+
+D:\M\T19>EL
+errorlevel 1
+D:\M\T19>MOVE E:X.DAT,E:Y.DAT D:\M\T19
+Source and destination are the same, e:\x.dat
+Source and destination are the same, e:\y.dat
+
+D:\M\T19>EL
+errorlevel 1
+D:\M\T19>MOVE DIR1 E:\DIR1
+d:\m\t19\dir1 => e:\dir1\dir1 [Unable to open source]
+
+D:\M\T19>EL
+errorlevel 1
+D:\M\T19>C:\DOS\SUBST E: /D
+
+D:\M\T19>ECHO GRDOS-TEST-END
+GRDOS-TEST-END

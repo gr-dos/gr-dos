@@ -1,0 +1,459 @@
+GRDOS-TEST-BEGIN
+== T01: parameters
+Required parameter missing
+errorlevel 1
+Required parameter missing
+errorlevel 1
+Invalid switch - X
+errorlevel 1
+Too many parameters - SUB
+errorlevel 1
+Too many parameters - SUB
+errorlevel 1
+Required parameter missing
+errorlevel 1
+Invalid switch - Y/-Y
+errorlevel 1
+d:\m\t01\a.txt => d:\m\t01\sub\a.txt [ok]
+errorlevel 0
+Required parameter missing
+errorlevel 1
+Required parameter missing
+errorlevel 1
+errorlevel 0
+errorlevel 0
+d:\m\t01\b.txt => d:\m\t01\b2.txt [ok]
+errorlevel 0
+== T02: a file renamed, into a directory, with a new name there
+d:\m\t02\a.txt => d:\m\t02\new.txt [ok]
+errorlevel 0
+d:\m\t02\b.txt => d:\m\t02\sub\newb.txt [ok]
+errorlevel 0
+d:\m\t02\c.txt => d:\m\t02\sub\c.txt [ok]
+errorlevel 0
+d:\m\t02\x.dat => d:\m\t02\sub\x.dat [ok]
+errorlevel 0
+d:\m\t02\y.dat => d:\m\t02\sub\lower.dat [ok]
+errorlevel 0
+d:\m\t02\ro.txt => d:\m\t02\noext [ok]
+errorlevel 0
+d:\m\t02\sub\rox.txt => d:\m\t02\longnamexyz.text [ok]
+errorlevel 0
+== T03: replacing a file, from a batch file: no question, then /-Y
+d:\m\t03\b.txt => d:\m\t03\sub\b.txt [ok]
+errorlevel 0
+== keys n^M
+Overwrite d:\m\t03\sub\b.txt (Yes/No/All)?n
+errorlevel 0
+== keys Y^M
+Overwrite d:\m\t03\sub\b.txt (Yes/No/All)?y
+d:\m\t03\a.txt => d:\m\t03\sub\b.txt [ok]
+errorlevel 0
+== keys x^MA^M
+Overwrite d:\m\t03\sub\b.txt (Yes/No/All)?a
+d:\m\t03\c.txt => d:\m\t03\sub\b.txt [ok]
+errorlevel 0
+== T04: wildcards
+d:\m\t04\x.dat => d:\m\t04\sub\x.dat [ok]
+d:\m\t04\y.dat => d:\m\t04\sub\y.dat [ok]
+errorlevel 0
+d:\m\t04\a.txt => d:\m\t04\sub\a.txt [ok]
+d:\m\t04\b.txt => d:\m\t04\sub\b.txt [ok]
+d:\m\t04\c.txt => d:\m\t04\sub\c.txt [ok]
+errorlevel 0
+d:\m\t04\ro.txt => d:\m\t04\sub\ro.txt [ok]
+Cannot move hid.txt - Permission denied
+Cannot move sys.txt - Permission denied
+errorlevel 1
+Cannot move *.NO - No such file or directory
+errorlevel 1
+d:\m\t04\dir1\in.txt => d:\m\t04\dir1\deep\in.txt [ok]
+d:\m\t04\dir1\deep => d:\m\t04\dir1\deep\deep [Unable to open source]
+errorlevel 1
+== T05: several files, separated by commas
+d:\m\t05\a.txt => d:\m\t05\sub\a.txt [ok]
+d:\m\t05\x.dat => d:\m\t05\sub\x.dat [ok]
+d:\m\t05\y.dat => d:\m\t05\sub\y.dat [ok]
+errorlevel 0
+d:\m\t05\b.txt => d:\m\t05\sub\b.txt [ok]
+d:\m\t05\c.txt => d:\m\t05\sub\c.txt [ok]
+errorlevel 0
+d:\m\t05\sub\a.txt => d:\m\t05\a.txt [ok]
+Cannot move NOPE.TXT - No such file or directory
+d:\m\t05\sub\x.dat => d:\m\t05\x.dat [ok]
+errorlevel 1
+d:\m\t05\sub\y.dat => d:\m\t05\y.dat [ok]
+d:\m\t05\sub\c.txt => d:\m\t05\c.txt [ok]
+d:\m\t05\sub\b.txt => d:\m\t05\b.txt [ok]
+errorlevel 0
+d:\m\t05\ro.txt => d:\m\t05\sub\ro.txt [ok]
+d:\m\t05\dir1\in.txt => d:\m\t05\sub\in.txt [ok]
+d:\m\t05\x.dat => d:\m\t05\sub\x.dat [ok]
+d:\m\t05\y.dat => d:\m\t05\sub\y.dat [ok]
+errorlevel 0
+== T06: several files to one, and to a directory that is not there
+Cannot move multiple files to a single file
+errorlevel 1
+Cannot move multiple files to a single file
+errorlevel 1
+d:\m\t06\a.txt => d:\m\t06\newdir\a.txt [ok]
+d:\m\t06\b.txt => d:\m\t06\newdir\b.txt [ok]
+errorlevel 0
+d:\m\t06\x.dat => d:\m\t06\newdat\x.dat [ok]
+d:\m\t06\y.dat => d:\m\t06\newdat\y.dat [ok]
+errorlevel 0
+d:\m\t06\c.txt => d:\m\t06\newc [ok]
+errorlevel 0
+d:\m\t06\ro.txt => d:\m\t06\new1\new2 [Unable to create destination]
+errorlevel 1
+d:\m\t06\sub\b.txt => d:\m\t06\new3\new4\b.txt [ok]
+d:\m\t06\sub\rox.txt => d:\m\t06\new3\new4\rox.txt [ok]
+errorlevel 0
+== keys n^M
+Make directory "d:\m\t06\newa"? [yn] n
+Cannot move multiple files to a single file
+errorlevel 1
+== keys xy^M
+Make directory "d:\m\t06\newa"? [yn] y
+d:\m\t06\dir1\in.txt => d:\m\t06\newa\in.txt [ok]
+d:\m\t06\dir1\deep\in2.txt => d:\m\t06\newa\in2.txt [ok]
+errorlevel 0
+== T07: a file onto itself
+Source and destination are the same, d:\m\t07\a.txt
+errorlevel 1
+Source and destination are the same, d:\m\t07\a.txt
+errorlevel 1
+Source and destination are the same, d:\m\t07\a.txt
+errorlevel 1
+Source and destination are the same, d:\m\t07\a.txt
+errorlevel 1
+Source and destination are the same, d:\m\t07\a.txt
+Source and destination are the same, d:\m\t07\b.txt
+Source and destination are the same, d:\m\t07\c.txt
+Source and destination are the same, d:\m\t07\ro.txt
+Cannot move hid.txt - Permission denied
+Cannot move sys.txt - Permission denied
+errorlevel 1
+Source and destination are the same, d:\m\t07\sub\b.txt
+errorlevel 1
+d:\m\t07\b.txt => d:\m\t07\sub\b.txt [ok]
+Cannot move B.TXT - No such file or directory
+errorlevel 1
+== T08: missing files, directories and drives
+Cannot move NOPE.TXT - No such file or directory
+errorlevel 1
+Cannot move NOPE\*.TXT - No such file or directory
+errorlevel 1
+d:\m\t08\a.txt => d:\m\t08\nope\x\y.txt [Unable to create destination]
+errorlevel 1
+Cannot move q:\ - Invalid Drive
+errorlevel 1
+Cannot move q:A.TXT - No such file or directory
+errorlevel 1
+d:\m\t08\b.txt => d:\m\t08\nope\x\b.txt [ok]
+d:\m\t08\c.txt => d:\m\t08\nope\x\c.txt [ok]
+errorlevel 0
+d:\m\t08\x.dat => d:\m\t08\nul [Unable to set destination attributes]
+errorlevel 1
+== T09: attributes
+d:\m\t09\ro.txt => d:\m\t09\sub\ro.txt [ok]
+errorlevel 0
+Cannot move hid.txt - Permission denied
+errorlevel 1
+Cannot move sys.txt - Permission denied
+errorlevel 1
+d:\m\t09\a.txt => d:\m\t09\sub\rox.txt [Unable to create destination]
+errorlevel 1
+d:\m\t09\a.txt => d:\m\t09\sub\a.txt [ok]
+d:\m\t09\b.txt => d:\m\t09\sub\b.txt [ok]
+d:\m\t09\c.txt => d:\m\t09\sub\c.txt [ok]
+Cannot move hid.txt - Permission denied
+Cannot move sys.txt - Permission denied
+errorlevel 1
+== T10: directories
+d:\m\t10\dir1 => d:\m\t10\dir2 [ok]
+errorlevel 0
+d:\m\t10\dir2 => d:\m\t10\sub\dir3 [Unable to open source]
+errorlevel 1
+d:\m\t10\dir2 => d:\m\t10\sub\dir2 [Unable to open source]
+errorlevel 1
+Cannot move dir2 - Permission denied
+errorlevel 1
+d:\m\t10\dir2 => a:\dir [Unable to open source]
+errorlevel 1
+Cannot move DIR2\ - No such file or directory
+errorlevel 1
+d:\m\t10\dir2\deep => d:\m\t10\dir2\deeper [ok]
+errorlevel 0
+d:\m\t10\dir2 => d:\m\t10\dir5 [ok]
+errorlevel 0
+d:\m\t10\dir5 => d:\m\t10\dir6 [ok]
+errorlevel 0
+d:\m\t10\dir6 => d:\m\t10\sub\dir7 [Unable to open source]
+errorlevel 1
+d:\m\t10\a.txt => d:\m\t10\dir6\a.txt [ok]
+errorlevel 0
+d:\m\t10\dir6 => d:\m\t10\dir6\dir6 [Unable to open source]
+errorlevel 1
+d:\m\t10\dir6 => d:\m\t10\dir6x [ok]
+errorlevel 0
+d:\m\t10\dir6x => d:\m\t10\b.txt [ok]
+errorlevel 0
+d:\m\t11\dir1 => d:\m\t11\dirx [ok]
+errorlevel 0
+d:\m\t11\dirx => d:\m\t11\sub\dirx [Unable to open source]
+d:\m\t11\c.txt => d:\m\t11\sub\c.txt [ok]
+errorlevel 1
+Source and destination are the same, d:\m\t11\dirx\deep
+d:\m\t11\a.txt => d:\m\t11\dirx\a.txt [ok]
+errorlevel 1
+Source and destination are the same, d:\m\t11\dirx
+errorlevel 1
+== T12: to another drive
+d:\m\t12\a.txt => a:\a.txt [ok]
+errorlevel 0
+d:\m\t12\b.txt => a:\b.txt [ok]
+d:\m\t12\ro.txt => a:\ro.txt [ok]
+errorlevel 0
+d:\m\t12\c.txt => a:\new.txt [ok]
+errorlevel 0
+Cannot move hid.txt - Permission denied
+Cannot move sys.txt - Permission denied
+errorlevel 1
+a:\new.txt => d:\m\t12\new.txt [ok]
+errorlevel 0
+d:\m\t12\x.dat => a:\subdir [ok]
+errorlevel 0
+d:\m\t12\dir1\in.txt => a:\in\in.txt [ok]
+d:\m\t12\dir1\deep => a:\in\deep [Unable to open source]
+errorlevel 1
+== keys F
+d:\m\t12\y.dat => b:\y.dat 
+Write protect error writing drive B
+Abort, Retry, Fail?F
+[Unable to create destination]
+errorlevel 1
+d:\m\big\big.bin => a:\big.bin [Unable to write destination]
+errorlevel 1
+== keys F F F F F F
+b:\b.txt => d:\m\t12\b.txt 
+Write protect error writing drive B
+Abort, Retry, Fail?F
+
+Write protect error writing drive B
+Abort, Retry, Fail?F
+
+Write protect error writing drive B
+Abort, Retry, Fail?F
+
+Write protect error writing drive B
+Abort, Retry, Fail?F
+[ok]
+errorlevel 0
+d:\m\t12\sub\b.txt => a:\b.txt [ok]
+errorlevel 0
+a:\b.txt => d:\m\t12\sub\b.txt [ok]
+a:\ro.txt => d:\m\t12\sub\ro.txt [ok]
+errorlevel 0
+== T13: COPYCMD
+== keys n^M
+Overwrite d:\m\t13\sub\b.txt (Yes/No/All)?n
+errorlevel 0
+d:\m\t13\a.txt => d:\m\t13\sub\b.txt [ok]
+errorlevel 0
+== keys N^M
+Overwrite d:\m\t13\sub\b.txt (Yes/No/All)?n
+errorlevel 0
+d:\m\t13\b.txt => d:\m\t13\sub\b.txt [ok]
+errorlevel 0
+d:\m\t13\c.txt => d:\m\t13\sub\b.txt [ok]
+errorlevel 0
+== keys y^M
+Overwrite d:\m\t13\sub\b.txt (Yes/No/All)?y
+d:\m\t13\x.dat => d:\m\t13\sub\b.txt [ok]
+errorlevel 0
+== keys n^M
+Overwrite d:\m\t13\sub\b.txt (Yes/No/All)?n
+errorlevel 0
+== keys n^M
+Overwrite d:\m\t13\sub\b.txt (Yes/No/All)?n
+errorlevel 0
+== keys n^M
+Overwrite d:\m\t13\sub\b.txt (Yes/No/All)?n
+errorlevel 0
+== T14: relative and drive-relative paths
+d:\m\t14\a.txt => d:\m\t14\sub\a.txt [ok]
+errorlevel 0
+d:\m\t14\b.txt => d:\m\t14\dir1\b.txt [ok]
+errorlevel 0
+d:\m\t14\c.txt => d:\m\t14\sub\c.txt [ok]
+errorlevel 0
+d:\m\t14\x.dat => d:\m\t14\dir1\deep\x.dat [ok]
+errorlevel 0
+d:\m\t14\y.dat => d:\m\t14\sub\z.dat [ok]
+errorlevel 0
+d:\m\t14\ro.txt => d:\m\t14\sub\ro.txt [ok]
+errorlevel 0
+d:\m\t14\sub\rox.txt => d:\m\t14\rox.txt [ok]
+errorlevel 0
+== T15: two sources of the same name
+d:\m\t15\b.txt => d:\m\t15\dir1\b.txt [ok]
+d:\m\t15\sub\b.txt => d:\m\t15\dir1\b.txt [ok]
+errorlevel 0
+d:\m\t15\a.txt => d:\m\t15\sub\a.txt [ok]
+Cannot move A.TXT - No such file or directory
+errorlevel 1
+== keys n^M y^M
+d:\m\t15\c.txt => d:\m\t15\dir1\deep\c.txt [ok]
+d:\m\t15\dir1\b.txt => d:\m\t15\dir1\deep\b.txt [ok]
+d:\m\t15\sub\a.txt => d:\m\t15\dir1\deep\a.txt [ok]
+errorlevel 0
+== keys n^M
+d:\m\t15\x.dat => d:\m\t15\dir1\x.dat [ok]
+d:\m\t15\dir1\deep\b.txt => d:\m\t15\dir1\b.txt [ok]
+errorlevel 0
+== T16: Yes, No and All
+== keys y^M n^M a^M
+Overwrite d:\m\t16\sub\a.txt (Yes/No/All)?y
+d:\m\t16\a.txt => d:\m\t16\sub\a.txt [ok]
+Overwrite d:\m\t16\sub\b.txt (Yes/No/All)?n
+Overwrite d:\m\t16\sub\c.txt (Yes/No/All)?a
+d:\m\t16\c.txt => d:\m\t16\sub\c.txt [ok]
+d:\m\t16\ro.txt => d:\m\t16\sub\ro.txt [ok]
+Cannot move hid.txt - Permission denied
+Cannot move sys.txt - Permission denied
+errorlevel 1
+== keys n^M qy^M
+Overwrite d:\m\t16\sub\x.dat (Yes/No/All)?n
+Overwrite d:\m\t16\sub\y.dat (Yes/No/All)?y
+d:\m\t16\y.dat => d:\m\t16\sub\y.dat [ok]
+errorlevel 0
+== T17: Ctrl-C and Ctrl-Z at a question, and Enter alone
+== keys ^C N
+Overwrite d:\m\t17\sub\b.txt (Yes/No/All)?^C
+
+Terminate batch job (Y/N)?N
+errorlevel 0
+== keys ^C N
+Make directory "d:\m\t17\newc"? [yn] ^C
+
+Terminate batch job (Y/N)?N
+errorlevel 0
+== keys ^Z
+Overwrite d:\m\t17\sub\b.txt (Yes/No/All)?errorlevel 0
+== keys ^M^My^M
+Overwrite d:\m\t17\sub\b.txt (Yes/No/All)?y
+d:\m\t17\c.txt => d:\m\t17\sub\b.txt [ok]
+errorlevel 0
+== keys y^M ^C N
+Overwrite d:\m\t17\sub\x.dat (Yes/No/All)?y
+d:\m\t17\x.dat => d:\m\t17\sub\x.dat [ok]
+Overwrite d:\m\t17\sub\y.dat (Yes/No/All)?^C
+
+Terminate batch job (Y/N)?N
+errorlevel 0
+== T18: a file name as a directory, and wildcards in the destination
+d:\m\t18\a.txt => d:\m\t18\b.txt [ok]
+errorlevel 0
+Cannot move A.TXT - No such file or directory
+errorlevel 1
+d:\m\t18\c.txt => d:\m\t18\sub\*.* [Unable to create destination]
+errorlevel 1
+d:\m\t18\dir1 => d:\m\t18\*.x [Unable to open source]
+errorlevel 1
+Source and destination are the same, d:\m\t18\x.dat
+errorlevel 1
+d:\m\t18\y.dat => d:\m\t18\sub\y.dat [ok]
+errorlevel 0
+d:\m\t18\ro.txt => d:\m\t18\newro.txt [ok]
+errorlevel 0
+d:\m\t18\b.txt => d:\m\t18\dir1\b.txt [ok]
+errorlevel 0
+== T19: the current directory and the root
+Cannot move t19 - No such file or directory
+errorlevel 1
+Cannot move m - No such file or directory
+errorlevel 1
+d:\m\t19\a.txt => d:\a.txt [ok]
+errorlevel 0
+d:\a.txt => d:\m\t19\a.txt [ok]
+errorlevel 0
+d:\m\t19\sub\b.txt => d:\m\t19\b.txt [ok]
+d:\m\t19\sub\rox.txt => d:\m\t19\rox.txt [ok]
+errorlevel 0
+Required parameter missing
+errorlevel 1
+== T21: a directory renamed, its paths no longer than DOS's 66
+Cannot move a - Permission denied
+errorlevel 1
+d:\m\t21\a => d:\m\t21\abcdefgh [ok]
+errorlevel 0
+d:\m\t21\abcdefgh => d:\m\t21\ab [ok]
+errorlevel 0
+== typed
+D:\M\T21>CD \M\T20
+
+D:\M\T20>MOVE A.TXT SUB\B.TXT
+Overwrite d:\m\t20\sub\b.txt (Yes/No/All)?n
+
+D:\M\T20>EL
+errorlevel 0
+D:\M\T20>MOVE /Y A.TXT SUB\B.TXT
+d:\m\t20\a.txt => d:\m\t20\sub\b.txt [ok]
+
+D:\M\T20>EL
+errorlevel 0
+D:\M\T20>MOVE X.DAT,Y.DAT NEWD
+Make directory "d:\m\t20\newd"? [yn] y
+d:\m\t20\x.dat => d:\m\t20\newd\x.dat [ok]
+d:\m\t20\y.dat => d:\m\t20\newd\y.dat [ok]
+
+D:\M\T20>EL
+errorlevel 0
+D:\M\T20>MOVE NEWD\*.* NEWE
+Make directory "d:\m\t20\newe"? [yn] n
+Cannot move multiple files to a single file
+
+D:\M\T20>EL
+errorlevel 1
+D:\M\T20>SET COPYCMD=/Y
+
+D:\M\T20>MOVE B.TXT SUB
+d:\m\t20\b.txt => d:\m\t20\sub\b.txt [ok]
+
+D:\M\T20>EL
+errorlevel 0
+D:\M\T20>SET COPYCMD=
+
+D:\M\T20>C:\COMMAND /C MOVE C.TXT SUB\B.TXT
+d:\m\t20\c.txt => d:\m\t20\sub\b.txt [ok]
+
+D:\M\T20>EL
+errorlevel 0
+D:\M\T20>COPY NEWD\X.DAT SUB > NUL
+
+D:\M\T20>MOVE NEWD\*.* SUB
+Overwrite d:\m\t20\sub\x.dat (Yes/No/All)?a
+d:\m\t20\newd\x.dat => d:\m\t20\sub\x.dat [ok]
+d:\m\t20\newd\y.dat => d:\m\t20\sub\y.dat [ok]
+
+D:\M\T20>EL
+errorlevel 0
+D:\M\T20>MOVE RO.TXT SUB\ROX.TXT
+Overwrite d:\m\t20\sub\rox.txt (Yes/No/All)?y
+d:\m\t20\ro.txt => d:\m\t20\sub\rox.txt [Unable to create destination]
+
+D:\M\T20>EL
+errorlevel 1
+D:\M\T20>COPY SUB\B.TXT CMD.TXT > NUL
+
+D:\M\T20>C:\COMMAND
+D:\M\T20>MOVE CMD.TXT SUB\B.TXT
+Overwrite d:\m\t20\sub\b.txt (Yes/No/All)?n
+
+D:\M\T20>EL
+errorlevel 0
+D:\M\T20>EXIT
+
+D:\M\T20>ECHO GRDOS-TEST-END
+GRDOS-TEST-END

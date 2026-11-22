@@ -189,7 +189,7 @@ drive. What a floppy carries is chosen for that use, not to fill it:
   [codepage.md](codepage.md)); and PRINTER.SYS with 4201.CPI, 4208.CPI
   and 5202.CPI (issue #25, [printer.md](printer.md)). Everything that is
   useful on a floppy fits on 1.2 MB, so the two have the same files.
-- **No floppy:** GRVER ([grver.md](grver.md)), FASTOPEN, which works on hard disks only, IFSFUNC,
+- **No floppy:** GRVER ([grver.md](grver.md)), MOVE ([move.md](move.md)), FASTOPEN, which works on hard disks only, IFSFUNC,
   which needs an installable file system driver, and there is none,
   FILESYS, which needs IFSFUNC (issue #20, [filesys.md](filesys.md)), and
   LCD.CPI, for the PC Convertible alone.
@@ -197,9 +197,9 @@ drive. What a floppy carries is chosen for that use, not to fill it:
 | Image | Files | Bytes free |
 |---|---:|---:|
 | 360 KB | 17 | 27,648 |
-| 720 KB | 35 | 53,248 |
-| 1.2 MB | 50 | 352,768 |
-| 1.44 MB | 50 | 596,480 |
+| 720 KB | 35 | 50,176 |
+| 1.2 MB | 50 | 350,208 |
+| 1.44 MB | 50 | 593,920 |
 
 `image/files-360k.txt` to `files-1440k.txt` list each image's files in
 order. They are part of the source: `make` checks both the Makefile's

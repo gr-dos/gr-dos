@@ -1,0 +1,18 @@
+# Typed at the prompt by scripts/move-test after typed.txt, on GR-DOS only:
+# files under two names, through SUBST, which MS-DOS 6.22's MOVE gets wrong
+# (it deletes the file it is about to copy) and whose SUBST.EXE is not on
+# the install. Its output is tests/move/expect-grdos.log, GR-DOS's own.
+# Nothing here may change a file.
+CD \M\T19
+C:\DOS\SUBST E: D:\M\T19
+MOVE A.TXT E:\A.TXT
+EL
+MOVE E:\B.TXT D:B.TXT
+EL
+MOVE *.DAT E:\
+EL
+MOVE E:X.DAT,E:Y.DAT D:\M\T19
+EL
+MOVE DIR1 E:\DIR1
+EL
+C:\DOS\SUBST E: /D

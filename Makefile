@@ -301,14 +301,18 @@ FILES_1440 := $(PROGRAMS) $(call extra_files,$(FLOPPY_1440)) $(HELP_FILES) $(BUI
 # reports the release version from the kernel's identification call.
 GRVER := $(BUILD)/grver/GRVER.EXE
 
+# MOVE (issue #106, docs/move.md): MS-DOS 6.22's MOVE, GR-DOS's own C in
+# move/. It is in C:\DOS and the release ZIP, and on no floppy.
+MOVE := $(BUILD)/move/MOVE.EXE
+
 # Everything, for C:\DOS (scripts/deploy-cf) and the release ZIP: the base
 # programs, then all of issue #17's in CMD's order, JOIN and SUBST, BACKUP and
 # RESTORE, FILESYS, REPLACE, GRAPHICS.PRO, COUNTRY.SYS and KEYBOARD.SYS, DISPLAY.SYS, EGA.CPI
-# and LCD.CPI, PRINTER.SYS, 4201.CPI, 4208.CPI and 5202.CPI, GRVER, HELP and
-# GRDOS.HLP, and the other *16 programs.
+# and LCD.CPI, PRINTER.SYS, 4201.CPI, 4208.CPI and 5202.CPI, GRVER, MOVE, HELP
+# and GRDOS.HLP, and the other *16 programs.
 ALL_FILES := $(PROGRAMS) $(call dist,$(addprefix $(SRC)/,$(EXTRA_UTILITIES))) $(addprefix $(SRC)/,$(JOIN_SUBST)) \
 	$(addprefix $(SRC)/,$(BACKUP_RESTORE) $(FILESYS) $(REPLACE)) $(GRAPHICS_PRO) \
-	$(NLS_DATA) $(CP_DATA) $(PRT_DATA) $(GRVER) $(HELP_FILES) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
+	$(NLS_DATA) $(CP_DATA) $(PRT_DATA) $(GRVER) $(MOVE) $(HELP_FILES) $(DIST16_EXTRA) $(BUILD)/image/AUTOEXEC.BAT
 
 # GR-DOS's own file names, which no *16 program may have, even with
 # another extension (COMMAND.COM would run only one of them).
@@ -335,7 +339,7 @@ TEST_FLOPPY  := $(addprefix test-floppy-,$(FORMATS))
 
 test: test-help test-dist16 test-mem-human $(TEST_FORMATS) test-utils test-extras $(TEST_FLOPPY) $(TEST_SYS) test-fc test-country \
 	test-keyb test-help-less test-more test-codepage test-printer test-grver test-fdisk test-install test-deploy-cf test-config-include \
-	test-join-subst test-backup-restore test-filesys test-replace
+	test-join-subst test-backup-restore test-filesys test-replace test-move
 
 # MEM /HUMAN's size format, compiled from the patched MEM.C on the host and
 # checked against df -h's rules (tests/mem-human, issue #89): no QEMU.
@@ -608,6 +612,26 @@ test-replace: $(REPLACE_TEST)
 replace-expect: $(REPLACE_TEST) $(REPLACE_REFERENCE)
 	scripts/replace-test --update --replace $(REPLACE_REFERENCE) $(TESTS)/replace-reference
 
+# MOVE (scripts/move-test, issue #106): tests/move/mv.bat, then the commands
+# of tests/move/typed.txt at the prompt, on a 512 MB CF install with an empty
+# 1.44 MB A: and a write-protected B:, MOVE's questions answered, whose output
+# on COM1 must be MS-DOS 6.22's (tests/move/expect.log), CRs too, and whose
+# files and directories those of tests/move/files.txt, after which D: and A:
+# must pass fsck.fat; then, on GR-DOS only, tests/move/grdos.txt's SUBST
+# cases (tests/move/expect-grdos.log). expect.log and files.txt are written
+# by make move-expect, which runs the same test on
+# MS-DOS 6.22 itself, from the 6.22 Upgrade's 3.5" disks in MSDOS622
+# (Disk1.img to Disk3.img). Microsoft's files are never in this repository.
+MOVE_TEST := $(CF)/manifest.txt scripts/move-test scripts/deploy-cf \
+	tests/move/mv.bat tests/move/typed.txt tests/move/grdos.txt tests/join-subst/el.bat
+
+test-move: $(MOVE_TEST)
+	scripts/move-test $(TESTS)/move
+
+move-expect: $(MOVE_TEST)
+	@test -n "$(MSDOS622)" || { echo 'make move-expect MSDOS622=DIR: DIR has the MS-DOS 6.22 Upgrade disks, Disk1.img to Disk3.img' >&2; exit 1; }
+	scripts/move-test --update --msdos622 "$(MSDOS622)" $(TESTS)/move-reference
+
 # BACKUP and RESTORE (scripts/backup-restore-test, issue #19):
 # tests/backup-restore/br.bat on a 512 MB CF install with a 1.44 MB A: of
 # disposable floppy images, whose output on COM1 must be exactly, CRs too,
@@ -670,7 +694,7 @@ dist: all release/README.txt LICENSE v4.0/LICENSE scripts/mkzip $(BUILD)/libc16.
 	  printf '\n\nGR-DOS\n------\n\n'; cat LICENSE; \
 	  printf '\n\nMS-DOS 4.00 source (v4.0/LICENSE)\n---------------------------------\n\n'; cat v4.0/LICENSE; echo; \
 	  scripts/dist16 notices $(DIST16); \
-	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM, RESTORE.COM, FILESYS.EXE,\nREPLACE.EXE, GRVER.EXE and HELP.EXE)\n-------------------------------------------------------------------------------------------------------------\n\n'; \
+	  printf '\n\nlibc16 (in ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM, RESTORE.COM, FILESYS.EXE,\nREPLACE.EXE, GRVER.EXE, MOVE.EXE and HELP.EXE)\n-------------------------------------------------------------------------------------------------------------\n\n'; \
 	  cat $(LIBC16_DIR)/LICENSE; \
 	} | sed 's/$$/\r/' > $(DIST)/$(NAME)/README.txt
 	scripts/dist16 check-dist $(DIST)/$(NAME) $(DIST16)
@@ -755,6 +779,8 @@ Tests (make test runs them all; most boot GR-DOS in QEMU)
                            it, against Microsoft's FILESYS's output
   make test-replace        REPLACE on a CF install and a floppy image,
                            against Microsoft's output
+  make test-move           MOVE on a CF install and two floppy images,
+                           against MS-DOS 6.22's output
   make test-dist16         scripts/dist16 against a fake GitHub (offline)
   make test-mem-human      MEM /HUMAN's size format, on the host (offline)
   make test-help           check this list against the Makefile's targets
@@ -777,6 +803,8 @@ Maintenance
                            Microsoft's FILESYS.EXE (FILESYS_REFERENCE)
   make replace-expect      rewrite tests/replace's expected output with
                            Microsoft's REPLACE.EXE (REPLACE_REFERENCE)
+  make move-expect         rewrite tests/move's expected output and files on
+                           MS-DOS 6.22 itself, from its disks (MSDOS622=DIR)
 
 Variables
   LIBC16_ROOT=../libc16    build against a libc16 checkout, built with its
@@ -812,7 +840,7 @@ test-help: scripts/check-help
 	test-dist16 test-mem-human dist16-resolve dist16-check run-dosbox run-dosbox-cf $(RUN_DOSBOX_FLOPPY) help test-help test-country $(TEST_COUNTRY) test-keyb test-help-less test-more \
 	test-grver test-grver-grdos test-grver-msdos msdos-core test-config-include test-codepage $(TEST_CODEPAGE) \
 	test-codepage-screen test-printer $(TEST_PRINTER) test-join-subst join-subst-expect test-backup-restore \
-	backup-restore-expect test-filesys filesys-expect test-replace replace-expect
+	backup-restore-expect test-filesys filesys-expect test-replace replace-expect test-move move-expect
 .DELETE_ON_ERROR:
 
 # Paths of the fetched tools, as shell assignments.
@@ -984,6 +1012,20 @@ $(BUILD)/grver/GRVER.OBJ: grver/grver.c $(TOOLS) $(BUILD)/libc16.stamp
 $(GRVER): $(BUILD)/grver/GRVER.OBJ $(TOOLS) $(BUILD)/libc16.stamp scripts/check-runtime
 	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos \
 	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) \
+	  name $@ file $< library $(LIBC16)
+	scripts/check-runtime $(@:.EXE=.MAP) $(LIBC16) $<
+
+# MOVE, C with libc16 and its startup, like GRVER.
+$(BUILD)/move/MOVE.OBJ: move/move.c $(TOOLS) $(BUILD)/libc16.stamp
+	mkdir -p $(@D)
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH \
+	  wcc $(filter-out -w0 -I$(CURDIR)/$(SRC)/H,$(WCFLAGS)) -w4 -we -fo=$@ $<
+
+# A 4 KB stack: MOVE walks a directory tree, a level of it at a time, to see
+# that a rename keeps its paths within DOS's 66 characters (some 33 levels).
+$(MOVE): $(BUILD)/move/MOVE.OBJ $(TOOLS) $(BUILD)/libc16.stamp scripts/check-runtime
+	. ./$(TOOLS) && PATH=$$WATCOM/binl64:$$PATH && wlink option quiet format dos \
+	  option nocaseexact option nodefaultlibs option map=$(@:.EXE=.MAP) option stack=4096 \
 	  name $@ file $< library $(LIBC16)
 	scripts/check-runtime $(@:.EXE=.MAP) $(LIBC16) $<
 
