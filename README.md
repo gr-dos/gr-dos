@@ -191,7 +191,7 @@ gr-dos-VERSION/
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
 │   ├── MOVE.EXE      moves files and renames directories, as MS-DOS 6.22's
-│   ├── CAT.EXE, CRCSUM.EXE, DF.EXE, DIFF.EXE, GZIP.EXE, LESS.EXE, LS.EXE, MD5SUM.EXE, PATCH.EXE,
+│   ├── CAT.EXE, CRCSUM.EXE, DF.EXE, DIFF.EXE, EDIT.EXE, GZIP.EXE, LESS.EXE, LS.EXE, MD5SUM.EXE, PATCH.EXE,
 │   │   RETROFCH.EXE, TAR.EXE, TCL.EXE, TERM16.EXE, TRUNCATE.EXE, UNAME.COM, WHICH.COM (the *16 programs dist16/lock pins)
 │   ├── SPROCKET.EXE, SPROCKET.LIC   serial file transfer and disk imaging, and its license
 │   ├── SOURCES.TXT   only with a *16 program under the GPL or another

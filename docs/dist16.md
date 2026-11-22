@@ -21,8 +21,8 @@ release.
 
 ## What is shipped
 
-The current lock includes CAT, CRCSUM, DF, DIFF, GZIP, LESS, LS, MD5SUM,
-PATCH, RETROFCH, TAR, TCL, TERM16, TRUNCATE, UNAME and WHICH from `gr-dos`, TICO from
+The current lock includes CAT, CRCSUM, DF, DIFF, EDIT, GZIP, LESS, LS,
+MD5SUM, PATCH, RETROFCH, TAR, TCL, TERM16, TRUNCATE, UNAME and WHICH from `gr-dos`, TICO from
 `tico-edit`, and SPROCKET from `plicease` (issue #37), with its license
 notice, SPROCKET.LIC ([License assets](#license-assets)).
 TCL's license is taken from a [license override](#license-overrides),

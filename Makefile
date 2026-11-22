@@ -1163,13 +1163,14 @@ $(foreach f,$(FORMATS),$(eval $(call image_rules,$(f))))
 # The distribution scripts/deploy-cf installs on a CF card or hard disk
 # (issue #14): ALL_FILES but AUTOEXEC.BAT, which deploy-cf writes for C:,
 # with their manifest, the boot sector, FDISK's master boot record and
-# VERSION. The manifest is that of a 1.44 MB image of them, so that the
-# files are stamped as on the floppies.
+# VERSION. The manifest is that of a 2.88 MB image of them, so that the
+# files are stamped as on the floppies; with EDIT.EXE they no longer fit
+# on a 1.44 MB one, and the manifest does not depend on the format.
 $(CF)/manifest.txt: $(CORE) $(ALL_FILES) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION scripts/mkimage \
 	scripts/check-image scripts/image-manifest
 	rm -rf $(CF)
 	mkdir -p $(CF)
-	scripts/mkimage --format 1440 $(BUILD)/all-files.img $(SRC) $(ALL_FILES)
+	scripts/mkimage --format 2880 $(BUILD)/all-files.img $(SRC) $(ALL_FILES)
 	cp $(CORE) $(filter-out %/AUTOEXEC.BAT,$(ALL_FILES)) $(SRC)/CMD/FDISK/FDBOOT.BIN VERSION $(CF)/
 	scripts/image-manifest $(BUILD)/all-files.img | grep -v '  AUTOEXEC\.BAT$$' > $@.tmp
 	rm $(BUILD)/all-files.img
@@ -1292,9 +1293,11 @@ $(TESTS)/HELLOX.EXE: $(TESTS)/HELLO.COM tests/extras/pad-header
 	tests/extras/pad-header $@.tmp $@
 	rm $@.tmp
 
+# ALL_FILES but the *16 programs only C:\DOS has, which the test does not
+# run and which, with EDIT.EXE, no longer fit on a 1.44 MB disk with it.
 $(TESTS)/extras.img: $(CORE) $(ALL_FILES) $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES) \
 	scripts/mkimage scripts/check-image
-	scripts/mkimage $@ $(SRC) $(filter-out %/AUTOEXEC.BAT $(DIST16)/SOURCES.TXT,$(ALL_FILES)) \
+	scripts/mkimage $@ $(SRC) $(filter-out %/AUTOEXEC.BAT $(DIST16_EXTRA),$(ALL_FILES)) \
 	  $(TESTS)/autoexec-extras/AUTOEXEC.BAT $(EXTRAS_FILES)
 
 # The country tests' disks: the system files, the scenario's CONFIG.SYS,
