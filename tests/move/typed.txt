@@ -1,0 +1,35 @@
+# Typed at COMMAND.COM's prompt by scripts/move-test when tests/move/mv.bat
+# ends, a line at each prompt: commands not run from a batch file, which
+# MOVE asks about by default. "== keys KEYS" lines give the answers to the
+# questions that follow, and are not typed.
+CD \M\T20
+== keys n^M
+MOVE A.TXT SUB\B.TXT
+EL
+MOVE /Y A.TXT SUB\B.TXT
+EL
+== keys y^M
+MOVE X.DAT,Y.DAT NEWD
+EL
+== keys n^M
+MOVE NEWD\*.* NEWE
+EL
+SET COPYCMD=/Y
+MOVE B.TXT SUB
+EL
+SET COPYCMD=
+C:\COMMAND /C MOVE C.TXT SUB\B.TXT
+EL
+COPY NEWD\X.DAT SUB > NUL
+== keys a^M
+MOVE NEWD\*.* SUB
+EL
+== keys y^M
+MOVE RO.TXT SUB\ROX.TXT
+EL
+COPY SUB\B.TXT CMD.TXT > NUL
+== keys n^M
+C:\COMMAND
+MOVE CMD.TXT SUB\B.TXT
+EL
+EXIT

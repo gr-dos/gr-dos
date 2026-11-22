@@ -100,7 +100,7 @@ carry more commands ([`docs/m5-utilities.md`](docs/m5-utilities.md#floppies)):
 | `HELP.EXE` and `GRDOS.HLP`, GR-DOS's command help ([`docs/help.md`](docs/help.md)) | | ✓ | ✓ |
 | `AUTOEXEC.BAT`: `PROMPT $P$G` and `PATH A:\` | ✓ | ✓ | ✓ |
 
-The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC, FILESYS, GRVER and LCD.CPI are on C: only. `image/files-360k.txt` (and so on) lists each image's
+The 360 KB disk's files are frozen. FASTOPEN, IFSFUNC, FILESYS, GRVER, MOVE and LCD.CPI are on C: only. `image/files-360k.txt` (and so on) lists each image's
 files in order, and `make` checks the image against it.
 `build/linux/manifest-360k.txt` (and so on) lists them with their checksums. To
 build one image from a built tree, choose the format with `--format` (1440
@@ -190,6 +190,7 @@ gr-dos-VERSION/
 │   ├── DISPLAY.SYS, EGA.CPI, LCD.CPI   code page switching for the screen
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
+│   ├── MOVE.EXE      moves files and renames directories, as MS-DOS 6.22's
 │   ├── CAT.EXE, CRCSUM.EXE, DF.EXE, DIFF.EXE, LESS.EXE, LS.EXE, MD5SUM.EXE, PATCH.EXE,
 │   │   RETROFCH.EXE, TAR.EXE, TCL.EXE, TERM16.EXE, TRUNCATE.EXE, WHICH.COM (the *16 programs dist16/lock pins)
 │   ├── SPROCKET.EXE, SPROCKET.LIC   serial file transfer and disk imaging, and its license
@@ -253,6 +254,8 @@ debugging, the unpacked tree, the logs and the QEMU output of each test
   and limits.
 - [`docs/grver.md`](docs/grver.md): the kernel's GR-DOS identification
   call (`INT 21h AX=3347h`), GRVER.EXE, and how a program calls it.
+- [`docs/move.md`](docs/move.md): MOVE.EXE, MS-DOS 6.22's MOVE, and its
+  tests against MS-DOS 6.22 itself.
 - [`docs/help.md`](docs/help.md): HELP.EXE and GRDOS.HLP, the offline
   command help, its topic files and how the build checks them against the
   distribution.
@@ -286,7 +289,7 @@ corresponding source
 an aggregation of separately licensed programs: including one under the
 GPL does not relicense GR-DOS, its kernel or any other program.
 ATTRIB.EXE, MEM.EXE, FDISK.EXE, FC.EXE, JOIN.EXE, SUBST.EXE, BACKUP.COM,
-RESTORE.COM, FILESYS.EXE, REPLACE.EXE, GRVER.EXE and HELP.EXE are
+RESTORE.COM, FILESYS.EXE, REPLACE.EXE, GRVER.EXE, MOVE.EXE and HELP.EXE are
 compiled with Open Watcom C but linked with
 [libc16](https://github.com/gr-dos/libc16), an MIT C runtime, and contain
 no Open Watcom code ([`docs/m4-utilities.md`](docs/m4-utilities.md)). The release README includes

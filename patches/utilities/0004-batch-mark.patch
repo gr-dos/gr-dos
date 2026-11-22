@@ -1,0 +1,44 @@
+GR-DOS: COMMAND.COM marks its batch segment as MS-DOS 6.22 does (issue #106).
+
+MS-DOS 6.22's MOVE replaces files without asking when it is run from a
+batch file. It is an external program: it finds COMMAND.COM's batch
+segment by the bytes "cox" that 6.22's COMMAND.COM puts before it, in the
+first 4 KB of the primary shell. COMMAND now has them too, so GR-DOS's
+MOVE.EXE and Microsoft's both see a batch file, and ask at the prompt.
+
+6.22's MOVE does not ask under COMMAND /C either, where 4.00's COMMAND
+looks like a primary shell. COMMAND also marks its SINGLECOM word, nonzero
+while a /C command runs, by "grdos/c", for GR-DOS's MOVE to see.
+
+Applied to a copy of v4.0/src before it is converted to CRLF (Makefile,
+PATCHES). `make check` builds without it.
+
+--- a/CMD/COMMAND/RDATA.ASM
++++ b/CMD/COMMAND/RDATA.ASM
+@@ -440,6 +440,13 @@
+ ERRCD_24	DW	?
+ HANDLE01	DW	?
+ LOADING 	DB	0
++;
++; GR-DOS: MS-DOS 6.22's mark of the batch segment, the word that follows
++; it.  MOVE (and Microsoft's own MOVE.EXE) finds it in the first 4 KB of
++; the primary COMMAND.COM to tell a command typed at the prompt from one
++; in a batch file, which replaces files without asking (issue #106).
++;
++BatchMark	DB	"cox"
+ BATCH		DW	0			; Assume no batch mode initially
+ COMSPEC 	DB	64 DUP(0)
+ comspec_end	dw	?
+@@ -468,6 +475,12 @@
+ IO_SAVE 	DW	?
+ RESTDIR 	DB	0
+ PERMCOM 	DB	0			; TRUE => permanent command
++;
++; GR-DOS: the mark of SINGLECOM, the word that follows it, nonzero while a
++; COMMAND /C command runs.  MOVE finds it as it finds BatchMark, and does
++; not ask under COMMAND /C, as MS-DOS 6.22's does not (issue #106).
++;
++SingleMark	DB	"grdos/c"
+ SINGLECOM	DW	0			; TRUE => single command version
+ VERVAL		DW	-1
+ fFail		DB	0			; TRUE => FAIL all INT 24s

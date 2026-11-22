@@ -1,0 +1,53 @@
+Topic: MOVE
+Summary: Moves files, and renames directories
+Origin: GR-DOS
+Group: command
+Files: MOVE.EXE
+
+Syntax
+  MOVE [/Y | /-Y] [drive:][path]filename[,...] destination
+  MOVE [/Y | /-Y] [drive:][path]dirname newname
+
+  filename     The file or files to move. Wildcards (* and ?) may be used,
+               and several names separated by commas (A.TXT,B.TXT).
+  destination  Where the files go: a drive, a directory, or both. For one
+               file it may be a new name too. Several files need a
+               directory; if it is not there, MOVE makes it.
+  dirname      A directory to rename. It stays in the same parent
+               directory: MOVE cannot move a directory elsewhere.
+  /Y           Replaces files, and makes directories, without asking.
+  /-Y          Asks first: "Overwrite NAME (Yes/No/All)?", and "Make
+               directory "NAME"? [yn]", answered with a key and Enter.
+
+Examples
+  MOVE ED.TXT,SIGRID.TXT C:\LETTERS
+    Moves two files into C:\LETTERS.
+  MOVE BILL.TXT C:\LETTERS\ANN.TXT
+    Moves BILL.TXT into C:\LETTERS, as ANN.TXT.
+  MOVE *.BAK A:\
+    Moves every .BAK file of the current directory to A:'s root.
+  MOVE C:\THISYEAR C:\LASTYEAR
+    Renames the directory C:\THISYEAR to LASTYEAR.
+
+Exit status
+  0  Every file was moved, or left where it was when asked to.
+  1  A file was not moved, or a parameter was wrong.
+
+Notes
+  Typed at the prompt, MOVE asks before it replaces a file, and before it
+  makes a directory for several files; in a batch file it does not, as
+  with /Y. COPYCMD=/Y in the environment (SET COPYCMD=/Y) stops the
+  questions too, and /-Y brings them back. MOVE shows each file as
+  SOURCE => DESTINATION, then [ok] or why it was not moved.
+  On the same drive a file is renamed into place, which is quick. To
+  another drive it is copied, with its date, time and attributes, and
+  deleted only once the copy is complete and its full size. A file
+  replaced is kept, as ~MOVEnnn.$$$, until the move is done. If any step
+  fails, MOVE undoes the others: the source and the file it was to
+  replace are kept. Hidden and system files are not moved.
+  MOVE is MS-DOS 6.22's: its messages, questions and errorlevels are the
+  same. Unlike 6.22's, it says [Unable to delete source], and deletes the
+  copy, when it cannot delete a file it copied (a write-protected disk);
+  it keeps a file it fails to replace; and it never replaces a file with
+  itself under another name (SUBST, JOIN).
+  MOVE is in C:\DOS on a hard disk install, not on the floppies.

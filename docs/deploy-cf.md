@@ -140,7 +140,7 @@ following, in this order:
    ([country-keyboard.md](country-keyboard.md)), DISPLAY.SYS, EGA.CPI and
    LCD.CPI ([codepage.md](codepage.md)), PRINTER.SYS, 4201.CPI, 4208.CPI
    and 5202.CPI ([printer.md](printer.md)), GRVER
-   ([grver.md](grver.md)), and the other `*16` programs `dist16/lock` pins
+   ([grver.md](grver.md)), MOVE ([move.md](move.md)), and the other `*16` programs `dist16/lock` pins
    (CAT, CRCSUM, DF, DIFF, LESS, LS, MD5SUM, PATCH, RETROFCH, TAR, TCL,
    TERM16, TRUNCATE and WHICH, and SPROCKET with its license, SPROCKET.LIC;
    [dist16.md](dist16.md)). The floppy images keep those they carry in the
