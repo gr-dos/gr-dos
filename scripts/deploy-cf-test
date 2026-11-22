@@ -185,7 +185,10 @@ sub at ($img, $lba) { "$img\@\@" . $lba * 512 }
 # Tcl16 0.01 predates --version for it: TCL /? gives "Tcl16 0.01: ...".
 # SPROCKET (plicease/sprocket, issue #37) has no --version: with no
 # subcommand it prints its usage, "SPROCKET 0.5.1: ...".
-my %VERSION = ('TCL.EXE' => { args => '/?', stem => 'tcl16' }, 'SPROCKET.EXE' => { args => '' });
+# GZIP (gr-dos/gzip16, issue #103) is GNU's own gzip 1.2.4, unchanged:
+# GZIP -V gives "gzip 1.2.4 (18 Aug 93)", that version, not gzip16's.
+my %VERSION = ('TCL.EXE' => { args => '/?', stem => 'tcl16' }, 'SPROCKET.EXE' => { args => '' },
+  'GZIP.EXE' => { args => '-V', version => '1.2.4' });
 sub dist16_programs () {
   my @p;
   for (split /\n/, slurp("$root/dist16/lock")) {

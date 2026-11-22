@@ -21,8 +21,8 @@ release.
 
 ## What is shipped
 
-The current lock includes CAT, CRCSUM, DF, DIFF, LESS, LS, MD5SUM, PATCH,
-RETROFCH, TAR, TCL, TERM16, TRUNCATE and WHICH from `gr-dos`, TICO from
+The current lock includes CAT, CRCSUM, DF, DIFF, GZIP, LESS, LS, MD5SUM,
+PATCH, RETROFCH, TAR, TCL, TERM16, TRUNCATE, UNAME and WHICH from `gr-dos`, TICO from
 `tico-edit`, and SPROCKET from `plicease` (issue #37), with its license
 notice, SPROCKET.LIC ([License assets](#license-assets)).
 TCL's license is taken from a [license override](#license-overrides),
@@ -287,7 +287,7 @@ Two families are allowed:
 
 | License | GitHub reports | For |
 |---|---|---|
-| `GPL-2.0-or-later` | `GPL-2.0` | [gr-dos/patch16](https://github.com/gr-dos/patch16), GNU patch 2.2, linked with libc16 (MIT) |
+| `GPL-2.0-or-later` | `GPL-2.0` | [gr-dos/patch16](https://github.com/gr-dos/patch16), GNU patch 2.2, linked with libc16 (MIT); [gr-dos/gzip16](https://github.com/gr-dos/gzip16), GNU gzip 1.2.4's own 1993 MS-DOS program, unchanged, linked with nothing of ours (issue #103) |
 | `GPL-1.0-or-later` | `GPL-1.0` | [gr-dos/perl16](https://github.com/gr-dos/perl16), whose Perl 3.044 is GPL version 1 or later |
 
 `dist16/config` lists them apart from the permissive licenses:
@@ -616,4 +616,5 @@ downloads and raw files. It needs no network. It covers:
 The CF boot test (`make test-deploy-cf`) runs every locked program from
 `C:\DOS`. Each prints its version with `--version`, the gr-dos
 convention, except those that have none: TCL prints its version with
-`/?`, and SPROCKET in its usage, with no subcommand.
+`/?`, SPROCKET in its usage, with no subcommand, and GZIP, GNU's gzip
+1.2.4, gives that version, not gzip16's, with `-V`.

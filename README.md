@@ -191,8 +191,8 @@ gr-dos-VERSION/
 │   ├── PRINTER.SYS, 4201.CPI, 4208.CPI, 5202.CPI   for printers
 │   ├── GRVER.EXE     the GR-DOS release version, from the kernel
 │   ├── MOVE.EXE      moves files and renames directories, as MS-DOS 6.22's
-│   ├── CAT.EXE, CRCSUM.EXE, DF.EXE, DIFF.EXE, LESS.EXE, LS.EXE, MD5SUM.EXE, PATCH.EXE,
-│   │   RETROFCH.EXE, TAR.EXE, TCL.EXE, TERM16.EXE, TRUNCATE.EXE, WHICH.COM (the *16 programs dist16/lock pins)
+│   ├── CAT.EXE, CRCSUM.EXE, DF.EXE, DIFF.EXE, GZIP.EXE, LESS.EXE, LS.EXE, MD5SUM.EXE, PATCH.EXE,
+│   │   RETROFCH.EXE, TAR.EXE, TCL.EXE, TERM16.EXE, TRUNCATE.EXE, UNAME.COM, WHICH.COM (the *16 programs dist16/lock pins)
 │   ├── SPROCKET.EXE, SPROCKET.LIC   serial file transfer and disk imaging, and its license
 │   ├── SOURCES.TXT   only with a *16 program under the GPL or another
 │   │                 source license: where its source is, and its license
@@ -281,7 +281,9 @@ SPROCKET.EXE is [plicease/sprocket](https://github.com/plicease/sprocket)'s,
 MIT, and linked with libc16 (MIT) rather than Open Watcom's runtime; its
 release's license notice is shipped beside it as SPROCKET.LIC
 ([`docs/dist16.md`](docs/dist16.md#license-assets), issue #37).
-PATCH.EXE ([patch16](https://github.com/gr-dos/patch16)) is under the GPL
+PATCH.EXE ([patch16](https://github.com/gr-dos/patch16)) and GZIP.EXE
+([gzip16](https://github.com/gr-dos/gzip16), GNU gzip 1.2.4's own MS-DOS
+program, issue #103) are under the GPL
 version 2 or later, and a `*16` program may also be under version 1 or
 later (perl16's Perl 3); such a program ships with its exact
 corresponding source
