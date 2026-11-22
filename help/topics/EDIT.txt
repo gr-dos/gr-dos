@@ -1,0 +1,90 @@
+Topic: EDIT
+Summary: Full-screen text editor with menus, like MS-DOS EDIT
+Origin: edit16
+Group: command
+Files: EDIT.EXE
+
+Syntax
+  EDIT [/B] [/H] [/R] [[drive:][path]filename ...]
+
+  filename     A file to edit. Up to 9 can be given; each opens in its
+               own window. A file that does not exist is created when it
+               is first saved. A name with * or ? in it shows the Open
+               dialog box, listing the files it matches.
+  /B           Black and white, for a monochrome monitor on a colour
+               adapter.
+  /H           As many lines as the display shows: 43 on an EGA, 50 on a
+               VGA. Ignored on a CGA or MDA.
+  /R           Read only: the files can be looked at, searched and
+               printed, but not changed.
+  --help       Shows the usage (also /?). --version shows EDIT's release.
+
+Examples
+  EDIT AUTOEXEC.BAT
+    Edits AUTOEXEC.BAT.
+  EDIT CONFIG.SYS AUTOEXEC.BAT
+    Opens both; F6 switches between them.
+  EDIT NOTES.TXT
+    Starts a new file NOTES.TXT, if there is none yet.
+  EDIT *.BAT
+    Shows the Open dialog box with the .BAT files.
+  EDIT /R README.TXT
+    Shows README.TXT without letting it be changed.
+
+Menus
+  Press and release Alt, then the highlighted letter of a menu (or Alt
+  and the letter together, or F10). Esc leaves the menus. The status
+  line says what the highlighted command does.
+
+  File      New, Open..., Save, Save As..., Close, Print..., Exit
+  Edit      Cut, Copy, Paste, Clear
+  Search    Find..., Repeat Last Find, Change...
+  View      Split Windows, Full Windows, Next File, Previous File, and
+            the open files by number
+  Options   Display... (tab stops, scroll bars)
+  Help      Getting Started, Keyboard, About...
+
+Keys
+  Arrows, Home, End, PgUp, PgDn   move; Ctrl+Left/Right by words
+  Ctrl+Home, Ctrl+End    start, end of the file
+  Ctrl+Enter             start of the next line
+  Shift with a move      selects text (Shift+Right, Shift+Ctrl+End ...)
+  Shift+Del, Ctrl+Ins    cut, copy the selection to the clipboard
+  Shift+Ins              pastes it; Del deletes the selection
+  Ctrl+Y                 cuts the line; Ctrl+Q Y cuts to its end
+  Ins                    switches between inserting and overtyping
+  Tab, Shift+Tab         indent; with lines selected, (un)indents them
+  Ctrl+Q F, Ctrl+Q A     Find, Change; F3 (or Ctrl+L) finds again
+  Ctrl+K 0-3, Ctrl+Q 0-3 set, go to a bookmark
+  Ctrl+P, Ctrl+key       types a control character
+  F6, Shift+F6           next, previous file; Alt+1 to Alt+9 by number
+  Ctrl+F4                closes the file
+  F1                     help
+  The WordStar keys work too: Ctrl+E, X, S, D move, Ctrl+R, C page, Ctrl+W,
+  Z scroll, Ctrl+A, F by words, Ctrl+G and Ctrl+H delete, Ctrl+T deletes a
+  word, Ctrl+N inserts a line. Help Keyboard lists every key.
+
+Exit status
+  0 when EDIT is left with File Exit, 1 for a switch it does not know, 8
+  if there is not enough memory to start.
+
+Notes
+  EDIT asks before it closes a file, or exits, with changes not saved.
+  Find and Change search the whole file, from the cursor round to it
+  again. A file can be up to 65,280 bytes. Files are saved with CR LF line
+  ends; the line ends a file already has, and its tab characters, are
+  kept. Tab characters show at every 8th column; Options Display sets how
+  far Tab indents.
+
+  EDIT needs an 8088 or better and 300 KB of free memory, plus the size
+  of the files open (Help About shows what is left). It runs on a CGA,
+  EGA, VGA or MDA in 80-column text mode, and needs no mouse.
+
+  Differences from MS-DOS EDIT: the cursor cannot go past the end of a
+  line; tab characters are kept, not expanded; settings are not saved
+  between runs; help is the two Help menu topics. Ctrl+Up and Ctrl+Down
+  need a 101-key keyboard; on an XT, Ctrl+W and Ctrl+Z scroll instead.
+
+  EDIT is gr-dos/edit16, under the MIT license, built with Free Pascal's
+  FreeVision (LGPL, with the Free Pascal linking exception). It is in
+  C:\DOS only, on no floppy: TICO is the editor on the floppies.

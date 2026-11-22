@@ -22,5 +22,5 @@ Device drivers and data files
   DISPLAY.SYS   Code page switching for an EGA, VGA or PC Convertible screen
   PRINTER.SYS   Code page switching for IBM printers on LPT1 to LPT3
 
- INDEX  Line 82/105  WRAP  (END)  Q quit
+ INDEX  Line 83/106  WRAP  (END)  Q quit
 attr 24: 70x80
